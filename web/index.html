@@ -1,0 +1,5117 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vyom Engine - By AgriDoot</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --canopy: #16a34a;
+        --canopy-bright: #22c55e;
+        --canopy-deep: #166534;
+        --soil: #c98a3d;
+        --sky: #4f8fb0;
+        --danger: #dc2626;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-lg: 18px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 20px;
+        --sp-6: 28px;
+      }
+      html[data-theme="dark"] {
+        --bg-deep: #0d1512;
+        --bg-panel: #131c17;
+        --bg-panel-2: #18221c;
+        --bg-raised: #1e2b23;
+        --line: #263329;
+        --line-soft: #1e2921;
+        --text-primary: #eef1ea;
+        --text-muted: #9aa79a;
+        --text-dim: #64766a;
+        --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+        --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.35);
+        --overlay-scrim: rgba(7, 11, 9, 0.75);
+      }
+      html[data-theme="light"] {
+        --bg-deep: #f4f7f2;
+        --bg-panel: #ffffff;
+        --bg-panel-2: #ffffff;
+        --bg-raised: #f7faf5;
+        --line: #e6ebe2;
+        --line-soft: #eef2ea;
+        --text-primary: #16241a;
+        --text-muted: #5c6b60;
+        --text-dim: #8b9a8f;
+        --shadow: 0 10px 32px rgba(30, 50, 30, 0.08);
+        --shadow-sm: 0 2px 10px rgba(30, 50, 30, 0.06);
+        --overlay-scrim: rgba(244, 247, 242, 0.9);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        font-family: "Inter", sans-serif;
+        overflow: hidden;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+      .mono {
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .display {
+        font-family: "Space Grotesk", sans-serif;
+      }
+      ::selection {
+        background: var(--canopy-deep);
+        color: #fff;
+      }
+
+      /* ---------- App shell ---------- */
+      #app {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        grid-template-rows: 64px 1fr 30px;
+        height: 100vh;
+      }
+
+      /* ---------- Left nav sidebar ---------- */
+      #nav-sidebar {
+        grid-row: 2;
+        background: var(--bg-panel);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        padding: 14px 10px;
+        overflow-y: auto;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 12px;
+        border-radius: 9px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 2px;
+        transition:
+          background 0.15s,
+          color 0.15s;
+        user-select: none;
+      }
+      .nav-item svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        flex-shrink: 0;
+      }
+      .nav-item:hover {
+        background: var(--bg-deep);
+        color: var(--text-primary);
+      }
+      .nav-item.active {
+        background: rgba(22, 163, 74, 0.12);
+        color: var(--canopy);
+        font-weight: 600;
+      }
+      html[data-theme="dark"] .nav-item.active {
+        background: rgba(34, 197, 94, 0.14);
+        color: var(--canopy-bright);
+      }
+      .nav-soon {
+        margin-left: auto;
+        font-size: 8.5px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .nav-divider {
+        height: 1px;
+        background: var(--line);
+        margin: 10px 4px;
+      }
+
+      /* ---------- Page content wrapper ---------- */
+      #content-area {
+        grid-row: 2;
+        overflow: hidden;
+        position: relative;
+      }
+      .page-view {
+        height: 100%;
+      }
+      .page-scroll {
+        height: 100%;
+        overflow-y: auto;
+        padding: 22px 26px;
+      }
+      .page-header {
+        margin-bottom: 18px;
+      }
+      .page-header h1 {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+        margin: 0 0 3px;
+      }
+      .page-header p {
+        font-size: 12.5px;
+        color: var(--text-dim);
+        margin: 0;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .stat-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+      }
+      .stat-card .slabel {
+        font-size: 11px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      .stat-card .sval {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .stat-card .ssub {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 14px;
+      }
+      .field-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition:
+          border-color 0.15s,
+          transform 0.1s;
+      }
+      .field-card:hover {
+        border-color: var(--canopy);
+        transform: translateY(-1px);
+      }
+      .field-card .fc-thumb {
+        height: 90px;
+        background: linear-gradient(135deg, var(--canopy-deep), var(--canopy));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        opacity: 0.85;
+      }
+      .field-card .fc-thumb svg {
+        width: 30px;
+        height: 30px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 1.6;
+      }
+      .field-card .fc-body {
+        padding: 12px 14px;
+      }
+      .field-card .fc-name {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .field-card .fc-crop {
+        font-size: 11.5px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .field-card .fc-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+        font-size: 11.5px;
+        color: var(--text-muted);
+      }
+      .field-card .fc-area {
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .empty-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-dim);
+        text-align: center;
+        padding: 40px;
+      }
+      .empty-page svg {
+        width: 44px;
+        height: 44px;
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 1.3;
+        margin-bottom: 14px;
+      }
+      .empty-page h2 {
+        font-family: "Space Grotesk", sans-serif;
+        color: var(--text-primary);
+        font-size: 17px;
+        margin: 0 0 6px;
+      }
+      .empty-page p {
+        font-size: 13px;
+        max-width: 360px;
+        line-height: 1.5;
+        margin: 0;
+      }
+
+      header {
+        grid-column: 1 / span 2;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 22px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--line);
+        position: relative;
+        overflow: hidden;
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -30%;
+        width: 30%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(139, 206, 118, 0.08),
+          transparent
+        );
+        animation: scan 7s linear infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        header::after {
+          animation: none;
+        }
+      }
+      @keyframes scan {
+        from {
+          left: -30%;
+        }
+        to {
+          left: 130%;
+        }
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 1;
+      }
+      .brand-logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        overflow: hidden;
+        flex-shrink: 0;
+        border: 1.5px solid var(--canopy-bright);
+        background: var(--bg-deep);
+      }
+      .brand-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .brand-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.15;
+      }
+      .brand-text .title {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: 0.2px;
+      }
+      .brand-text .subtitle {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        letter-spacing: 0.6px;
+      }
+
+      .header-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 1;
+      }
+      .header-search {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      .header-search input {
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        padding: 9px 34px 9px 13px;
+        border-radius: 9px;
+        font-size: 13px;
+        width: 230px;
+        font-family: "Inter", sans-serif;
+      }
+      .header-search input:focus {
+        outline: none;
+        border-color: var(--canopy);
+      }
+      .header-search .search-inline-btns {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: none;
+        align-items: center;
+        gap: 4px;
+      }
+      .header-search.has-text .search-inline-btns {
+        display: flex;
+      }
+      .header-search .clear-btn {
+        background: none;
+        border: none;
+        color: var(--text-dim);
+        cursor: pointer;
+        width: 22px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        border-radius: 5px;
+      }
+      .header-search .clear-btn:hover {
+        color: var(--text-primary);
+        background: var(--line);
+      }
+      .header-search .go-btn {
+        background: var(--canopy);
+        color: #0f1b14;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .header-search .go-btn:hover {
+        background: var(--canopy-bright);
+      }
+      .icon-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: var(--bg-deep);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: border-color 0.15s;
+      }
+      .icon-btn:hover {
+        border-color: var(--canopy);
+      }
+      .icon-btn svg {
+        width: 16px;
+        height: 16px;
+        stroke: var(--text-primary);
+        fill: none;
+        stroke-width: 1.8;
+      }
+      .user-chip {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 6px 10px 6px 6px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .user-chip .avatar {
+        width: 23px;
+        height: 23px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: var(--bg-panel);
+      }
+      .user-chip .chevron {
+        width: 11px;
+        height: 11px;
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 2;
+        flex-shrink: 0;
+        transition: transform 0.15s;
+      }
+      .user-chip.open .chevron {
+        transform: rotate(180deg);
+      }
+      .user-menu {
+        position: fixed;
+        min-width: 150px;
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        z-index: 200;
+      }
+      .user-menu button {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 11px 13px;
+        background: none;
+        border: none;
+        color: var(--danger);
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        text-align: left;
+        text-decoration: none;
+      }
+      .user-menu button:hover {
+        background: var(--bg-deep);
+      }
+      .user-menu button svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        flex-shrink: 0;
+      }
+
+      /* ---------- API status toggle ---------- */
+      .status-toggle {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 5px 12px 5px 6px;
+        cursor: pointer;
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        user-select: none;
+        transition: border-color 0.15s;
+      }
+      .status-toggle:hover {
+        border-color: var(--canopy);
+      }
+      .status-track {
+        width: 30px;
+        height: 16px;
+        border-radius: 10px;
+        background: var(--line);
+        position: relative;
+        flex-shrink: 0;
+        transition: background 0.25s;
+      }
+      .status-track::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        transition:
+          transform 0.25s,
+          background 0.25s;
+      }
+      .status-toggle.online .status-track {
+        background: rgba(139, 206, 118, 0.25);
+      }
+      .status-toggle.online .status-track::after {
+        transform: translateX(14px);
+        background: var(--canopy-bright);
+        box-shadow: 0 0 8px rgba(143, 206, 118, 0.7);
+      }
+      .status-toggle.offline .status-track::after {
+        background: var(--danger);
+      }
+      .status-toggle.checking .status-track::after {
+        background: var(--soil);
+      }
+      .status-label {
+        color: var(--text-muted);
+      }
+      .status-toggle.online .status-label {
+        color: var(--canopy-bright);
+      }
+      .status-toggle.offline .status-label {
+        color: var(--danger);
+      }
+      .status-detail {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 10px 13px;
+        box-shadow: var(--shadow);
+        font-size: 11px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        display: none;
+        z-index: 50;
+        font-weight: 400;
+      }
+      .status-toggle.expanded .status-detail {
+        display: block;
+      }
+      .status-detail .drow {
+        margin-top: 3px;
+      }
+      .status-detail .drow:first-child {
+        margin-top: 0;
+      }
+      .status-detail b {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      /* ---------- Sidebar ---------- */
+      #sidebar {
+        width: 368px;
+        flex-shrink: 0;
+        background: var(--bg-panel);
+        border-right: 1px solid var(--line);
+        overflow-y: auto;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .panel-label {
+        font-size: 10.5px;
+        letter-spacing: 0.8px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        margin-bottom: 9px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+      }
+      .card {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+      }
+
+      select,
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        padding: 10px 12px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-family: "Inter", sans-serif;
+      }
+      select:focus,
+      input:focus {
+        outline: none;
+        border-color: var(--canopy);
+      }
+      label {
+        font-size: 11.5px;
+        color: var(--text-muted);
+        display: block;
+        margin: 12px 0 5px;
+        font-weight: 500;
+      }
+      label:first-child {
+        margin-top: 0;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 13px;
+        cursor: pointer;
+        font-weight: 500;
+        font-family: "Inter", sans-serif;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .btn:hover {
+        border-color: var(--canopy);
+      }
+      .btn-primary {
+        background: var(--canopy);
+        color: #0f1b14;
+        border-color: var(--canopy);
+        font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: var(--canopy-bright);
+      }
+      .btn-danger {
+        color: var(--danger);
+      }
+      .btn-danger:hover {
+        border-color: var(--danger);
+        background: rgba(201, 96, 64, 0.08);
+      }
+      .btn-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      /* ---------- Segmented control (platform) ---------- */
+      .segmented {
+        display: flex;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 3px;
+        gap: 3px;
+      }
+      .segmented button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 8px 6px;
+        border-radius: 7px;
+        cursor: pointer;
+        font-family: "Inter", sans-serif;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .segmented button.active {
+        background: var(--canopy);
+        color: #0f1b14;
+      }
+      .segmented button:not(.active):hover {
+        color: var(--text-primary);
+      }
+
+      .farm-search {
+        margin-bottom: 9px;
+      }
+      .farm-search input {
+        padding: 9px 11px;
+        font-size: 12px;
+      }
+
+      .farm-item {
+        padding: 11px 11px;
+        border-radius: 9px;
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid transparent;
+        margin-bottom: 4px;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .farm-item:last-child {
+        margin-bottom: 0;
+      }
+      .farm-item:hover {
+        background: var(--bg-deep);
+      }
+      .farm-item.active {
+        border-color: var(--canopy);
+        background: var(--bg-deep);
+      }
+      .farm-item .fname {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .farm-item .fcrop {
+        font-size: 10px;
+        color: var(--text-dim);
+      }
+      .farm-item .area {
+        color: var(--text-dim);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      /* ---------- Farm details (professional info grid) ---------- */
+      .farm-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .farm-head .display {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+      .farm-id-chip {
+        font-size: 9.5px;
+        color: var(--text-dim);
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 6px;
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .detail-item {
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+      }
+      .detail-item .dicon {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 9.5px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        font-weight: 600;
+      }
+      .detail-item .dicon svg {
+        width: 11px;
+        height: 11px;
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 2;
+      }
+      .detail-item .dval {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 13px;
+        margin-top: 4px;
+        color: var(--text-primary);
+      }
+      .detail-item .dval.empty {
+        color: var(--text-dim);
+        font-size: 12px;
+        font-family: "Inter", sans-serif;
+      }
+
+      .readout-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .readout {
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 11px;
+      }
+      .readout .rname {
+        font-size: 10px;
+        color: var(--text-dim);
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+      .readout .rval {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 18px;
+        font-weight: 500;
+        margin-top: 2px;
+      }
+      .readout .rval.empty {
+        color: var(--text-dim);
+        font-size: 13px;
+        font-weight: 400;
+      }
+      .readout.selected {
+        border-color: var(--canopy-bright);
+      }
+
+      .avail-note {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+      .avail-note .count {
+        color: var(--canopy-bright);
+        font-weight: 600;
+      }
+
+      .date-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 9px;
+      }
+      .date-chip {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        padding: 5px 9px;
+        border-radius: 6px;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          color 0.15s;
+      }
+      .date-chip:hover {
+        border-color: var(--canopy);
+        color: var(--text-primary);
+      }
+      .date-chip.selected {
+        border-color: var(--canopy-bright);
+        color: var(--canopy-bright);
+        background: rgba(143, 206, 118, 0.08);
+      }
+
+      .index-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 9px;
+      }
+      .legend-swatch {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 9.5px;
+        color: var(--text-dim);
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 7px 3px 4px;
+      }
+      .legend-swatch .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      .legend-note {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        margin-top: 4px;
+      }
+
+      /* ---------- Custom calendar (only real-data dates selectable) ---------- */
+      .date-picker-wrap {
+        position: relative;
+      }
+      .date-picker-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        padding: 10px 12px;
+        border-radius: 9px;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: "Inter", sans-serif;
+      }
+      .date-picker-btn:hover {
+        border-color: var(--canopy);
+      }
+      .date-picker-btn svg {
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 2;
+        flex-shrink: 0;
+      }
+      .calendar-popup {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: max(100%, 258px);
+        z-index: 60;
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px;
+        box-shadow: var(--shadow);
+      }
+      .calendar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .calendar-header button {
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .calendar-header button:hover {
+        border-color: var(--canopy);
+      }
+      .calendar-header span {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 3px;
+      }
+      .calendar-dow {
+        font-size: 9.5px;
+        color: var(--text-dim);
+        text-align: center;
+        padding: 2px 0;
+      }
+      .calendar-day {
+        font-size: 11.5px;
+        text-align: center;
+        padding: 6px 0;
+        border-radius: 6px;
+        color: var(--text-dim);
+        background: transparent;
+        border: none;
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .calendar-day.enabled {
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .calendar-day.enabled:hover {
+        background: var(--bg-deep);
+        border: 1px solid var(--canopy);
+      }
+      .calendar-day.selected {
+        background: var(--canopy);
+        color: #0f1b14;
+        font-weight: 600;
+      }
+      .calendar-day.empty {
+        visibility: hidden;
+      }
+      .calendar-footnote {
+        font-size: 10px;
+        color: var(--text-dim);
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+
+      #map {
+        flex: 1;
+        height: 100%;
+        min-width: 0;
+      }
+
+      #chart-wrap {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px;
+        height: 150px;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .empty-state {
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.5;
+        padding: 6px 2px;
+      }
+      .index-note {
+        font-size: 11px;
+        color: var(--text-dim);
+        line-height: 1.4;
+        margin-top: 6px;
+      }
+      .index-note.warn {
+        color: var(--soil);
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 4px;
+      }
+
+      .toast {
+        position: fixed;
+        bottom: 46px;
+        left: 384px;
+        background: var(--bg-raised);
+        border: 1px solid var(--canopy);
+        color: var(--text-primary);
+        padding: 11px 16px;
+        border-radius: 9px;
+        font-size: 13px;
+        z-index: 2000;
+        box-shadow: var(--shadow);
+        display: none;
+        max-width: 420px;
+      }
+
+      footer {
+        grid-column: 1 / span 2;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 0 22px;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--text-dim);
+      }
+      footer a {
+        color: var(--text-dim);
+        text-decoration: none;
+      }
+      footer a:hover {
+        color: var(--canopy);
+      }
+      footer .footer-links {
+        display: flex;
+        gap: 18px;
+        align-items: center;
+      }
+
+      /* ---------- Login overlay: split hero + sign-in card ---------- */
+      #login-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 5000;
+        display: flex;
+        flex-direction: column;
+        background: #f4f7f2;
+        overflow-y: auto;
+      }
+      .login-main {
+        display: flex;
+        flex: 1;
+        min-height: 560px;
+      }
+      @media (max-width: 860px) {
+        .login-main {
+          flex-direction: column;
+        }
+      }
+
+      /* Left hero panel -- CSS/SVG only, no stock photo (see chat) */
+      .login-hero {
+        flex: 1.1;
+        position: relative;
+        overflow: hidden;
+        min-width: 0;
+        background: url("https://apiv2.agridoot.co.in:12443/img/app_img//bg_img_0a6283.png")
+          center/cover no-repeat;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 40px 44px;
+        color: #fff;
+      }
+      .login-hero::before {
+        /* dark tint over the photo so text stays legible */
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0.2) 0%,
+          rgba(0, 0, 0, 0.35) 45%,
+          rgba(0, 0, 0, 0.72) 100%
+        );
+      }
+      .hero-copy {
+        position: relative;
+        z-index: 2;
+      }
+      .hero-copy .eyebrow {
+        font-size: 15px;
+        color: #eef7ea;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .hero-copy .brandname {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 36px;
+        line-height: 1.1;
+        color: #c6f0a8;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      }
+      .hero-copy .brandname b {
+        color: #fff;
+      }
+      .hero-copy .tag {
+        font-weight: 600;
+        font-size: 15px;
+        margin-top: 6px;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .hero-copy .desc {
+        font-size: 12.5px;
+        line-height: 1.6;
+        margin-top: 10px;
+        max-width: 340px;
+        color: #eef2ea;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .hero-stats {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        gap: 8px;
+        margin-top: 26px;
+        background: rgba(10, 18, 10, 0.42);
+        border-radius: 12px;
+        padding: 14px 10px;
+        backdrop-filter: blur(2px);
+        flex-wrap: wrap;
+      }
+      .hero-stat {
+        flex: 1;
+        min-width: 100px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .hero-stat .hicon {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.14);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .hero-stat .hicon svg {
+        width: 15px;
+        height: 15px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2;
+      }
+      .hero-stat .hval {
+        font-weight: 700;
+        font-size: 15px;
+        line-height: 1.1;
+      }
+      .hero-stat .hlabel {
+        font-size: 9.5px;
+        color: #dce8d6;
+      }
+      .hero-quote {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        font-style: italic;
+        font-size: 13px;
+        margin-top: 18px;
+        color: #f2f6ef;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+
+      /* Right sign-in panel */
+      .login-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-panel);
+        min-width: 340px;
+      }
+      .login-topbar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        padding: 18px 28px 0;
+        font-size: 12.5px;
+        color: var(--text-muted);
+      }
+      .login-topbar span {
+        cursor: pointer;
+      }
+      .login-card {
+        width: 380px;
+        max-width: 88%;
+        margin: auto;
+        padding: 20px 0;
+        text-align: center;
+      }
+      .login-logo-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        margin-bottom: 4px;
+      }
+      .login-logo {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        overflow: hidden;
+        flex-shrink: 0;
+        border: 2px solid var(--canopy-bright);
+      }
+      .login-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .login-brandtext {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 22px;
+        color: var(--canopy);
+      }
+      .login-title {
+        font-weight: 700;
+        font-size: 17px;
+        margin-top: 14px;
+      }
+      .login-tagline {
+        font-size: 12.5px;
+        color: var(--text-dim);
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+
+      .oauth-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        padding: 10px 12px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      .oauth-btn:hover {
+        border-color: var(--canopy);
+      }
+      .oauth-btn:first-of-type {
+        margin-top: 22px;
+      }
+      .oauth-btn svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+      }
+
+      .login-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0;
+        color: var(--text-dim);
+        font-size: 11.5px;
+      }
+      .login-divider::before,
+      .login-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--line);
+      }
+
+      .login-form {
+        text-align: left;
+      }
+      .login-form label {
+        margin-top: 14px;
+      }
+      .login-form label:first-child {
+        margin-top: 0;
+      }
+      .input-with-icon {
+        position: relative;
+      }
+      .input-with-icon svg {
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 15px;
+        height: 15px;
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 1.8;
+        pointer-events: none;
+      }
+      .input-with-icon input {
+        padding-left: 34px;
+      }
+      .input-with-icon .eye-toggle {
+        position: absolute;
+        right: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 4px;
+        display: flex;
+      }
+      .input-with-icon .eye-toggle svg {
+        position: static;
+        transform: none;
+      }
+      .login-links-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 8px;
+      }
+      .login-links-row a {
+        font-size: 12px;
+        color: var(--canopy);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .login-links-row a:hover {
+        text-decoration: underline;
+      }
+      .login-beta-badge {
+        display: inline-block;
+        margin-top: 12px;
+        font-size: 10px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        background: rgba(34, 197, 94, 0.12);
+        color: var(--canopy-deep);
+        border: 1px solid var(--canopy);
+        padding: 4px 10px;
+        border-radius: 20px;
+      }
+      html[data-theme="dark"] .login-beta-badge {
+        color: var(--canopy-bright);
+      }
+      .login-error {
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--danger);
+        background: rgba(220, 38, 38, 0.08);
+        border: 1px solid var(--danger);
+        border-radius: 8px;
+        padding: 8px 10px;
+        display: none;
+      }
+      .login-submit {
+        margin-top: 18px;
+      }
+      .login-footnote {
+        margin-top: 16px;
+        font-size: 12.5px;
+        color: var(--text-dim);
+      }
+      .login-footnote a {
+        color: var(--canopy);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .login-footnote a:hover {
+        text-decoration: underline;
+      }
+
+      /* Bottom feature strip + trust logos */
+      .login-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        justify-content: space-between;
+        align-items: flex-start;
+        background: var(--bg-raised);
+        border-top: 1px solid var(--line);
+        padding: 20px 40px;
+      }
+      .strip-features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 26px;
+        flex: 1;
+      }
+      .strip-feature {
+        display: flex;
+        gap: 10px;
+        max-width: 220px;
+      }
+      .strip-feature .sicon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        background: rgba(22, 163, 74, 0.1);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .strip-feature .sicon svg {
+        width: 17px;
+        height: 17px;
+        stroke: var(--canopy);
+        fill: none;
+        stroke-width: 1.8;
+      }
+      .strip-feature .stitle {
+        font-weight: 600;
+        font-size: 12.5px;
+        color: var(--canopy);
+      }
+      .strip-feature .sdesc {
+        font-size: 11px;
+        color: var(--text-dim);
+        line-height: 1.4;
+        margin-top: 2px;
+      }
+      .trust-block {
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .trust-block .tlabel {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+      }
+      .trust-logos {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .trust-logo {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-align: center;
+        letter-spacing: 0.3px;
+      }
+      .trust-logo .tl-icon {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 1.5px solid var(--line);
+        margin: 0 auto 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--canopy);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      /* ---------- Imagery & Indices page (mockup-matched layout) ---------- */
+      .imagery-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      .field-overview-bar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 14px;
+        padding: 14px 20px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .fo-left .fo-name-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .fo-left .fo-name-row .display {
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .fo-status-badge {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        background: rgba(22, 163, 74, 0.12);
+        color: var(--canopy);
+        border-radius: 20px;
+        padding: 2px 9px;
+      }
+      .fo-location {
+        font-size: 11.5px;
+        color: var(--text-dim);
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .fo-location svg {
+        width: 12px;
+        height: 12px;
+        stroke: var(--text-dim);
+        fill: none;
+        stroke-width: 2;
+        flex-shrink: 0;
+      }
+      .fo-subline {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        margin-top: 6px;
+      }
+      .fo-subline span {
+        margin-right: 14px;
+      }
+      .fo-right {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .fo-stat {
+        background: var(--bg-deep);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 16px;
+        text-align: center;
+        min-width: 80px;
+      }
+      .fo-stat .fo-sval {
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .fo-stat .fo-slabel {
+        font-size: 9.5px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .fo-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .imagery-row {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+      .map-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-width: 0;
+      }
+      .map-toolbar {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 20;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 5px;
+        box-shadow: var(--shadow-sm);
+      }
+      .map-toolbar button {
+        width: 30px;
+        height: 30px;
+        border: none;
+        background: transparent;
+        border-radius: 7px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+      }
+      .map-toolbar button:hover {
+        background: var(--bg-deep);
+      }
+      .map-toolbar button svg {
+        width: 15px;
+        height: 15px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+      }
+      .date-nav-bar {
+        position: absolute;
+        top: 14px;
+        left: 60px;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        box-shadow: var(--shadow-sm);
+      }
+      .date-nav-bar button {
+        width: 28px;
+        height: 32px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        color: var(--text-primary);
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .date-nav-bar button:hover {
+        color: var(--canopy);
+      }
+      .date-nav-bar button:disabled {
+        color: var(--text-dim);
+        cursor: default;
+      }
+      .date-nav-bar .dn-label {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 0 4px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .cloud-badge {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        z-index: 20;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 6px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .cloud-badge svg {
+        width: 12px;
+        height: 12px;
+        stroke: var(--sky);
+        fill: none;
+        stroke-width: 2;
+      }
+      .index-btn-row {
+        flex-shrink: 0;
+        display: flex;
+        gap: 6px;
+        padding: 10px 14px;
+        overflow-x: auto;
+        background: var(--bg-panel);
+        border-top: 1px solid var(--line);
+      }
+      .index-quick-btn {
+        flex-shrink: 0;
+        padding: 7px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--bg-deep);
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: "Inter", sans-serif;
+      }
+      .index-quick-btn:hover {
+        border-color: var(--canopy);
+        color: var(--text-primary);
+      }
+      .index-quick-btn.active {
+        background: var(--canopy);
+        border-color: var(--canopy);
+        color: #0f1b14;
+      }
+      .index-legend {
+        grid-template-columns: repeat(3, 1fr);
+        display: grid !important;
+        gap: 5px;
+      }
+
+      /* ============================================================
+     MOBILE (<=768px): hamburger + slide-in nav drawer, bottom tab
+     bar replacing the sidebar nav, stacked map/detail panel, and a
+     fuller login-page reflow than the earlier single breakpoint.
+     ============================================================ */
+      #bottom-tab-bar {
+        display: none;
+      }
+      #nav-scrim {
+        display: none;
+      }
+      #mobile-search-btn {
+        display: none;
+      }
+
+      @media (max-width: 768px) {
+        #mobile-menu-btn {
+          display: flex !important;
+        }
+        .brand-text .subtitle {
+          display: none;
+        }
+
+        /* Header: search collapses behind an icon button, status/theme/user compact down */
+        .header-search {
+          display: none;
+          position: fixed;
+          top: 56px;
+          left: 0;
+          right: 0;
+          padding: 10px 14px;
+          background: var(--bg-panel);
+          border-bottom: 1px solid var(--line);
+          z-index: 600;
+        }
+        .header-search.mobile-open {
+          display: block;
+        }
+        .header-search input {
+          width: 100%;
+          padding: 9px 34px 9px 13px;
+        }
+        #mobile-search-btn {
+          display: flex !important;
+        }
+        .status-toggle .status-label {
+          display: none;
+        }
+        .status-toggle {
+          padding: 5px 8px;
+        }
+        .user-chip span#user-name-label {
+          display: none;
+        }
+        .header-right {
+          gap: 6px;
+        }
+
+        /* App grid: no left nav column at all -- it becomes an overlay drawer */
+        #app {
+          grid-template-columns: 1fr;
+          grid-template-rows: 56px 1fr;
+        }
+        footer {
+          display: none;
+        }
+
+        #nav-sidebar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          bottom: 0;
+          width: 240px;
+          z-index: 900;
+          transform: translateX(-100%);
+          transition: transform 0.2s ease;
+          box-shadow: var(--shadow);
+        }
+        #nav-sidebar.open {
+          transform: translateX(0);
+        }
+        #nav-scrim {
+          display: block;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.4);
+          z-index: 800;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+        }
+        #nav-scrim.open {
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        #content-area {
+          grid-column: 1;
+          grid-row: 2;
+          padding-bottom: 56px;
+        }
+        .page-scroll {
+          padding: 14px 14px 20px;
+        }
+        .stat-grid {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+        .field-grid {
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: 10px;
+        }
+
+        /* Bottom tab bar replaces the side nav as the primary way to switch pages */
+        #bottom-tab-bar {
+          display: flex;
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 56px;
+          z-index: 500;
+          background: var(--bg-panel);
+          border-top: 1px solid var(--line);
+        }
+        .tab-item {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          color: var(--text-dim);
+          cursor: pointer;
+        }
+        .tab-item svg {
+          width: 19px;
+          height: 19px;
+          stroke: currentColor;
+          fill: none;
+          stroke-width: 1.8;
+        }
+        .tab-item span {
+          font-size: 9.5px;
+          font-weight: 500;
+        }
+        .tab-item.active {
+          color: var(--canopy);
+        }
+
+        /* Imagery & Indices: map on top, controls panel below (not side by side) */
+        .imagery-row {
+          flex-direction: column;
+          overflow-y: auto;
+        }
+        #sidebar {
+          width: 100%;
+          max-height: none;
+          order: 2;
+          border-right: none;
+          border-top: 1px solid var(--line);
+        }
+        .map-column {
+          flex: none;
+          height: 38vh;
+          order: 1;
+        }
+        .field-overview-bar {
+          padding: 12px 14px;
+        }
+        .fo-right {
+          width: 100%;
+        }
+
+        /* Login page: shrink hero, stack stats 2x2, stack the bottom strip */
+        .login-hero {
+          padding: 26px 22px;
+        }
+        .hero-copy .brandname {
+          font-size: 28px;
+        }
+        .hero-stats {
+          gap: 6px;
+        }
+        .hero-stat {
+          min-width: 44%;
+        }
+        .login-strip {
+          flex-direction: column;
+          padding: 18px 20px;
+          gap: 18px;
+        }
+        .strip-features {
+          gap: 16px;
+        }
+        .trust-block {
+          text-align: left;
+        }
+        .trust-logos {
+          flex-wrap: wrap;
+        }
+      }
+
+      /* ---------- Draw-new-field modal ---------- */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        background: rgba(10, 18, 10, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .modal-card {
+        width: 520px;
+        max-width: 100%;
+        max-height: 90vh;
+        background: var(--bg-panel);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        flex-shrink: 0;
+      }
+      .modal-header h3 {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 16px;
+      }
+      .modal-body {
+        padding: 16px 18px 20px;
+        overflow-y: auto;
+      }
+      .draw-map-slot {
+        width: 100%;
+        height: 320px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
+      .draw-map-slot #map {
+        width: 100%;
+        height: 100%;
+      }
+      @media (max-width: 600px) {
+        .draw-map-slot {
+          height: 240px;
+        }
+        .modal-card {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="login-overlay">
+      <div class="login-main">
+        <div class="login-hero">
+          <div class="hero-copy">
+            <div class="eyebrow">Welcome to</div>
+            <div class="brandname">Agri<b>Doot</b></div>
+            <div class="tag">Smart Farming. Sustainable Future.</div>
+            <div class="desc">
+              AI-Powered insights &bull; IoT Enabled &bull; GIS Intelligence.
+              Empowering farmers with real-time data for better decisions and
+              higher yields.
+            </div>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <div class="hicon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path
+                    d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+                  />
+                </svg>
+              </div>
+              <div>
+                <div class="hval">15K+</div>
+                <div class="hlabel">Farmers</div>
+              </div>
+            </div>
+            <div class="hero-stat">
+              <div class="hicon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18M3 9h6" />
+                </svg>
+              </div>
+              <div>
+                <div class="hval">2K+</div>
+                <div class="hlabel">Acres Monitored</div>
+              </div>
+            </div>
+            <div class="hero-stat">
+              <div class="hicon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <div class="hval">2.5L+</div>
+                <div class="hlabel">AI Queries</div>
+              </div>
+            </div>
+            <div class="hero-stat">
+              <div class="hicon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="M18 9l-5 5-3-3-4 4" />
+                </svg>
+              </div>
+              <div>
+                <div class="hval">98%</div>
+                <div class="hlabel">Satisfaction</div>
+              </div>
+            </div>
+          </div>
+          <div class="hero-quote">
+            &ldquo;Data se Decision, Decision se Behtar Fasal.&rdquo;
+          </div>
+        </div>
+
+        <div class="login-panel">
+          <div class="login-topbar">
+            <span>&#127760; English</span>
+            <span onclick="showHonestPlaceholder('Help center')"
+              >? Need help?</span
+            >
+          </div>
+          <div class="login-card">
+            <div class="login-logo-row">
+              <div class="login-logo">
+                <img
+                  src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+                  alt="AgriDoot"
+                />
+              </div>
+              <span class="login-brandtext">AgriDoot</span>
+            </div>
+            <div class="login-title">Sign in to your account</div>
+            <div class="login-tagline">
+              Access your dashboard and farm insights
+            </div>
+            <span class="login-beta-badge">Beta &middot; Invite only</span>
+
+            <button
+              type="button"
+              class="oauth-btn"
+              onclick="showHonestPlaceholder('Google sign-in')"
+            >
+              <svg viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.85A11 11 0 0 0 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.05H2.18a11 11 0 0 0 0 9.9z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.05l3.66 2.85C6.71 7.31 9.14 5.38 12 5.38z"
+                />
+              </svg>
+              Continue with Google
+            </button>
+
+            <div class="login-divider">or</div>
+
+            <div class="login-form">
+              <label>Email or Phone Number</label>
+              <div class="input-with-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"
+                  />
+                  <path d="m22 6-10 7L2 6" />
+                </svg>
+                <input
+                  type="text"
+                  id="login-username"
+                  autocomplete="username"
+                  placeholder="Enter email, phone, or username"
+                />
+              </div>
+              <label>Password</label>
+              <div class="input-with-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <input
+                  type="password"
+                  id="login-password"
+                  autocomplete="current-password"
+                  placeholder="Enter your password"
+                  style="padding-right: 34px"
+                />
+                <button
+                  type="button"
+                  class="eye-toggle"
+                  onclick="togglePasswordVisibility()"
+                  aria-label="Show password"
+                >
+                  <svg
+                    id="eye-icon"
+                    viewBox="0 0 24 24"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    width="15"
+                    height="15"
+                    stroke="var(--text-dim)"
+                    fill="none"
+                    stroke-width="1.8"
+                  >
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </div>
+              <div class="login-links-row">
+                <a onclick="showHonestPlaceholder('Password reset')"
+                  >Forgot Password?</a
+                >
+              </div>
+              <div id="login-error" class="login-error"></div>
+              <button
+                class="btn btn-primary login-submit"
+                onclick="handleLogin()"
+              >
+                Sign In
+              </button>
+            </div>
+            <div class="login-footnote">
+              Don't have an account?
+              <a onclick="showHonestPlaceholder('Self-serve sign-up')"
+                >Sign Up</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="login-strip">
+        <div
+          class="strip-features"
+          style="flex: 1; justify-content: space-between"
+        >
+          <div class="strip-feature">
+            <div class="sicon">
+              <svg
+                viewBox="0 0 24 24"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+            <div>
+              <div class="stitle">Secure &amp; Reliable</div>
+              <div class="sdesc">
+                Your data is protected with enterprise-grade security.
+              </div>
+            </div>
+          </div>
+          <div class="strip-feature">
+            <div class="sicon">
+              <svg
+                viewBox="0 0 24 24"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+            </div>
+            <div>
+              <div class="stitle">Real-time Insights</div>
+              <div class="sdesc">
+                Get instant updates and recommendations for your farm.
+              </div>
+            </div>
+          </div>
+          <div class="strip-feature">
+            <div class="sicon">
+              <svg
+                viewBox="0 0 24 24"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                />
+              </svg>
+            </div>
+            <div>
+              <div class="stitle">AI-Powered Advisory</div>
+              <div class="sdesc">
+                Personalized advice in your language by AgriDoot Gyan AI.
+              </div>
+            </div>
+          </div>
+          <div class="strip-feature">
+            <div class="sicon">
+              <svg
+                viewBox="0 0 24 24"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+                <path d="M12 12v9M9 18l3 3 3-3" />
+              </svg>
+            </div>
+            <div>
+              <div class="stitle">Easy Access</div>
+              <div class="sdesc">
+                Access your farm data anytime, anywhere, on any device.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="app" style="display: none">
+      <header>
+        <button
+          class="icon-btn"
+          id="mobile-menu-btn"
+          onclick="toggleMobileNav()"
+          aria-label="Menu"
+          style="display: none"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 6h18M3 12h18M3 18h18" />
+          </svg>
+        </button>
+        <div class="brand">
+          <div class="brand-logo">
+            <img
+              src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+              alt="AgriDoot logo"
+            />
+          </div>
+          <div class="brand-text">
+            <span class="title">Vyom Engine</span>
+            <span class="subtitle mono"
+              >BY AGRIDOOT &middot; EARTH OBSERVATORY</span
+            >
+          </div>
+        </div>
+        <div class="header-right">
+          <button
+            class="icon-btn"
+            id="mobile-search-btn"
+            onclick="toggleMobileSearch()"
+            aria-label="Search"
+            title="Search"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </button>
+          <div class="header-search" id="header-search">
+            <input
+              id="global-field-search"
+              type="text"
+              placeholder="Search your fields..."
+              oninput="onGlobalFieldSearch()"
+            />
+            <div class="search-inline-btns">
+              <button
+                type="button"
+                class="clear-btn"
+                onclick="clearGlobalFieldSearch()"
+                title="Clear"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+
+          <button
+            class="icon-btn"
+            onclick="showHonestPlaceholder('Notifications')"
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </button>
+          <button
+            class="icon-btn"
+            onclick="showHonestPlaceholder('Help center')"
+            title="Need help?"
+            aria-label="Help"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4" />
+              <path d="M12 17h.01" />
+            </svg>
+          </button>
+
+          <div
+            class="status-toggle checking"
+            id="status-toggle"
+            onclick="onStatusToggleClick()"
+            title="Click to re-check and see details"
+          >
+            <div class="status-track"></div>
+            <span class="status-label" id="status-label">Checking</span>
+            <div class="status-detail" id="status-detail">
+              <div class="drow">
+                Endpoint: <b id="status-endpoint">&ndash;</b>
+              </div>
+              <div class="drow">
+                Last checked: <b id="status-lastcheck">&ndash;</b>
+              </div>
+              <div class="drow">Click again to re-check</div>
+            </div>
+          </div>
+
+          <button
+            class="icon-btn"
+            id="theme-toggle"
+            onclick="toggleTheme()"
+            title="Toggle theme"
+            aria-label="Toggle light/dark theme"
+          >
+            <svg
+              id="theme-icon"
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ></svg>
+          </button>
+          <div class="user-chip" id="user-chip" onclick="toggleUserMenu(event)">
+            <img
+              class="avatar"
+              id="user-avatar"
+              src="https://apiv2.agridoot.co.in:12443/img/app_img//profile_img_d10e50.png"
+              alt=""
+            />
+            <div
+              style="display: flex; flex-direction: column; line-height: 1.2"
+            >
+              <span id="user-name-label"></span>
+              <span style="font-size: 9.5px; color: var(--text-dim)"
+                >Beta access</span
+              >
+            </div>
+            <svg
+              class="chevron"
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <div class="user-menu" id="user-menu" style="display: none">
+              <button
+                type="button"
+                onclick="
+                  event.stopPropagation();
+                  confirmLogout();
+                "
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <path d="M16 17l5-5-5-5" />
+                  <path d="M21 12H9" />
+                </svg>
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <nav id="nav-sidebar">
+        <button
+          class="btn btn-primary"
+          style="margin-bottom: 14px"
+          onclick="
+            switchPage('myfields');
+            openDrawFieldModal();
+          "
+        >
+          + Add New Field
+        </button>
+        <div
+          class="nav-item active"
+          data-page="overview"
+          onclick="switchPage('overview')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="7" height="9" />
+            <rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" />
+            <rect x="3" y="16" width="7" height="5" />
+          </svg>
+          Overview
+        </div>
+        <div
+          class="nav-item"
+          data-page="myfields"
+          onclick="switchPage('myfields')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 9h18M9 21V9" />
+          </svg>
+          My Fields
+        </div>
+        <div
+          class="nav-item"
+          data-page="imagery"
+          onclick="switchPage('imagery')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          Imagery &amp; Indices
+        </div>
+        <div class="nav-divider"></div>
+        <div
+          class="nav-item"
+          data-page="comparisons"
+          onclick="switchPage('comparisons')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 3v18h18" />
+            <path d="M18 9l-5 5-3-3-4 4" />
+          </svg>
+          Comparisons<span class="nav-soon">Soon</span>
+        </div>
+        <div class="nav-item" data-page="alerts" onclick="switchPage('alerts')">
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          Alerts<span class="nav-soon">Soon</span>
+        </div>
+        <div
+          class="nav-item"
+          data-page="reports"
+          onclick="switchPage('reports')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+            />
+            <path d="M14 2v6h6M9 13h6M9 17h6" />
+          </svg>
+          Reports<span class="nav-soon">Soon</span>
+        </div>
+        <div
+          class="nav-item"
+          data-page="downloads"
+          onclick="switchPage('downloads')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          Downloads<span class="nav-soon">Soon</span>
+        </div>
+        <div class="nav-divider"></div>
+        <div
+          class="nav-item"
+          data-page="settings"
+          onclick="switchPage('settings')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            />
+          </svg>
+          Settings<span class="nav-soon">Soon</span>
+        </div>
+        <div class="nav-item" onclick="window.open('errors.html', '_blank')">
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          Errors
+        </div>
+        <div style="margin-top: auto; padding-top: 14px">
+          <div class="card" style="text-align: center; padding: 14px 12px">
+            <div
+              style="
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                overflow: hidden;
+                margin: 0 auto 8px;
+                border: 1.5px solid var(--canopy-bright);
+              "
+            >
+              <img
+                src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+                alt=""
+                style="width: 100%; height: 100%; object-fit: cover"
+              />
+            </div>
+            <div style="font-size: 12px; font-weight: 600">Beta Access</div>
+            <div
+              style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px"
+            >
+              Invite-only &middot; all features unlocked
+            </div>
+          </div>
+        </div>
+      </nav>
+      <div id="nav-scrim" onclick="closeMobileNav()"></div>
+
+      <nav id="bottom-tab-bar">
+        <div
+          class="tab-item active"
+          data-page="overview"
+          onclick="switchPage('overview')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="7" height="9" />
+            <rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" />
+            <rect x="3" y="16" width="7" height="5" />
+          </svg>
+          <span>Overview</span>
+        </div>
+        <div
+          class="tab-item"
+          data-page="myfields"
+          onclick="switchPage('myfields')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 9h18M9 21V9" />
+          </svg>
+          <span>Fields</span>
+        </div>
+        <div
+          class="tab-item"
+          data-page="imagery"
+          onclick="switchPage('imagery')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <span>Indices</span>
+        </div>
+        <div class="tab-item" data-page="alerts" onclick="switchPage('alerts')">
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          <span>Alerts</span>
+        </div>
+        <div class="tab-item" data-page="more" onclick="toggleMobileNav()">
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="5" r="1.2" />
+            <circle cx="12" cy="12" r="1.2" />
+            <circle cx="12" cy="19" r="1.2" />
+          </svg>
+          <span>More</span>
+        </div>
+      </nav>
+
+      <div id="content-area">
+        <div class="page-view" id="page-overview">
+          <div class="page-scroll">
+            <div class="page-header">
+              <h1>Overview</h1>
+              <p>Monitor all your fields at a glance.</p>
+            </div>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="slabel">Total fields</div>
+                <div class="sval" id="ov-total-fields">&ndash;</div>
+              </div>
+              <div class="stat-card">
+                <div class="slabel">Total area</div>
+                <div class="sval" id="ov-total-area">&ndash;</div>
+                <div class="ssub">acres</div>
+              </div>
+              <div class="stat-card">
+                <div class="slabel">Sentinel-2 indices</div>
+                <div class="sval" id="ov-s2-count">&ndash;</div>
+              </div>
+              <div class="stat-card">
+                <div class="slabel">Sentinel-1 indices</div>
+                <div class="sval" id="ov-s1-count">&ndash;</div>
+              </div>
+            </div>
+            <div class="panel-label">Your fields</div>
+            <div class="field-grid" id="ov-field-grid"></div>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-myfields" style="display: none">
+          <div class="page-scroll">
+            <div
+              class="page-header"
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+              "
+            >
+              <div>
+                <h1>My Fields</h1>
+                <p>Manage and monitor all your fields in one place.</p>
+              </div>
+              <button
+                class="btn btn-primary"
+                style="width: auto; padding: 10px 18px"
+                onclick="openDrawFieldModal()"
+              >
+                + Draw new field
+              </button>
+            </div>
+            <div class="field-grid" id="myfields-grid"></div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="draw-field-modal" style="display: none">
+          <div class="modal-card">
+            <div class="modal-header">
+              <h3>Draw new field</h3>
+              <button
+                class="icon-btn"
+                onclick="closeDrawFieldModal()"
+                aria-label="Close"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div
+                class="header-search"
+                id="modal-search-wrap"
+                style="width: 100%; margin-bottom: 10px; position: relative"
+              >
+                <input
+                  id="modal-location-search"
+                  type="text"
+                  placeholder="Address, place, or lat, lon (e.g. 23.28, 77.30)"
+                  oninput="onSearchInput()"
+                  style="width: 100%"
+                />
+                <div class="search-inline-btns">
+                  <button
+                    type="button"
+                    class="clear-btn"
+                    onclick="clearSearch()"
+                    title="Clear"
+                  >
+                    &times;
+                  </button>
+                  <button
+                    type="button"
+                    class="go-btn"
+                    onclick="searchLocation()"
+                  >
+                    Go
+                  </button>
+                </div>
+              </div>
+              <div id="draw-map-slot" class="draw-map-slot"></div>
+
+              <div class="card" style="margin-top: 12px">
+                <button
+                  class="btn btn-primary"
+                  id="draw-start-btn"
+                  onclick="startDrawing()"
+                >
+                  Start drawing
+                </button>
+                <div id="draw-active-controls" style="display: none">
+                  <div class="empty-state" style="padding-top: 0">
+                    Click points on the map to trace the field boundary, then
+                    Finish.
+                  </div>
+                  <div class="btn-row" style="margin-top: 8px">
+                    <button class="btn" onclick="cancelDrawing()">
+                      Cancel
+                    </button>
+                    <button class="btn btn-primary" onclick="finishDrawing()">
+                      Finish shape
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                id="create-form"
+                class="card"
+                style="display: none; margin-top: 12px"
+              >
+                <div class="panel-label">Field details</div>
+                <label>Name</label>
+                <input
+                  type="text"
+                  id="new-farm-name"
+                  placeholder="e.g. North block, Rampur"
+                />
+                <label>Crop (optional)</label>
+                <input
+                  type="text"
+                  id="new-farm-crop"
+                  placeholder="e.g. Wheat"
+                />
+                <label>Sowing date (optional)</label>
+                <input type="date" id="new-farm-sowing-date" />
+                <label>Country (optional)</label>
+                <input
+                  type="text"
+                  id="new-farm-country"
+                  placeholder="e.g. India"
+                />
+                <div class="btn-row" style="margin-top: 12px">
+                  <button class="btn" onclick="cancelDraft()">Discard</button>
+                  <button class="btn btn-primary" onclick="saveDraft()">
+                    Save field
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-imagery" style="display: none">
+          <div class="imagery-shell">
+            <div
+              class="field-overview-bar"
+              id="detail-panel"
+              style="display: none"
+            >
+              <div
+                id="detail-grid-view"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  flex-wrap: wrap;
+                  gap: 14px;
+                  width: 100%;
+                "
+              >
+                <div class="fo-left">
+                  <div class="fo-name-row">
+                    <div id="selected-farm-name" class="display"></div>
+                    <span class="fo-status-badge">Active</span>
+                  </div>
+                  <div class="fo-location">
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"
+                      />
+                    </svg>
+                    <span id="detail-location">&ndash;</span>
+                  </div>
+                  <div class="fo-subline">
+                    <span>Sowing: <b id="detail-sowing-date">&ndash;</b></span>
+                    <span
+                      >ID:
+                      <b id="detail-polygon-id" style="font-size: 10px"
+                        >&ndash;</b
+                      ></span
+                    >
+                    <span id="detail-centroid-wrap"
+                      >Centroid: <b id="detail-centroid">&ndash;</b></span
+                    >
+                  </div>
+                </div>
+                <div class="fo-right">
+                  <div class="fo-stat">
+                    <div class="fo-sval" id="detail-area">&ndash;</div>
+                    <div class="fo-slabel">Area</div>
+                  </div>
+                  <div class="fo-stat">
+                    <div class="fo-sval" id="detail-crop">&ndash;</div>
+                    <div class="fo-slabel">Crop</div>
+                  </div>
+                  <div class="fo-stat">
+                    <div class="fo-sval" id="detail-crop-age">&ndash;</div>
+                    <div class="fo-slabel">Crop age</div>
+                  </div>
+                  <div class="fo-actions">
+                    <button
+                      class="btn"
+                      id="edit-details-btn"
+                      style="width: auto; padding: 8px 12px; font-size: 11px"
+                      onclick="toggleEditDetails()"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      class="btn btn-danger"
+                      style="width: auto; padding: 8px 12px; font-size: 11px"
+                      onclick="deleteFarm()"
+                      title="Delete field"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div
+                id="detail-grid-edit"
+                style="
+                  display: none;
+                  width: 100%;
+                  border-top: 1px solid var(--line);
+                  margin-top: 12px;
+                  padding-top: 12px;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    align-items: flex-end;
+                  "
+                >
+                  <div>
+                    <label style="margin: 0">Crop</label
+                    ><input
+                      type="text"
+                      id="edit-crop"
+                      placeholder="e.g. Wheat"
+                      style="width: 160px"
+                    />
+                  </div>
+                  <div>
+                    <label style="margin: 0">Sowing date</label
+                    ><input
+                      type="date"
+                      id="edit-sowing-date"
+                      style="width: 160px"
+                    />
+                  </div>
+                  <button
+                    class="btn"
+                    style="width: auto; padding: 10px 14px"
+                    onclick="toggleEditDetails()"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    class="btn btn-primary"
+                    style="width: auto; padding: 10px 14px"
+                    onclick="saveDetails()"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="imagery-row">
+              <div class="map-column">
+                <div class="map-toolbar">
+                  <button
+                    type="button"
+                    onclick="cycleMapType()"
+                    title="Change basemap"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M12 2 2 7l10 5 10-5-10-5z" />
+                      <path d="m2 17 10 5 10-5M2 12l10 5 10-5" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="zoomToActiveFarm()"
+                    title="Zoom to field"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m21 21-4.3-4.3" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="scrollToTrend()"
+                    title="Jump to trend chart"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M3 3v18h18" />
+                      <path d="M18 9l-5 5-3-3-4 4" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onclick="zoomToActiveFarm()"
+                    title="Center on field"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"
+                      />
+                      <circle cx="12" cy="9" r="2.5" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div class="date-nav-bar">
+                  <button
+                    type="button"
+                    onclick="stepDate(-1)"
+                    id="date-nav-prev"
+                    title="Previous date"
+                  >
+                    &lsaquo;
+                  </button>
+                  <span
+                    class="dn-label"
+                    id="date-nav-label"
+                    onclick="toggleCalendar('date-nav-bar')"
+                    >Select a date</span
+                  >
+                  <button
+                    type="button"
+                    onclick="stepDate(1)"
+                    id="date-nav-next"
+                    title="Next date"
+                  >
+                    &rsaquo;
+                  </button>
+                  <div
+                    id="calendar-popup"
+                    class="calendar-popup"
+                    style="display: none; top: calc(100% + 6px); left: 0"
+                  >
+                    <div class="calendar-header">
+                      <button type="button" onclick="shiftCalendarMonth(-1)">
+                        &lsaquo;
+                      </button>
+                      <span id="calendar-month-label" class="mono"></span>
+                      <button type="button" onclick="shiftCalendarMonth(1)">
+                        &rsaquo;
+                      </button>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid"></div>
+                    <div class="calendar-footnote">
+                      Only dates with processed data for this index are
+                      selectable.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="cloud-badge" id="cloud-badge" style="display: none">
+                  <svg
+                    viewBox="0 0 24 24"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+                  </svg>
+                  <span id="cloud-badge-text">Cloud &ndash;</span>
+                </div>
+
+                <main id="map"></main>
+
+                <div class="index-btn-row" id="index-btn-row"></div>
+              </div>
+
+              <aside id="sidebar">
+                <div class="card" style="margin-top: 0">
+                  <div class="panel-label">Imagery &amp; indices</div>
+
+                  <label>Index</label>
+                  <select id="index-select" onchange="onIndexChange()"></select>
+                  <div id="index-note" class="index-note"></div>
+                  <div id="index-legend" class="index-legend"></div>
+
+                  <label>Date</label>
+                  <div class="date-picker-wrap">
+                    <button
+                      type="button"
+                      class="date-picker-btn"
+                      id="date-picker-btn"
+                      onclick="toggleCalendar('date-picker-wrap')"
+                    >
+                      <span id="date-picker-label">Select a date</span>
+                      <svg viewBox="0 0 24 24" width="14" height="14">
+                        <path
+                          d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <label
+                    >Opacity
+                    <span
+                      id="opacity-value"
+                      class="mono"
+                      style="color: var(--text-dim); font-weight: 400"
+                    ></span
+                  ></label>
+                  <input
+                    type="range"
+                    id="opacity-slider"
+                    min="0"
+                    max="100"
+                    value="100"
+                    oninput="onOpacityInput()"
+                  />
+
+                  <label
+                    >Look back
+                    <span
+                      id="lookback-value"
+                      class="mono"
+                      style="color: var(--text-dim); font-weight: 400"
+                    ></span
+                  ></label>
+                  <input
+                    type="range"
+                    id="lookback-slider"
+                    min="1"
+                    max="180"
+                    value="30"
+                    oninput="onLookbackInput()"
+                  />
+
+                  <div id="cloud-cover-row">
+                    <label
+                      >Max cloud cover (S2 only)
+                      <span
+                        id="cloud-cover-value"
+                        class="mono"
+                        style="color: var(--text-dim); font-weight: 400"
+                      ></span
+                    ></label>
+                    <input
+                      type="range"
+                      id="cloud-cover-slider"
+                      min="0"
+                      max="100"
+                      value="40"
+                      oninput="onCloudCoverInput()"
+                    />
+                  </div>
+
+                  <div class="btn-row" style="margin-top: 14px">
+                    <button class="btn btn-primary" onclick="refreshFarm()">
+                      Load Data
+                    </button>
+                  </div>
+                </div>
+
+                <div class="card" style="margin-top: 12px">
+                  <div class="panel-label">
+                    <span>Readings</span>
+                    <span
+                      id="readings-date-label"
+                      class="mono"
+                      style="
+                        font-weight: 400;
+                        text-transform: none;
+                        letter-spacing: 0;
+                      "
+                    ></span>
+                  </div>
+                  <div id="readout-grid" class="readout-grid"></div>
+                </div>
+
+                <div style="margin-top: 12px" id="trend-section">
+                  <div class="panel-label">Trend</div>
+                  <div id="chart-wrap"><canvas id="trend-chart"></canvas></div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+        <!-- /#page-imagery -->
+
+        <div class="page-view" id="page-comparisons" style="display: none">
+          <div class="empty-page">
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M18 9l-5 5-3-3-4 4" />
+            </svg>
+            <h2>Comparisons</h2>
+            <p>
+              Compare field health across dates and fields. Not built yet --
+              needs a design decision on what a "comparison" computes before
+              implementing (date-vs-date diff, field-vs-field, or both).
+            </p>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-alerts" style="display: none">
+          <div class="empty-page">
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <h2>Alerts</h2>
+            <p>
+              Automatic notifications for things like low vegetation or pest
+              risk. Not built yet -- needs a real detection engine and a weather
+              data source behind it, not just a UI.
+            </p>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-reports" style="display: none">
+          <div class="empty-page">
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <path d="M14 2v6h6M9 13h6M9 17h6" />
+            </svg>
+            <h2>Reports</h2>
+            <p>
+              Generate and download PDF field-health reports. Not built yet --
+              needs a report-generation service.
+            </p>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-downloads" style="display: none">
+          <div class="empty-page">
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            <h2>Downloads</h2>
+            <p>
+              Access previously generated reports, maps, and advisory documents.
+              Depends on Reports existing first.
+            </p>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-settings" style="display: none">
+          <div class="empty-page">
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+              />
+            </svg>
+            <h2>Settings</h2>
+            <p>
+              Profile, preferences, and account settings. Not built yet -- the
+              backend has no persisted user-settings concept beyond login
+              credentials today.
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- /#content-area -->
+
+      <footer>
+        <div class="footer-links">
+          <span class="mono"
+            >Vyom Engine v0.4 &middot; &copy; 2026 AgriDoot</span
+          >
+          <a href="#" onclick="return false;">Docs</a>
+          <a href="#" onclick="return false;">Support</a>
+          <span>Imagery: Copernicus Sentinel-1/2</span>
+        </div>
+      </footer>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+      // -----------------------------------------------------------------
+      // Point this at your running API.
+      // -----------------------------------------------------------------
+      const API_BASE = "http://179.61.219.225:8000";
+
+      // -----------------------------------------------------------------
+      // Google Maps: paste your key below. Enable "Maps JavaScript API",
+      // "Drawing library" (bundled in) and "Geocoding API" for this key in
+      // Google Cloud Console, and restrict it to your domain/IP there too.
+      // -----------------------------------------------------------------
+      const GOOGLE_MAPS_API_KEY = "AIzaSyCzOfu4-7D3dLjqAKWZHNifm3tM6gcNn44";
+
+      const SESSION_KEY = "vyom_session"; // {token, expires_at (ms), username}
+
+      let map, geocoder, searchMarker;
+      let farms = [];
+      let farmOverlays = {};
+      let activeFarmId = null;
+      let draftPolygon = null;
+      let draftGeoJSON = null;
+      let indexTileLayer = null;
+      let trendChart = null;
+      let availableIndices = { S2: [], S1: [] };
+      let indexScales = {};
+      let sessionExpiryTimer = null;
+      let currentPlatform = "S2";
+      let availableDates = [];
+
+      // ================= Theme =================
+      const SUN_PATH =
+        '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>';
+      const MOON_PATH =
+        '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/>';
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        const icon = document.getElementById("theme-icon");
+        if (icon) icon.innerHTML = theme === "dark" ? SUN_PATH : MOON_PATH;
+        localStorage.setItem("vyom-theme", theme);
+      }
+      function toggleTheme() {
+        const current = document.documentElement.getAttribute("data-theme");
+        applyTheme(current === "dark" ? "light" : "dark");
+      }
+      (function initTheme() {
+        applyTheme(localStorage.getItem("vyom-theme") || "light");
+      })();
+
+      // ================= Session / login =================
+      function getSession() {
+        try {
+          const raw = localStorage.getItem(SESSION_KEY);
+          if (!raw) return null;
+          const session = JSON.parse(raw);
+          if (
+            !session.token ||
+            !session.expires_at ||
+            Date.now() >= session.expires_at
+          )
+            return null;
+          return session;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function setSession(session) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        scheduleSessionExpiry(session);
+      }
+
+      function clearSession() {
+        localStorage.removeItem(SESSION_KEY);
+        if (sessionExpiryTimer) clearTimeout(sessionExpiryTimer);
+      }
+
+      function scheduleSessionExpiry(session) {
+        if (sessionExpiryTimer) clearTimeout(sessionExpiryTimer);
+        const msRemaining = session.expires_at - Date.now();
+        // Also poll every minute as a backstop in case the tab was asleep/suspended
+        // past the single timeout (some browsers throttle long background timers).
+        sessionExpiryTimer = setTimeout(
+          () => {
+            if (!getSession())
+              showLogin(
+                "Your session expired after 24 hours. Please sign in again.",
+              );
+          },
+          Math.max(msRemaining, 0),
+        );
+      }
+
+      function showApp() {
+        document.getElementById("login-overlay").style.display = "none";
+        document.getElementById("app").style.display = "grid";
+      }
+
+      function showLogin(message) {
+        clearSession();
+        document.getElementById("app").style.display = "none";
+        document.getElementById("login-overlay").style.display = "flex";
+        const err = document.getElementById("login-error");
+        if (message) {
+          err.textContent = message;
+          err.style.display = "block";
+        } else {
+          err.style.display = "none";
+        }
+      }
+
+      function togglePasswordVisibility() {
+        const input = document.getElementById("login-password");
+        const isHidden = input.type === "password";
+        input.type = isHidden ? "text" : "password";
+        document.getElementById("eye-icon").innerHTML = isHidden
+          ? '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/>'
+          : '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>';
+      }
+
+      // Google/Apple sign-in, password reset, self-serve sign-up, and the help
+      // center all need backend support that doesn't exist yet (no OAuth
+      // integration, no reset-token endpoint, no signup flow -- still invite-only).
+      // This says so plainly instead of pretending to submit or silently doing
+      // nothing on click.
+      function showHonestPlaceholder(feature) {
+        showToast(
+          `${feature} isn't set up yet -- contact AgriDoot directly for now.`,
+        );
+      }
+
+      async function handleLogin() {
+        const username = document.getElementById("login-username").value.trim();
+        const password = document.getElementById("login-password").value;
+        const err = document.getElementById("login-error");
+        if (!username || !password) {
+          err.textContent = "Enter both a user ID and password.";
+          err.style.display = "block";
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          if (!res.ok) {
+            err.textContent = "Invalid user ID or password.";
+            err.style.display = "block";
+            return;
+          }
+          const data = await res.json();
+          setSession({
+            token: data.token,
+            expires_at: data.expires_at * 1000,
+            username: data.username,
+          });
+          err.style.display = "none";
+          document.getElementById("login-password").value = "";
+          startApp();
+        } catch (e) {
+          err.textContent =
+            "Could not reach the server. Check your connection.";
+          err.style.display = "block";
+        }
+      }
+
+      function handleLogout() {
+        showLogin();
+      }
+
+      function toggleUserMenu(e) {
+        e.stopPropagation();
+        const chip = document.getElementById("user-chip");
+        const menu = document.getElementById("user-menu");
+        if (menu.parentElement !== document.body)
+          document.body.appendChild(menu);
+        const opening = menu.style.display === "none";
+        if (opening) {
+          const r = chip.getBoundingClientRect();
+          menu.style.left = r.right - menu.offsetWidth + "px";
+          menu.style.top = r.bottom + 8 + "px";
+          // offsetWidth is 0 before first paint; re-measure after display:block.
+          menu.style.display = "block";
+          const w = menu.offsetWidth;
+          menu.style.left = r.right - w + "px";
+        } else {
+          menu.style.display = "none";
+        }
+        chip.classList.toggle("open", opening);
+      }
+      document.addEventListener("click", () => {
+        const menu = document.getElementById("user-menu");
+        if (menu) menu.style.display = "none";
+        const chip = document.getElementById("user-chip");
+        if (chip) chip.classList.remove("open");
+      });
+
+      function confirmLogout() {
+        document.getElementById("user-menu").style.display = "none";
+        document.getElementById("user-chip").classList.remove("open");
+        if (confirm("Are you sure you want to sign out?")) {
+          handleLogout();
+        }
+      }
+
+      document
+        .getElementById("login-password")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") handleLogin();
+        });
+
+      // ================= API helper (auto-attaches session token) =================
+      async function api(path, opts = {}) {
+        const session = getSession();
+        if (!session) {
+          showLogin("Your session expired. Please sign in again.");
+          throw new Error("Not authenticated");
+        }
+        const res = await fetch(`${API_BASE}${path}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.token}`,
+          },
+          ...opts,
+        });
+        if (res.status === 401) {
+          showLogin("Your session expired. Please sign in again.");
+          throw new Error("Not authenticated");
+        }
+        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+        return res.json();
+      }
+
+      function tileTokenParam() {
+        const session = getSession();
+        return session ? `&token=${encodeURIComponent(session.token)}` : "";
+      }
+
+      // ================= Google Maps =================
+      function loadGoogleMaps() {
+        if (window.google && window.google.maps) return initApp();
+        window.__vyomGoogleMapsReady = initApp;
+        const script = document.createElement("script");
+        // Note: no "drawing" library here -- Google removed the DrawingManager
+        // library in Maps JS API v3.65. Polygon drawing below is implemented
+        // manually (click to add a vertex, Finish to close the shape) instead.
+        // "places" is loaded for the address autocomplete on the header search box.
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=__vyomGoogleMapsReady`;
+        script.async = true;
+        document.head.appendChild(script);
+      }
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+          center: { lat: 20.5, lng: 78.9 },
+          zoom: 5,
+          mapTypeId: "satellite",
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            style: google.maps.MapTypeControlStyle.DROPDOWN_MENU,
+            position: google.maps.ControlPosition.TOP_RIGHT,
+            mapTypeIds: ["satellite", "hybrid", "roadmap", "terrain"],
+          },
+          streetViewControl: false,
+          fullscreenControl: false,
+        });
+
+        geocoder = new google.maps.Geocoder();
+        initSearchAutocomplete();
+      }
+
+      // Address autocomplete (Google Places) inside the "Draw new field" modal's
+      // search box, plus direct "lat, lon" jump for exact coordinates -- used to
+      // navigate the drawing map to the right place before tracing a field
+      // boundary. Moved here from the header (was a general map-jump tool; the
+      // header search is now for filtering the person's own fields instead).
+      function initSearchAutocomplete() {
+        const input = document.getElementById("modal-location-search");
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+          fields: ["geometry", "name"],
+        });
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          if (place && place.geometry && place.geometry.location) {
+            map.setCenter(place.geometry.location);
+            map.setZoom(14);
+            dropSearchMarker(place.geometry.location, place.name);
+          }
+          onSearchInput();
+        });
+      }
+
+      // Drops (or moves) a single marker at a searched location -- same visual
+      // pattern as Google's own search results, which is what was missing before:
+      // the map recentered but nothing actually marked the spot.
+      function dropSearchMarker(location, label) {
+        if (searchMarker) searchMarker.setMap(null);
+        searchMarker = new google.maps.Marker({
+          position: location,
+          map,
+          title: label || "",
+          animation: google.maps.Animation.DROP,
+        });
+      }
+
+      const _LAT_LNG_PATTERN =
+        /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+      // ================= Manual polygon drawing (DrawingManager replacement) =================
+      let isDrawing = false;
+      let draftPath = [];
+      let draftPreviewLine = null;
+      let draftClickListener = null;
+
+      function startDrawing() {
+        if (draftPolygon) {
+          draftPolygon.setMap(null);
+          draftPolygon = null;
+        }
+        draftPath = [];
+        isDrawing = true;
+        map.setOptions({ draggableCursor: "crosshair" });
+        draftClickListener = map.addListener("click", (e) => {
+          draftPath.push(e.latLng);
+          renderDraftPreview();
+        });
+        updateDrawUI();
+      }
+
+      function renderDraftPreview() {
+        if (draftPreviewLine) draftPreviewLine.setMap(null);
+        draftPreviewLine = new google.maps.Polyline({
+          path: draftPath,
+          strokeColor: "#8fce76",
+          strokeWeight: 2,
+          strokeOpacity: 0.9,
+          map,
+        });
+      }
+
+      function finishDrawing() {
+        if (draftPath.length < 3) {
+          showToast(
+            "Add at least 3 points before finishing (click more spots on the map).",
+          );
+          return;
+        }
+        stopDrawingListeners();
+        draftPolygon = new google.maps.Polygon({
+          paths: draftPath,
+          fillColor: "#8fce76",
+          fillOpacity: 0.15,
+          strokeColor: "#8fce76",
+          strokeWeight: 2,
+          editable: true,
+          map,
+        });
+        draftGeoJSON = polygonToGeoJSON(draftPolygon);
+        isDrawing = false;
+        updateDrawUI();
+        document.getElementById("create-form").style.display = "block";
+        document.getElementById("new-farm-name").focus();
+      }
+
+      function cancelDrawing() {
+        stopDrawingListeners();
+        draftPath = [];
+        isDrawing = false;
+        updateDrawUI();
+      }
+
+      function stopDrawingListeners() {
+        if (draftClickListener) {
+          google.maps.event.removeListener(draftClickListener);
+          draftClickListener = null;
+        }
+        if (draftPreviewLine) {
+          draftPreviewLine.setMap(null);
+          draftPreviewLine = null;
+        }
+        map.setOptions({ draggableCursor: null });
+      }
+
+      function updateDrawUI() {
+        document.getElementById("draw-start-btn").style.display = isDrawing
+          ? "none"
+          : "block";
+        document.getElementById("draw-active-controls").style.display =
+          isDrawing ? "block" : "none";
+      }
+
+      function polygonToGeoJSON(polygon) {
+        const path = polygon.getPath();
+        const coords = [];
+        for (let i = 0; i < path.getLength(); i++) {
+          const pt = path.getAt(i);
+          coords.push([pt.lng(), pt.lat()]);
+        }
+        if (
+          coords.length &&
+          (coords[0][0] !== coords[coords.length - 1][0] ||
+            coords[0][1] !== coords[coords.length - 1][1])
+        ) {
+          coords.push(coords[0]);
+        }
+        return { type: "Polygon", coordinates: [coords] };
+      }
+
+      function geoJSONToPaths(geometry) {
+        return geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+      }
+
+      function geoJSONBounds(geometry) {
+        const bounds = new google.maps.LatLngBounds();
+        geometry.coordinates[0].forEach(([lng, lat]) =>
+          bounds.extend({ lat, lng }),
+        );
+        return bounds;
+      }
+
+      function geoJSONCentroid(geometry) {
+        const coords = geometry.coordinates[0];
+        let sumLat = 0,
+          sumLng = 0;
+        coords.forEach(([lng, lat]) => {
+          sumLat += lat;
+          sumLng += lng;
+        });
+        return { lat: sumLat / coords.length, lng: sumLng / coords.length };
+      }
+
+      // ================= Helpers =================
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.style.display = "block";
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => (t.style.display = "none"), 4000);
+      }
+
+      // ================= API status toggle =================
+      let statusExpanded = false;
+
+      function onStatusToggleClick() {
+        statusExpanded = !statusExpanded;
+        document
+          .getElementById("status-toggle")
+          .classList.toggle("expanded", statusExpanded);
+        if (statusExpanded) checkApiHealth();
+      }
+
+      async function checkApiHealth() {
+        const el = document.getElementById("status-toggle");
+        const label = document.getElementById("status-label");
+        el.classList.remove("online", "offline");
+        el.classList.add("checking");
+        label.textContent = "Checking";
+        try {
+          const res = await fetch(`${API_BASE}/health`);
+          if (!res.ok) throw new Error("bad status");
+          el.classList.remove("checking", "offline");
+          el.classList.add("online");
+          label.textContent = "Live";
+        } catch (e) {
+          el.classList.remove("checking", "online");
+          el.classList.add("offline");
+          label.textContent = "Offline";
+        }
+        document.getElementById("status-endpoint").textContent =
+          API_BASE.replace(/^https?:\/\//, "");
+        document.getElementById("status-lastcheck").textContent =
+          new Date().toLocaleTimeString();
+      }
+
+      // ================= Indices =================
+      async function loadAvailableIndices() {
+        try {
+          availableIndices = await api("/farms/available-indices");
+        } catch (e) {
+          console.error("Could not load index list", e);
+        }
+        try {
+          indexScales = await api("/farms/index-scales");
+        } catch (e) {
+          console.error("Could not load index color scales", e);
+        }
+      }
+
+      function populateIndexSelect() {
+        const sel = document.getElementById("index-select");
+        const previous = sel.value;
+        sel.innerHTML = "";
+
+        const groupS2 = document.createElement("optgroup");
+        groupS2.label = "Sentinel-2 optical";
+        (availableIndices.S2 || []).forEach((idx) => {
+          const opt = document.createElement("option");
+          opt.value = idx;
+          opt.dataset.platform = "S2";
+          opt.textContent = idx.replace(/_/g, " ");
+          groupS2.appendChild(opt);
+        });
+        sel.appendChild(groupS2);
+
+        const groupS1 = document.createElement("optgroup");
+        groupS1.label = "Sentinel-1 radar";
+        (availableIndices.S1 || []).forEach((idx) => {
+          const opt = document.createElement("option");
+          opt.value = idx;
+          opt.dataset.platform = "S1";
+          opt.textContent = idx.replace(/_/g, " ");
+          groupS1.appendChild(opt);
+        });
+        sel.appendChild(groupS1);
+
+        // Keep whatever was selected before if it still exists (e.g. re-populating
+        // after available-indices reloads); otherwise default to the first S2 index.
+        if (previous && [...sel.options].some((o) => o.value === previous)) {
+          sel.value = previous;
+        }
+        syncPlatformFromIndex();
+        updateIndexNote();
+        renderIndexButtonRow();
+      }
+
+      // Quick-pick row under the map -- built from the real available-indices list
+      // (not hardcoded), so it only ever shows indices this deployment actually
+      // computes. Clicking a button is equivalent to picking it in the dropdown.
+      function renderIndexButtonRow() {
+        const row = document.getElementById("index-btn-row");
+        const current = document.getElementById("index-select").value;
+        const all = [
+          ...(availableIndices.S2 || []),
+          ...(availableIndices.S1 || []),
+        ];
+        row.innerHTML = all
+          .map(
+            (idx) => `
+    <button type="button" class="index-quick-btn${idx === current ? " active" : ""}" onclick="selectIndexQuick('${idx}')">
+      ${idx.replace(/_/g, " ")}
+    </button>`,
+          )
+          .join("");
+      }
+
+      async function selectIndexQuick(idx) {
+        document.getElementById("index-select").value = idx;
+        await onIndexChange();
+      }
+
+      // No platform toggle in the UI -- the chosen index determines the platform,
+      // since S2 and S1 index names never overlap (available-indices keeps them in
+      // separate lists server-side).
+      function syncPlatformFromIndex() {
+        const sel = document.getElementById("index-select");
+        const opt = sel.options[sel.selectedIndex];
+        currentPlatform = (opt && opt.dataset.platform) || "S2";
+      }
+
+      function updateIndexNote() {
+        const idx = document.getElementById("index-select").value;
+        const note = document.getElementById("index-note");
+        if (idx === "SOC_VIS") {
+          note.textContent =
+            "Experimental proxy from visible bands only, not a calibrated soil-carbon lab value. Treat as relative brightness, ground-truth before acting on it.";
+          note.classList.add("warn");
+        } else if (["RVI", "VV_VH_RATIO"].includes(idx)) {
+          note.textContent =
+            "Radar-derived, cloud-independent, useful during monsoon when optical imagery is unavailable.";
+          note.classList.remove("warn");
+        } else {
+          note.textContent = "";
+          note.classList.remove("warn");
+        }
+      }
+
+      // ================= Farms =================
+      async function loadFarms() {
+        farms = await api("/farms");
+        const countEl = document.getElementById("farm-count");
+        if (countEl)
+          countEl.textContent = farms.length ? `${farms.length}` : "";
+
+        Object.values(farmOverlays).forEach((p) => p.setMap(null));
+        farmOverlays = {};
+
+        const bounds = new google.maps.LatLngBounds();
+        farms.forEach((farm) => {
+          const paths = geoJSONToPaths(farm.geometry);
+          const polygon = new google.maps.Polygon({
+            paths,
+            strokeColor: "#8fce76",
+            strokeWeight: 1.5,
+            fillColor: "#8fce76",
+            fillOpacity: 0.06,
+          });
+          polygon.setMap(map);
+          polygon.addListener("click", () => selectFarm(farm.id));
+          farmOverlays[farm.id] = polygon;
+          paths.forEach((p) => bounds.extend(p));
+        });
+
+        renderFarmList();
+        renderOverviewPage();
+        renderMyFieldsPage();
+
+        if (!activeFarmId && farms.length) map.fitBounds(bounds, 60);
+      }
+
+      // ================= Page navigation (Overview / My Fields / Imagery & 5 placeholders) =================
+      function switchPage(pageName) {
+        document.querySelectorAll(".page-view").forEach((el) => {
+          // .imagery-shell (inside #page-imagery) now owns the internal flex/column
+          // layout itself, so the page-view wrapper just needs block display --
+          // making #page-imagery itself a flex container too would leave
+          // .imagery-shell sized to its content instead of stretching full-width.
+          el.style.display = el.id === `page-${pageName}` ? "block" : "none";
+        });
+        document.querySelectorAll(".nav-item").forEach((el) => {
+          el.classList.toggle("active", el.dataset.page === pageName);
+        });
+        document.querySelectorAll(".tab-item").forEach((el) => {
+          el.classList.toggle("active", el.dataset.page === pageName);
+        });
+        closeMobileNav();
+        // The map needs a resize nudge after being hidden/shown -- Google Maps
+        // doesn't know its container's size changed while display:none.
+        if (pageName === "imagery" && map) {
+          setTimeout(() => google.maps.event.trigger(map, "resize"), 50);
+        }
+      }
+
+      // ================= Mobile nav drawer (hamburger + bottom-bar "More") =================
+      function toggleMobileNav() {
+        const nav = document.getElementById("nav-sidebar");
+        const scrim = document.getElementById("nav-scrim");
+        const opening = !nav.classList.contains("open");
+        nav.classList.toggle("open", opening);
+        scrim.classList.toggle("open", opening);
+      }
+      function closeMobileNav() {
+        document.getElementById("nav-sidebar").classList.remove("open");
+        document.getElementById("nav-scrim").classList.remove("open");
+      }
+      function toggleMobileSearch() {
+        document
+          .getElementById("header-search")
+          .classList.toggle("mobile-open");
+      }
+
+      // ================= "Draw new field" modal (My Fields) =================
+      // Reparents the single shared #map element into the modal rather than
+      // creating a second Google Map instance -- reuses all the existing drawing
+      // logic (startDrawing/finishDrawing/etc, which reference the one global
+      // `map` variable) unchanged, instead of duplicating it for a second map.
+      function openDrawFieldModal() {
+        document.getElementById("draw-field-modal").style.display = "flex";
+        document
+          .getElementById("draw-map-slot")
+          .appendChild(document.getElementById("map"));
+        setTimeout(() => {
+          google.maps.event.trigger(map, "resize");
+          if (farms.length) {
+            const bounds = new google.maps.LatLngBounds();
+            farms.forEach((f) =>
+              geoJSONToPaths(f.geometry).forEach((p) => bounds.extend(p)),
+            );
+            map.fitBounds(bounds, 40);
+          }
+        }, 60);
+      }
+
+      function closeDrawFieldModal(skipConfirm) {
+        if (!skipConfirm && (isDrawing || draftPolygon)) {
+          if (!confirm("Discard the field you're drawing?")) return;
+        }
+        if (isDrawing) cancelDrawing();
+        if (draftPolygon) {
+          draftPolygon.setMap(null);
+          draftPolygon = null;
+          draftGeoJSON = null;
+        }
+        document.getElementById("create-form").style.display = "none";
+        document.getElementById("draw-field-modal").style.display = "none";
+        // Put #map back where the Imagery & Indices page expects it.
+        document
+          .getElementById("page-imagery")
+          .appendChild(document.getElementById("map"));
+        if (map) setTimeout(() => google.maps.event.trigger(map, "resize"), 60);
+      }
+
+      function fieldCardHtml(farm) {
+        const area =
+          farm.area_acre != null ? `${farm.area_acre.toFixed(2)} ac` : "\u2013";
+        return `
+    <div class="field-card" onclick="openFieldFromCard('${farm.id}')">
+      <div class="fc-thumb">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+      </div>
+      <div class="fc-body">
+        <div class="fc-name">${farm.name || "Unnamed field"}</div>
+        <div class="fc-crop">${farm.crop_type || "Crop not set"}</div>
+        <div class="fc-meta">
+          <span>${farm.sowing_date ? new Date(farm.sowing_date).toLocaleDateString() : "No sowing date"}</span>
+          <span class="fc-area">${area}</span>
+        </div>
+      </div>
+    </div>`;
+      }
+
+      function openFieldFromCard(farmId) {
+        switchPage("imagery");
+        selectFarm(farmId);
+      }
+
+      let globalFieldQuery = "";
+      function onGlobalFieldSearch() {
+        globalFieldQuery = document
+          .getElementById("global-field-search")
+          .value.trim()
+          .toLowerCase();
+        document
+          .getElementById("header-search")
+          .classList.toggle("has-text", !!globalFieldQuery);
+        renderOverviewPage();
+        renderMyFieldsPage();
+      }
+      function clearGlobalFieldSearch() {
+        document.getElementById("global-field-search").value = "";
+        onGlobalFieldSearch();
+      }
+      function matchingFarms() {
+        if (!globalFieldQuery) return farms;
+        return farms.filter(
+          (f) =>
+            (f.name || "").toLowerCase().includes(globalFieldQuery) ||
+            (f.crop_type || "").toLowerCase().includes(globalFieldQuery),
+        );
+      }
+
+      function renderOverviewPage() {
+        document.getElementById("ov-total-fields").textContent = farms.length;
+        const totalAcres = farms.reduce(
+          (sum, f) => sum + (f.area_acre || 0),
+          0,
+        );
+        document.getElementById("ov-total-area").textContent =
+          totalAcres.toFixed(2);
+        document.getElementById("ov-s2-count").textContent = (
+          availableIndices.S2 || []
+        ).length;
+        document.getElementById("ov-s1-count").textContent = (
+          availableIndices.S1 || []
+        ).length;
+
+        const grid = document.getElementById("ov-field-grid");
+        const shown = matchingFarms();
+        grid.innerHTML = shown.length
+          ? shown.map(fieldCardHtml).join("")
+          : `<div class="empty-state">${farms.length ? "No fields match your search." : "No fields yet -- go to My Fields to draw one."}</div>`;
+      }
+
+      function renderMyFieldsPage() {
+        const grid = document.getElementById("myfields-grid");
+        const shown = matchingFarms();
+        grid.innerHTML = shown.length
+          ? shown.map(fieldCardHtml).join("")
+          : `<div class="empty-state">${farms.length ? "No fields match your search." : 'No fields yet -- click "+ Add New Field" to draw one.'}</div>`;
+      }
+
+      // Superseded by the My Fields / Overview grids (matchingFarms()) -- the
+      // Imagery & Indices sidebar no longer has its own field list/search (see the
+      // "move search to My Fields" change), so these are now safe no-ops. Left in
+      // place (rather than removing every call site) since loadFarms()/selectFarm()
+      // still call renderFarmList() as part of their existing flow.
+      function renderFarmList() {
+        if (!document.getElementById("farm-search-input")) return;
+        const query = (
+          document.getElementById("farm-search-input").value || ""
+        ).toLowerCase();
+        const list = document.getElementById("farm-list");
+        const filtered = farms.filter((f) =>
+          (f.name || "").toLowerCase().includes(query),
+        );
+
+        if (farms.length === 0) {
+          list.innerHTML =
+            '<div class="empty-state">No fields yet. Draw a polygon on the map to add one.</div>';
+        } else if (filtered.length === 0) {
+          list.innerHTML =
+            '<div class="empty-state">No fields match your search.</div>';
+        } else {
+          list.innerHTML = "";
+          filtered.forEach((farm) => {
+            const item = document.createElement("div");
+            item.className =
+              "farm-item" + (farm.id === activeFarmId ? " active" : "");
+            item.innerHTML = `
+        <div class="fname">
+          <span>${farm.name || "Unnamed field"}</span>
+          ${farm.crop_type ? `<span class="fcrop">${farm.crop_type}</span>` : ""}
+        </div>
+        <span class="area mono">${farm.area_acre ? farm.area_acre.toFixed(2) + " ac" : ""}</span>`;
+            item.onclick = () => selectFarm(farm.id);
+            list.appendChild(item);
+          });
+        }
+        updateFarmListVisibility();
+      }
+
+      function updateFarmListVisibility() {
+        const input = document.getElementById("farm-search-input");
+        const list = document.getElementById("farm-list");
+        if (!input || !list) return;
+        const show =
+          !activeFarmId ||
+          document.activeElement === input ||
+          input.value.trim().length > 0;
+        list.style.display = show ? "block" : "none";
+      }
+
+      function cancelDraft() {
+        if (draftPolygon) draftPolygon.setMap(null);
+        draftPolygon = null;
+        draftGeoJSON = null;
+        document.getElementById("create-form").style.display = "none";
+        document.getElementById("new-farm-name").value = "";
+        document.getElementById("new-farm-crop").value = "";
+        document.getElementById("new-farm-sowing-date").value = "";
+        document.getElementById("new-farm-country").value = "";
+        closeDrawFieldModal();
+      }
+
+      async function saveDraft() {
+        const name = document.getElementById("new-farm-name").value.trim();
+        if (!name) return showToast("Give the field a name first.");
+        // Re-read from the polygon in case the user dragged a vertex after finishing the shape.
+        if (draftPolygon) draftGeoJSON = polygonToGeoJSON(draftPolygon);
+        if (!draftGeoJSON)
+          return showToast("Draw a boundary on the map first.");
+
+        try {
+          const farm = await api("/farms", {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              user_id: "00000000-0000-0000-0000-000000000001",
+              geometry: draftGeoJSON,
+              crop_type:
+                document.getElementById("new-farm-crop").value.trim() || null,
+              sowing_date:
+                document.getElementById("new-farm-sowing-date").value || null,
+              country:
+                document.getElementById("new-farm-country").value.trim() ||
+                null,
+            }),
+          });
+          if (draftPolygon) draftPolygon.setMap(null);
+          draftPolygon = null;
+          draftGeoJSON = null;
+          document.getElementById("create-form").style.display = "none";
+          document.getElementById("new-farm-name").value = "";
+          document.getElementById("new-farm-crop").value = "";
+          document.getElementById("new-farm-sowing-date").value = "";
+          document.getElementById("new-farm-country").value = "";
+          closeDrawFieldModal(/* skipConfirm */ true);
+          await loadFarms();
+          switchPage("imagery");
+          selectFarm(farm.id);
+          showToast(
+            `Saved "${farm.name}" \u2014 hit Load Data to pull the first scene.`,
+          );
+        } catch (e) {
+          if (e.message !== "Not authenticated")
+            showToast("Could not save field: " + e.message);
+        }
+      }
+
+      async function deleteFarm() {
+        if (!activeFarmId) return;
+        if (!confirm("Delete this field? This cannot be undone.")) return;
+        await api(`/farms/${activeFarmId}`, { method: "DELETE" });
+        activeFarmId = null;
+        document.getElementById("detail-panel").style.display = "none";
+        await loadFarms();
+      }
+
+      function fmtArea(acre) {
+        if (acre == null) return null;
+        return acre >= 100
+          ? `${acre.toFixed(1)} acre`
+          : `${acre.toFixed(2)} acre`;
+      }
+
+      function fmtCropAge(days) {
+        if (days == null) return null;
+        if (days < 0) return "Not sown yet";
+        if (days === 0) return "Sown today";
+        if (days === 1) return "1 day";
+        if (days < 60) return `${days} days`;
+        const weeks = Math.floor(days / 7);
+        return `${days} days (~${weeks} wk)`;
+      }
+
+      // Reverse-geocoded address per farm id, cached so switching back to a farm
+      // doesn't re-call the Geocoding API every time.
+      const _locationCache = {};
+
+      function populateFarmDetails(farm) {
+        document.getElementById("selected-farm-name").textContent =
+          farm.name || "Unnamed field";
+
+        const cropEl = document.getElementById("detail-crop");
+        cropEl.textContent = farm.crop_type || "Not set";
+        cropEl.classList.toggle("empty", !farm.crop_type);
+
+        document.getElementById("detail-polygon-id").textContent = farm.id;
+
+        const areaEl = document.getElementById("detail-area");
+        const areaText = fmtArea(farm.area_acre);
+        areaEl.textContent = areaText || "Unknown";
+        areaEl.classList.toggle("empty", !areaText);
+
+        const sowingEl = document.getElementById("detail-sowing-date");
+        sowingEl.textContent = farm.sowing_date
+          ? new Date(farm.sowing_date).toLocaleDateString()
+          : "Not set";
+        sowingEl.classList.toggle("empty", !farm.sowing_date);
+
+        const ageEl = document.getElementById("detail-crop-age");
+        const ageText = fmtCropAge(farm.crop_age_days);
+        ageEl.textContent = ageText || "\u2013";
+        ageEl.classList.toggle("empty", !ageText);
+
+        const centroid = geoJSONCentroid(farm.geometry);
+        document.getElementById("detail-centroid").textContent =
+          `${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`;
+
+        populateFarmLocation(farm.id, centroid);
+      }
+
+      function populateFarmLocation(farmId, centroid) {
+        const locEl = document.getElementById("detail-location");
+        if (_locationCache[farmId]) {
+          locEl.textContent = _locationCache[farmId];
+          locEl.classList.remove("empty");
+          return;
+        }
+        if (!geocoder) {
+          locEl.textContent = "Unavailable";
+          locEl.classList.add("empty");
+          return;
+        }
+        locEl.textContent = "Looking up\u2026";
+        locEl.classList.add("empty");
+        geocoder.geocode({ location: centroid }, (results, status) => {
+          // Farm may have been deselected by the time this resolves -- don't
+          // overwrite whatever's now showing for a different farm.
+          if (activeFarmId !== farmId) return;
+          if (status === "OK" && results[0]) {
+            const address = results[0].formatted_address;
+            _locationCache[farmId] = address;
+            locEl.textContent = address;
+            locEl.classList.remove("empty");
+          } else {
+            locEl.textContent = "Not found";
+            locEl.classList.add("empty");
+          }
+        });
+      }
+
+      // ================= Edit farm details (crop / country / sowing date) =================
+      function toggleEditDetails() {
+        const view = document.getElementById("detail-grid-view");
+        const edit = document.getElementById("detail-grid-edit");
+        const editing = edit.style.display !== "none";
+        if (editing) {
+          edit.style.display = "none";
+          view.style.display = "flex";
+          document.getElementById("edit-details-btn").textContent = "Edit";
+        } else {
+          const farm = farms.find((f) => f.id === activeFarmId);
+          if (!farm) return;
+          document.getElementById("edit-crop").value = farm.crop_type || "";
+          document.getElementById("edit-sowing-date").value =
+            farm.sowing_date || "";
+          view.style.display = "none";
+          edit.style.display = "block";
+          document.getElementById("edit-details-btn").textContent = "Cancel";
+        }
+      }
+
+      async function saveDetails() {
+        if (!activeFarmId) return;
+        try {
+          const updated = await api(`/farms/${activeFarmId}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              crop_type:
+                document.getElementById("edit-crop").value.trim() || null,
+              sowing_date:
+                document.getElementById("edit-sowing-date").value || null,
+            }),
+          });
+          const idx = farms.findIndex((f) => f.id === activeFarmId);
+          if (idx !== -1) farms[idx] = updated;
+          populateFarmDetails(updated);
+          toggleEditDetails();
+          renderFarmList();
+          showToast("Farm details saved.");
+        } catch (e) {
+          if (e.message !== "Not authenticated")
+            showToast("Could not save details: " + e.message);
+        }
+      }
+
+      // Click a field (list item or map polygon) -> select it, pan/zoom the map to
+      // its boundary, and briefly flash the outline so it's obvious which one is showing.
+      // Runs the full flow even if this farm is already selected -- clicking it
+      // again is a deliberate "take me back to this field" action, so it always
+      // re-fits the map rather than being a no-op.
+      async function selectFarm(farmId) {
+        activeFarmId = farmId;
+        document.getElementById("create-form").style.display = "none";
+        document.getElementById("detail-panel").style.display = "flex";
+        // Reset out of edit mode if it was left open on a previously-selected farm.
+        document.getElementById("detail-grid-edit").style.display = "none";
+        document.getElementById("detail-grid-view").style.display = "flex";
+        document.getElementById("edit-details-btn").textContent = "Edit";
+
+        const farm =
+          farms.find((f) => f.id === farmId) || (await api(`/farms/${farmId}`));
+        populateFarmDetails(farm);
+
+        Object.entries(farmOverlays).forEach(([id, polygon]) => {
+          polygon.setOptions({
+            strokeColor: id === farmId ? "#c98a3d" : "#8fce76",
+            strokeWeight: id === farmId ? 2.5 : 1.5,
+          });
+        });
+
+        // Show this field on the map: fit to its bounds, capped so tiny fields
+        // don't zoom in absurdly far.
+        const bounds = geoJSONBounds(farm.geometry);
+        map.fitBounds(bounds, 80);
+        const capListener = map.addListener("idle", () => {
+          if (map.getZoom() > 17) map.setZoom(17);
+          google.maps.event.removeListener(capListener);
+        });
+        flashFarmOutline(farmId);
+
+        populateIndexSelect();
+        await loadDates();
+        await refreshLayerAndReadouts();
+        renderFarmList();
+      }
+
+      function flashFarmOutline(farmId) {
+        const polygon = farmOverlays[farmId];
+        if (!polygon) return;
+        let ticks = 0;
+        const flashTimer = setInterval(() => {
+          polygon.setOptions({ fillOpacity: ticks % 2 === 0 ? 0.28 : 0.06 });
+          ticks++;
+          if (ticks >= 4) {
+            clearInterval(flashTimer);
+            polygon.setOptions({ fillOpacity: 0.06 });
+          }
+        }, 220);
+      }
+
+      async function onIndexChange() {
+        syncPlatformFromIndex();
+        updateIndexNote();
+        renderIndexButtonRow();
+        await loadDates();
+        await refreshLayerAndReadouts();
+      }
+
+      let _lastGoodDate = null;
+      let _calendarViewYear = null;
+      let _calendarViewMonth = null; // 0-11
+
+      // availableDates is scoped to the *current index*, not just platform -- dates
+      // where this specific index has no real zonal-stat value (see
+      // available_dates(index=...) in farms.py) never show up here. The calendar
+      // below only enables cells for dates actually present in this list -- that's
+      // the "only enable dates where data is available" behavior, which a native
+      // <input type=date> can't do (it only supports a min/max range, not
+      // individual disabled days), which is why this is a custom widget.
+      async function loadDates() {
+        const index = document.getElementById("index-select").value;
+        try {
+          availableDates = await api(
+            `/farms/${activeFarmId}/available-dates?platform=${currentPlatform}&index=${index}`,
+          );
+          if (availableDates.length === 0) {
+            _lastGoodDate = null;
+            updateDateLabels("No data yet");
+            updateDateNavButtons();
+            showToast(
+              `No processed ${index.replace(/_/g, " ")} data yet -- hit Load Data to pull imagery.`,
+            );
+            return;
+          }
+          // availableDates is already sorted newest-first (server-side).
+          _lastGoodDate = availableDates[0];
+          const d = new Date(_lastGoodDate);
+          _calendarViewYear = d.getFullYear();
+          _calendarViewMonth = d.getMonth();
+          updateDateLabels(
+            d.toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            }),
+          );
+          updateDateNavButtons();
+        } catch (e) {
+          availableDates = [];
+          _lastGoodDate = null;
+          updateDateLabels("Select a date");
+          updateDateNavButtons();
+        }
+      }
+
+      // The right-panel date button and the map's arrow-nav bar both show the same
+      // selected date -- kept as two separate elements (to match the mockup) but
+      // always updated together so they never disagree.
+      function updateDateLabels(text) {
+        document.getElementById("date-picker-label").textContent = text;
+        document.getElementById("date-nav-label").textContent = text;
+      }
+
+      function updateDateNavButtons() {
+        const idx = availableDates.indexOf(_lastGoodDate);
+        // availableDates is newest-first: "prev" (older) is a higher index, "next" (newer) is a lower index.
+        document.getElementById("date-nav-prev").disabled =
+          idx === -1 || idx >= availableDates.length - 1;
+        document.getElementById("date-nav-next").disabled = idx <= 0;
+      }
+
+      async function stepDate(direction) {
+        const idx = availableDates.indexOf(_lastGoodDate);
+        if (idx === -1) return;
+        const nextIdx = idx - direction; // direction=1 (next/newer) moves to a lower array index
+        if (nextIdx < 0 || nextIdx >= availableDates.length) return;
+        await selectCalendarDate(availableDates[nextIdx]);
+      }
+
+      function toggleCalendar(anchorId) {
+        const popup = document.getElementById("calendar-popup");
+        // Reparent the one shared popup into whichever control was actually
+        // clicked -- previously it was permanently anchored inside .date-nav-bar,
+        // so opening it from the right panel's Date button made it appear over on
+        // the map instead of near where the person clicked.
+        const anchor = document.getElementById(anchorId || "date-picker-wrap");
+        if (anchor && popup.parentElement !== anchor) anchor.appendChild(popup);
+
+        const opening = popup.style.display === "none";
+        if (opening) {
+          const ref = _lastGoodDate ? new Date(_lastGoodDate) : new Date();
+          _calendarViewYear = ref.getFullYear();
+          _calendarViewMonth = ref.getMonth();
+          renderCalendarGrid();
+        }
+        popup.style.display = opening ? "block" : "none";
+      }
+
+      function shiftCalendarMonth(delta) {
+        _calendarViewMonth += delta;
+        if (_calendarViewMonth < 0) {
+          _calendarViewMonth = 11;
+          _calendarViewYear--;
+        }
+        if (_calendarViewMonth > 11) {
+          _calendarViewMonth = 0;
+          _calendarViewYear++;
+        }
+        renderCalendarGrid();
+      }
+
+      function renderCalendarGrid() {
+        const grid = document.getElementById("calendar-grid");
+        const monthLabel = document.getElementById("calendar-month-label");
+        const monthStart = new Date(_calendarViewYear, _calendarViewMonth, 1);
+        monthLabel.textContent = monthStart.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "long",
+        });
+
+        // "YYYY-MM-DD" -> full ISO acquisition string, for enabled-day lookups.
+        const byDay = {};
+        availableDates.forEach((d) => {
+          byDay[d.slice(0, 10)] = d;
+        });
+        const selectedDay = _lastGoodDate ? _lastGoodDate.slice(0, 10) : null;
+
+        grid.innerHTML = "";
+        ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].forEach((dow) => {
+          const el = document.createElement("div");
+          el.className = "calendar-dow";
+          el.textContent = dow;
+          grid.appendChild(el);
+        });
+
+        const firstWeekday = monthStart.getDay();
+        for (let i = 0; i < firstWeekday; i++) {
+          const filler = document.createElement("div");
+          filler.className = "calendar-day empty";
+          grid.appendChild(filler);
+        }
+
+        const daysInMonth = new Date(
+          _calendarViewYear,
+          _calendarViewMonth + 1,
+          0,
+        ).getDate();
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayStr = `${_calendarViewYear}-${String(_calendarViewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.textContent = day;
+          const enabled = !!byDay[dayStr];
+          cell.className =
+            "calendar-day" +
+            (enabled ? " enabled" : "") +
+            (dayStr === selectedDay ? " selected" : "");
+          if (enabled) cell.onclick = () => selectCalendarDate(byDay[dayStr]);
+          else cell.disabled = true;
+          grid.appendChild(cell);
+        }
+      }
+
+      async function selectCalendarDate(fullIsoDate) {
+        _lastGoodDate = fullIsoDate;
+        updateDateLabels(
+          new Date(fullIsoDate).toLocaleDateString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          }),
+        );
+        updateDateNavButtons();
+        document.getElementById("calendar-popup").style.display = "none";
+        await refreshLayerAndReadouts();
+      }
+
+      // Close the calendar when clicking anywhere outside it. One physical popup
+      // element serves both visual triggers (the right-panel date button and the
+      // map's arrow-nav date label) -- it lives inside the map date-nav bar, but
+      // either trigger opens/closes the same instance.
+      document.addEventListener("click", (e) => {
+        const popup = document.getElementById("calendar-popup");
+        const btn = document.getElementById("date-picker-btn");
+        const navLabel = document.getElementById("date-nav-label");
+        if (!popup || popup.style.display === "none") return;
+        const clickedTrigger =
+          (btn && (e.target === btn || btn.contains(e.target))) ||
+          (navLabel && (e.target === navLabel || navLabel.contains(e.target)));
+        if (!popup.contains(e.target) && !clickedTrigger) {
+          popup.style.display = "none";
+        }
+      });
+
+      async function refreshLayerAndReadouts() {
+        if (!activeFarmId) return;
+        const index = document.getElementById("index-select").value;
+        const date = _lastGoodDate || "latest";
+        if (!index) return;
+
+        if (indexTileLayer) {
+          const idx = map.overlayMapTypes.getArray().indexOf(indexTileLayer);
+          if (idx !== -1) map.overlayMapTypes.removeAt(idx);
+        }
+
+        indexTileLayer = new google.maps.ImageMapType({
+          getTileUrl: (coord, zoom) => {
+            const numTiles = 1 << zoom;
+            let x = coord.x % numTiles;
+            if (x < 0) x += numTiles;
+            if (coord.y < 0 || coord.y >= numTiles) return null;
+            return `${API_BASE}/tiles/${activeFarmId}/${date}/${zoom}/${x}/${coord.y}.png?index=${index}&platform=${currentPlatform}${tileTokenParam()}`;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          opacity:
+            parseInt(document.getElementById("opacity-slider").value, 10) / 100,
+          name: index,
+        });
+        map.overlayMapTypes.push(indexTileLayer);
+
+        renderIndexLegend(index);
+        await loadReadouts(date);
+        await loadTrend(index);
+      }
+
+      // ================= Imagery sliders: opacity / look back / cloud cover =================
+      function onOpacityInput() {
+        const val = document.getElementById("opacity-slider").value;
+        document.getElementById("opacity-value").textContent = `${val}%`;
+        if (indexTileLayer) indexTileLayer.setOpacity(parseInt(val, 10) / 100);
+      }
+
+      function onLookbackInput() {
+        const val = parseInt(
+          document.getElementById("lookback-slider").value,
+          10,
+        );
+        const label = val >= 30 ? ` (~${Math.round(val / 30)} mo)` : "";
+        document.getElementById("lookback-value").textContent =
+          `${val} days${label}`;
+      }
+
+      function onCloudCoverInput() {
+        const val = document.getElementById("cloud-cover-slider").value;
+        document.getElementById("cloud-cover-value").textContent =
+          `up to ${val}%`;
+      }
+      // Initialize the labels on load (sliders start at their HTML default values).
+      onOpacityInput();
+      onLookbackInput();
+      onCloudCoverInput();
+
+      // ================= Index color scale (legend + reading-card coloring) =================
+      // Mirrors vyom/processing/index_scale.py's band_for_value(): first band whose
+      // upper bound the value is <= to. indexScales is fetched once at startup from
+      // GET /farms/index-scales, so this always matches whatever the backend (and
+      // the map tiles) are actually using -- not a separately-maintained copy.
+      function bandForValue(indexName, value) {
+        const bands = indexScales[indexName];
+        if (!bands || value == null) return null;
+        for (const band of bands) {
+          if (band.upper == null || value <= band.upper) return band;
+        }
+        return null;
+      }
+
+      function renderIndexLegend(indexName) {
+        const wrap = document.getElementById("index-legend");
+        const bands = indexScales[indexName];
+        if (!bands) {
+          wrap.innerHTML = "";
+          return;
+        }
+        wrap.innerHTML = bands
+          .map((b, i) => {
+            const prevUpper = i === 0 ? null : bands[i - 1].upper;
+            const label =
+              b.upper == null
+                ? `> ${prevUpper}`
+                : prevUpper == null
+                  ? `< ${b.upper}`
+                  : `${prevUpper}\u2013${b.upper}`;
+            return `<span class="legend-swatch"><span class="dot" style="background:${b.color};"></span>${label}</span>`;
+          })
+          .join("");
+      }
+
+      // ================= Map toolbar (basemap cycle / zoom-to-field / trend jump) =================
+      const _MAP_TYPES = ["satellite", "hybrid", "roadmap", "terrain"];
+      function cycleMapType() {
+        const current = map.getMapTypeId();
+        const next =
+          _MAP_TYPES[(_MAP_TYPES.indexOf(current) + 1) % _MAP_TYPES.length];
+        map.setMapTypeId(next);
+      }
+
+      function zoomToActiveFarm() {
+        if (!activeFarmId) return;
+        const farm = farms.find((f) => f.id === activeFarmId);
+        if (!farm) return;
+        const bounds = geoJSONBounds(farm.geometry);
+        map.fitBounds(bounds, 80);
+      }
+
+      function scrollToTrend() {
+        const el = document.getElementById("trend-section");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      // Cloud % badge over the map -- pulled from the trend series (already fetched
+      // for the chart), matched to the currently selected date by timestamp rather
+      // than exact string equality (the two endpoints don't necessarily serialize
+      // the same datetime identically).
+      function updateCloudBadge(series) {
+        const badge = document.getElementById("cloud-badge");
+        const text = document.getElementById("cloud-badge-text");
+        if (!_lastGoodDate) {
+          badge.style.display = "none";
+          return;
+        }
+        const target = new Date(_lastGoodDate).getTime();
+        const match = series.find(
+          (s) => new Date(s.acquisition_date).getTime() === target,
+        );
+        if (match && match.cloud_pct != null) {
+          text.textContent = `Cloud ${match.cloud_pct.toFixed(0)}%`;
+          badge.style.display = "flex";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+
+      async function loadReadouts(date) {
+        date = date || _lastGoodDate || "latest";
+        const dateLabel = document.getElementById("readings-date-label");
+        dateLabel.textContent =
+          date === "latest"
+            ? "(latest)"
+            : `(${new Date(date).toLocaleDateString()})`;
+
+        const latest = await api(
+          `/farms/${activeFarmId}/latest?date=${encodeURIComponent(date)}`,
+        );
+        const grid = document.getElementById("readout-grid");
+        const selectedIndex = document.getElementById("index-select").value;
+        grid.innerHTML = "";
+
+        Object.entries(latest).forEach(([name, data]) => {
+          const div = document.createElement("div");
+          div.className =
+            "readout" + (name === selectedIndex ? " selected" : "");
+          const band = bandForValue(name, data.value);
+          if (band) div.style.borderLeftColor = band.color;
+          div.innerHTML = `
+      <div class="rname">${name.replace(/_/g, " ")}${band ? ` <span style="color:${band.color};">\u25cf ${band.tier}</span>` : ""}</div>
+      <div class="rval ${data.value == null ? "empty" : ""}">${data.value != null ? data.value.toFixed(3) : "no data"}</div>
+    `;
+          grid.appendChild(div);
+        });
+      }
+
+      async function loadTrend(index) {
+        const wrap = document.getElementById("chart-wrap");
+        const ctx = document.getElementById("trend-chart");
+
+        // If the Chart.js CDN script failed to load (blocked by a network
+        // filter/extension, or just a bad connection), `Chart` is undefined and
+        // `new Chart(...)` below throws -- previously this was an *uncaught*
+        // promise rejection (selectFarm/refreshLayerAndReadouts don't catch it),
+        // so the trend card just silently stayed an empty box with no visible
+        // error anywhere in the UI, only in the browser console. Fail visibly
+        // instead.
+        if (typeof Chart === "undefined") {
+          if (trendChart) {
+            trendChart.destroy();
+            trendChart = null;
+          }
+          wrap.innerHTML =
+            '<div class="empty-state">Chart library failed to load (probably a blocked script) — trend chart unavailable. Latest readings above are unaffected.</div>';
+          return;
+        }
+        // loadTrend can be called again (switching index/date) after the guard
+        // above already replaced canvas#trend-chart with the empty-state div --
+        // put the canvas back if it's missing.
+        if (!document.getElementById("trend-chart")) {
+          wrap.innerHTML = '<canvas id="trend-chart"></canvas>';
+        }
+
+        const series = await api(
+          `/farms/${activeFarmId}/timeseries?metric=${index}_mean`,
+        );
+        updateCloudBadge(series);
+        const gridColor = getComputedStyle(document.documentElement)
+          .getPropertyValue("--line")
+          .trim();
+        const tickColor = getComputedStyle(document.documentElement)
+          .getPropertyValue("--text-dim")
+          .trim();
+
+        if (trendChart) {
+          trendChart.destroy();
+          trendChart = null;
+        }
+
+        if (series.length === 0) {
+          wrap.innerHTML =
+            '<div class="empty-state">No processed scenes yet for this index — refresh imagery to compute the first data point.</div>';
+          return;
+        }
+
+        const labels = series.map((s) =>
+          new Date(s.acquisition_date).toLocaleDateString(),
+        );
+        const values = series.map((s) => s.value);
+
+        trendChart = new Chart(document.getElementById("trend-chart"), {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                data: values,
+                borderColor: "#8fce76",
+                backgroundColor: "rgba(139,206,118,0.12)",
+                fill: true,
+                tension: 0.25,
+                pointRadius: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                ticks: { color: tickColor, font: { size: 10 } },
+                grid: { color: gridColor },
+              },
+              y: {
+                ticks: { color: tickColor, font: { size: 10 } },
+                grid: { color: gridColor },
+              },
+            },
+          },
+        });
+      }
+
+      async function refreshFarm() {
+        if (!activeFarmId) return;
+        const daysBack = parseInt(
+          document.getElementById("lookback-slider").value,
+          10,
+        );
+        const maxCloudCover = parseFloat(
+          document.getElementById("cloud-cover-slider").value,
+        );
+        showToast(
+          `Queued \u2014 searching the last ${daysBack} days, discovery/download/processing run in the background.`,
+        );
+        await api(`/farms/${activeFarmId}/refresh`, {
+          method: "POST",
+          body: JSON.stringify({
+            platforms: [currentPlatform],
+            days_back: daysBack,
+            max_cloud_cover: maxCloudCover,
+          }),
+        });
+        showToast(
+          "Refresh queued. This can take a few minutes for a new scene \u2014 check back shortly.",
+        );
+      }
+
+      // Inline Go/clear buttons only make sense once something's typed -- Google's
+      // Places autocomplete dropdown (initSearchAutocomplete) handles the
+      // as-you-type address suggestions; this just manages showing/hiding the pill.
+      function onSearchInput() {
+        const wrap = document.getElementById("modal-search-wrap");
+        const hasText =
+          document.getElementById("modal-location-search").value.trim().length >
+          0;
+        wrap.classList.toggle("has-text", hasText);
+      }
+
+      function clearSearch() {
+        const input = document.getElementById("modal-location-search");
+        input.value = "";
+        input.focus();
+        onSearchInput();
+      }
+
+      function searchLocation() {
+        const q = document.getElementById("modal-location-search").value.trim();
+        if (!q) return;
+
+        // Exact "lat, lon" jumps straight there -- no geocoding round-trip needed.
+        const coordMatch = q.match(_LAT_LNG_PATTERN);
+        if (coordMatch) {
+          const lat = parseFloat(coordMatch[1]);
+          const lng = parseFloat(coordMatch[2]);
+          if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+            map.setCenter({ lat, lng });
+            map.setZoom(15);
+            dropSearchMarker({ lat, lng });
+            return;
+          }
+          showToast("Latitude must be -90 to 90 and longitude -180 to 180.");
+          return;
+        }
+
+        if (!geocoder) return;
+        geocoder.geocode({ address: q }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            map.setCenter(results[0].geometry.location);
+            map.setZoom(12);
+            dropSearchMarker(
+              results[0].geometry.location,
+              results[0].formatted_address,
+            );
+          } else {
+            showToast("No matching location found.");
+          }
+        });
+      }
+      document
+        .getElementById("modal-location-search")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") searchLocation();
+        });
+
+      // ================= App bootstrap =================
+      function initApp() {
+        initMap();
+        const session = getSession();
+        document.getElementById("user-name-label").textContent =
+          session.username;
+        scheduleSessionExpiry(session);
+        showApp();
+        checkApiHealth();
+        loadAvailableIndices().then(loadFarms);
+      }
+
+      function startApp() {
+        showApp();
+        loadGoogleMaps();
+      }
+
+      (function bootstrap() {
+        const session = getSession();
+        if (session) {
+          startApp();
+        } else {
+          showLogin();
+        }
+      })();
+    </script>
+  </body>
+</html>
