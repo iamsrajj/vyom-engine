@@ -19,3 +19,4 @@ exactextract==0.2.0
 numpy==1.26.4
 pydantic==2.9.2
 pydantic-settings==2.5.2
+google-auth==2.35.0

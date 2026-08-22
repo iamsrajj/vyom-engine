@@ -70,5 +70,14 @@ class Settings(BaseSettings):
     # auth/signup rebuild, which will replace this with a proper role check).
     error_panel_usernames: str = ""
 
+    # Google Sign-In (Google Identity Services). Create an OAuth Client ID
+    # (type: Web application) at https://console.cloud.google.com/apis/credentials
+    # -- the frontend needs the same client ID to init the Google button.
+    google_client_id: str = ""
+
+    # AgriDoot's own phone-OTP SMS API (see vyom/otp_client.py)
+    agridoot_otp_url: str = "https://apiv2.agridoot.co.in:12443/ad/v2/user/genotp"
+    agridoot_otp_api_key: str = ""
+
 
 settings = Settings()

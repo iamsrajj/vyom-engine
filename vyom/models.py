@@ -108,3 +108,62 @@ class ErrorLog(Base):
     context = Column(JSONB, nullable=False, server_default="{}")
     resolved = Column(Boolean, nullable=False, server_default="false")
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class User(Base):
+    """A real account -- replaces the flat AUTH_USERS env-var list. Every
+    account starts with Google sign-in (name/email/picture come from Google's
+    verified ID token, never trusted from the client directly) then completes
+    a profile (org/designation/address/phone) with the phone verified by OTP
+    before the account is usable."""
+    __tablename__ = "users"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Short human-friendly identifier shown in the UI/support conversations,
+    # e.g. "AGD-7F3K2Q" -- distinct from the internal uuid `id`.
+    account_id = Column(String, unique=True, nullable=False)
+
+    email = Column(String, unique=True, nullable=False)
+    # Google's stable user id
+    google_sub = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    profile_img_url = Column(Text)
+
+    organization = Column(String, nullable=False)
+    designation = Column(String, nullable=False)
+    address = Column(Text, nullable=False)
+
+    phone_cc = Column(String, nullable=False, default="91")
+    phone = Column(String, unique=True, nullable=False)
+    phone_verified = Column(Boolean, nullable=False, server_default="false")
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),
+                        default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OtpVerification(Base):
+    """One row per OTP attempt. The actual OTP digits are never sent to or
+    trusted from the client -- AgriDoot's genotp API returns otp_value to
+    THIS backend, which stores a salted hash of it here and compares against
+    what the user types in, server-side. See vyom/otp_client.py."""
+    __tablename__ = "otp_verifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    phone_cc = Column(String, nullable=False)
+    phone = Column(String, nullable=False, index=True)
+    # "signup" (new account, phone not yet in users table) or
+    # "signin" (phone must already belong to an existing user)
+    purpose = Column(String, nullable=False)
+
+    # sha256(otp_value), never plaintext
+    otp_hash = Column(String, nullable=False)
+    # AgriDoot genotp's own otp_id, for support/debugging
+    provider_otp_id = Column(String)
+    provider_request_id = Column(String)  # AgriDoot genotp's own request_id
+
+    attempts = Column(Integer, nullable=False, server_default="0")
+    max_attempts = Column(Integer, nullable=False, server_default="5")
+    verified = Column(Boolean, nullable=False, server_default="false")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

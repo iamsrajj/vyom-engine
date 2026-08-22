@@ -14,6 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
       :root {
         --canopy: #16a34a;
@@ -2197,7 +2198,7 @@
               >? Need help?</span
             >
           </div>
-          <div class="login-card">
+          <div class="login-card" id="login-card-main">
             <div class="login-logo-row">
               <div class="login-logo">
                 <img
@@ -2213,30 +2214,28 @@
             </div>
             <span class="login-beta-badge">Beta &middot; Invite only</span>
 
+            <div
+              id="googleSignInBtn"
+              style="display: flex; justify-content: center; margin-bottom: 4px"
+            ></div>
             <button
               type="button"
               class="oauth-btn"
-              onclick="showHonestPlaceholder('Google sign-in')"
+              onclick="showPhoneSigninStep()"
+              style="margin-top: 10px"
             >
-              <svg viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.85A11 11 0 0 0 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.05H2.18a11 11 0 0 0 0 9.9z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.05l3.66 2.85C6.71 7.31 9.14 5.38 12 5.38z"
-                />
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="5" y="2" width="14" height="20" rx="2" />
+                <line x1="12" y1="18" x2="12.01" y2="18" />
               </svg>
-              Continue with Google
+              Continue with phone number
             </button>
 
             <div class="login-divider">or</div>
@@ -2318,6 +2317,154 @@
               <a onclick="showHonestPlaceholder('Self-serve sign-up')"
                 >Sign Up</a
               >
+            </div>
+          </div>
+
+          <!-- ================= Phone sign-in (existing accounts) ================= -->
+          <div class="login-card" id="login-card-phone" style="display: none">
+            <div class="login-title">Sign in with phone</div>
+            <div class="login-tagline">
+              We'll text a verification code to this number
+            </div>
+            <div class="login-form" style="margin-top: 18px">
+              <label>Phone number</label>
+              <div style="display: flex; gap: 8px">
+                <input
+                  type="text"
+                  id="phone-cc"
+                  value="91"
+                  style="width: 56px; text-align: center; flex: none"
+                  class="input-with-icon"
+                />
+                <input
+                  type="tel"
+                  id="phone-signin-number"
+                  placeholder="10-digit phone number"
+                  style="flex: 1"
+                />
+              </div>
+              <div id="phone-signin-error" class="login-error"></div>
+              <button
+                class="btn btn-primary login-submit"
+                onclick="sendOtp('signin')"
+              >
+                Send code
+              </button>
+              <div class="login-footnote" style="margin-top: 14px">
+                <a onclick="showLoginStep('main')">&larr; Back to sign in</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= OTP entry (shared by signin + signup) ================= -->
+          <div class="login-card" id="login-card-otp" style="display: none">
+            <div class="login-title">Enter verification code</div>
+            <div class="login-tagline" id="otp-sent-to-label">
+              We sent a 6-digit code by SMS
+            </div>
+            <div class="login-form" style="margin-top: 18px">
+              <label>Verification code</label>
+              <input
+                type="text"
+                id="otp-code-input"
+                placeholder="6-digit code"
+                maxlength="6"
+                inputmode="numeric"
+                style="letter-spacing: 4px; font-size: 18px; text-align: center"
+              />
+              <div id="otp-error" class="login-error"></div>
+              <button
+                class="btn btn-primary login-submit"
+                onclick="submitOtp()"
+              >
+                Verify
+              </button>
+              <div class="login-footnote" style="margin-top: 14px">
+                <a onclick="resendOtp()">Resend code</a>
+                &nbsp;&middot;&nbsp;
+                <a onclick="showLoginStep('main')">Cancel</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= Complete profile (new Google signups) ================= -->
+          <div class="login-card" id="login-card-signup" style="display: none">
+            <div class="login-title">Complete your profile</div>
+            <div class="login-tagline">
+              Just a few details to finish setting up your account
+            </div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin: 16px 0;
+              "
+            >
+              <img
+                id="signup-avatar"
+                src=""
+                alt=""
+                style="
+                  width: 44px;
+                  height: 44px;
+                  border-radius: 50%;
+                  object-fit: cover;
+                "
+              />
+              <div>
+                <div id="signup-name" style="font-weight: 600"></div>
+                <div
+                  id="signup-email"
+                  style="font-size: 13px; color: var(--text-dim)"
+                ></div>
+              </div>
+            </div>
+            <div class="login-form">
+              <label>Organization</label>
+              <input
+                type="text"
+                id="signup-organization"
+                placeholder="e.g. NovosEdge Pvt. Ltd."
+              />
+              <label>Designation</label>
+              <input
+                type="text"
+                id="signup-designation"
+                placeholder="e.g. Agronomist"
+              />
+              <label>Address</label>
+              <input
+                type="text"
+                id="signup-address"
+                placeholder="Full address"
+              />
+              <label>Phone number</label>
+              <div style="display: flex; gap: 8px">
+                <input
+                  type="text"
+                  id="signup-phone-cc"
+                  value="91"
+                  style="width: 56px; text-align: center; flex: none"
+                  class="input-with-icon"
+                />
+                <input
+                  type="tel"
+                  id="signup-phone-number"
+                  placeholder="10-digit phone number"
+                  style="flex: 1"
+                />
+              </div>
+              <div id="signup-error" class="login-error"></div>
+              <button
+                class="btn btn-primary login-submit"
+                onclick="sendOtp('signup')"
+              >
+                Send verification code
+              </button>
+              <div class="login-footnote" style="margin-top: 14px">
+                <a onclick="showLoginStep('main')">&larr; Back to sign in</a>
+              </div>
             </div>
           </div>
         </div>
@@ -3489,7 +3636,16 @@
       // -----------------------------------------------------------------
       // Point this at your running API.
       // -----------------------------------------------------------------
-      const API_BASE = "http://179.61.219.225:8000";
+      // Same-origin requests -- nginx (see deploy/nginx-vyom.conf) proxies
+      // /auth, /farms, /tiles, /errors, /health to uvicorn on 127.0.0.1:8000,
+      // so the dashboard and API share one origin/port (80/443) instead of
+      // the old direct-port-8000 setup on the previous server.
+      const API_BASE = "";
+      // Google OAuth Client ID (Web application type) -- from
+      // https://console.cloud.google.com/apis/credentials. Client IDs are
+      // meant to be public/embedded in frontend code, this is not a secret
+      // the way S3/CDSE keys are.
+      const GOOGLE_CLIENT_ID = "REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID";
 
       // -----------------------------------------------------------------
       // Google Maps: paste your key below. Enable "Maps JavaScript API",
@@ -3587,6 +3743,8 @@
         clearSession();
         document.getElementById("app").style.display = "none";
         document.getElementById("login-overlay").style.display = "flex";
+        showLoginStep("main");
+        initGoogleSignIn();
         const err = document.getElementById("login-error");
         if (message) {
           err.textContent = message;
@@ -3650,6 +3808,266 @@
             "Could not reach the server. Check your connection.";
           err.style.display = "block";
         }
+      }
+
+      // ============================================================
+      // Google sign-in + phone OTP (signup/signin)
+      // ============================================================
+
+      // Tracks what the current OTP entry step should do on success --
+      // set right before showLoginStep('otp') is called.
+      let otpFlowState = null; // { purpose: 'signin'|'signup', phone, cc, otpSession, registrationToken?, prefill? }
+
+      function showLoginStep(step) {
+        const steps = {
+          main: "login-card-main",
+          phone: "login-card-phone",
+          otp: "login-card-otp",
+          signup: "login-card-signup",
+        };
+        Object.values(steps).forEach((id) => {
+          document.getElementById(id).style.display = "none";
+        });
+        document.getElementById(steps[step]).style.display = "block";
+      }
+
+      function showPhoneSigninStep() {
+        document.getElementById("phone-signin-error").style.display = "none";
+        document.getElementById("phone-signin-number").value = "";
+        showLoginStep("phone");
+      }
+
+      let googleButtonRendered = false;
+      let googleInitRetries = 0;
+      function initGoogleSignIn() {
+        if (googleButtonRendered) return; // renderButton() appends -- only do this once
+        if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("REPLACE_")) {
+          console.warn(
+            "Google Sign-In not configured -- set GOOGLE_CLIENT_ID in index.html",
+          );
+          return;
+        }
+        // accounts.google.com's script loads async/defer -- it may not be
+        // ready yet on the very first showLogin() call, so retry briefly.
+        if (!window.google) {
+          if (googleInitRetries++ < 20) setTimeout(initGoogleSignIn, 150);
+          return;
+        }
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
+        });
+        google.accounts.id.renderButton(
+          document.getElementById("googleSignInBtn"),
+          {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            shape: "pill",
+            text: "continue_with",
+            width: 320,
+          },
+        );
+        googleButtonRendered = true;
+      }
+
+      async function handleGoogleCredential(response) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/google`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id_token: response.credential }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast(data.detail || "Google sign-in failed");
+            return;
+          }
+          if (data.status === "signin") {
+            completeSessionLogin(data.token, data.expires_at, data.user);
+          } else if (data.status === "signup_required") {
+            startSignupFlow(data.registration_token, data.prefill);
+          }
+        } catch (e) {
+          showToast("Could not reach the server");
+        }
+      }
+
+      function startSignupFlow(registrationToken, prefill) {
+        otpFlowState = { registrationToken, prefill };
+        document.getElementById("signup-avatar").src = prefill.picture || "";
+        document.getElementById("signup-name").textContent = prefill.name || "";
+        document.getElementById("signup-email").textContent =
+          prefill.email || "";
+        document.getElementById("signup-organization").value = "";
+        document.getElementById("signup-designation").value = "";
+        document.getElementById("signup-address").value = "";
+        document.getElementById("signup-phone-number").value = "";
+        document.getElementById("signup-error").style.display = "none";
+        showLoginStep("signup");
+      }
+
+      function setFieldError(elId, message) {
+        const el = document.getElementById(elId);
+        el.textContent = message;
+        el.style.display = "block";
+      }
+
+      async function sendOtp(purpose) {
+        let phone, cc, errElId;
+        if (purpose === "signin") {
+          phone = document.getElementById("phone-signin-number").value.trim();
+          cc = document.getElementById("phone-cc").value.trim() || "91";
+          errElId = "phone-signin-error";
+        } else {
+          phone = document.getElementById("signup-phone-number").value.trim();
+          cc = document.getElementById("signup-phone-cc").value.trim() || "91";
+          errElId = "signup-error";
+          // Validate the rest of the profile fields before sending an OTP at all
+          const organization = document
+            .getElementById("signup-organization")
+            .value.trim();
+          const designation = document
+            .getElementById("signup-designation")
+            .value.trim();
+          const address = document
+            .getElementById("signup-address")
+            .value.trim();
+          if (!organization || !designation || !address) {
+            setFieldError(
+              errElId,
+              "Please fill in organization, designation, and address first.",
+            );
+            return;
+          }
+        }
+        if (!/^\d{7,15}$/.test(phone)) {
+          setFieldError(errElId, "Enter a valid phone number.");
+          return;
+        }
+        document.getElementById(errElId).style.display = "none";
+
+        try {
+          const res = await fetch(`${API_BASE}/auth/otp/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, cc, purpose }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setFieldError(errElId, data.detail || "Could not send code.");
+            return;
+          }
+
+          if (purpose === "signup") {
+            const organization = document
+              .getElementById("signup-organization")
+              .value.trim();
+            const designation = document
+              .getElementById("signup-designation")
+              .value.trim();
+            const address = document
+              .getElementById("signup-address")
+              .value.trim();
+            otpFlowState = {
+              ...otpFlowState,
+              purpose: "signup",
+              phone,
+              cc,
+              otpSession: data.otp_session,
+              organization,
+              designation,
+              address,
+            };
+          } else {
+            otpFlowState = {
+              purpose: "signin",
+              phone,
+              cc,
+              otpSession: data.otp_session,
+            };
+          }
+
+          document.getElementById("otp-sent-to-label").textContent =
+            `We sent a 6-digit code to +${cc} ${phone}`;
+          document.getElementById("otp-code-input").value = "";
+          document.getElementById("otp-error").style.display = "none";
+          showLoginStep("otp");
+        } catch (e) {
+          setFieldError(errElId, "Could not reach the server.");
+        }
+      }
+
+      async function resendOtp() {
+        if (!otpFlowState) return;
+        await sendOtp(otpFlowState.purpose);
+      }
+
+      async function submitOtp() {
+        const code = document.getElementById("otp-code-input").value.trim();
+        if (!code || !otpFlowState) return;
+        try {
+          const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              otp_session: otpFlowState.otpSession,
+              code,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setFieldError("otp-error", data.detail || "Verification failed.");
+            return;
+          }
+
+          if (data.status === "signin") {
+            // Phone-based sign-in: verifying the OTP directly returns a session.
+            completeSessionLogin(data.token, data.expires_at, data.user);
+            return;
+          }
+
+          // status === "otp_verified" -> this was the signup phone-verification
+          // step; now actually create the account.
+          const completeRes = await fetch(`${API_BASE}/auth/signup/complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              registration_token: otpFlowState.registrationToken,
+              organization: otpFlowState.organization,
+              designation: otpFlowState.designation,
+              address: otpFlowState.address,
+              phone: otpFlowState.phone,
+              phone_cc: otpFlowState.cc,
+              otp_session: otpFlowState.otpSession,
+            }),
+          });
+          const completeData = await completeRes.json();
+          if (!completeRes.ok) {
+            setFieldError(
+              "otp-error",
+              completeData.detail || "Could not create account.",
+            );
+            return;
+          }
+          completeSessionLogin(
+            completeData.token,
+            completeData.expires_at,
+            completeData.user,
+          );
+        } catch (e) {
+          setFieldError("otp-error", "Could not reach the server.");
+        }
+      }
+
+      function completeSessionLogin(token, expiresAtSeconds, user) {
+        setSession({
+          token,
+          expires_at: expiresAtSeconds * 1000,
+          username: (user && (user.account_id || user.name)) || "user",
+        });
+        otpFlowState = null;
+        startApp();
       }
 
       function handleLogout() {
