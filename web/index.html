@@ -15,6 +15,11 @@
       rel="stylesheet"
     />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- config.js is gitignored (real API keys live there) -- copy from
+         config.js.example and fill in real values. This must load before
+         the main script below so window.GOOGLE_MAPS_API_KEY / GOOGLE_CLIENT_ID
+         are set in time. -->
+    <script src="config.js"></script>
     <style>
       :root {
         --canopy: #16a34a;
@@ -3645,14 +3650,14 @@
       // https://console.cloud.google.com/apis/credentials. Client IDs are
       // meant to be public/embedded in frontend code, this is not a secret
       // the way S3/CDSE keys are.
-      const GOOGLE_CLIENT_ID = "REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID";
+      const GOOGLE_CLIENT_ID = window.GOOGLE_CLIENT_ID || "";
 
       // -----------------------------------------------------------------
       // Google Maps: paste your key below. Enable "Maps JavaScript API",
       // "Drawing library" (bundled in) and "Geocoding API" for this key in
       // Google Cloud Console, and restrict it to your domain/IP there too.
       // -----------------------------------------------------------------
-      const GOOGLE_MAPS_API_KEY = "AIzaSyCzOfu4-7D3dLjqAKWZHNifm3tM6gcNn44";
+      const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "";
 
       const SESSION_KEY = "vyom_session"; // {token, expires_at (ms), username}
 
@@ -4145,6 +4150,13 @@
       // ================= Google Maps =================
       function loadGoogleMaps() {
         if (window.google && window.google.maps) return initApp();
+        if (!GOOGLE_MAPS_API_KEY) {
+          console.error(
+            "GOOGLE_MAPS_API_KEY is not set -- copy web/config.js.example to config.js and fill in real keys.",
+          );
+          showToast("Map couldn't load: missing API key configuration.");
+          return;
+        }
         window.__vyomGoogleMapsReady = initApp;
         const script = document.createElement("script");
         // Note: no "drawing" library here -- Google removed the DrawingManager

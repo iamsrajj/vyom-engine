@@ -1,0 +1,5 @@
+// Copy this file to config.js (gitignored, never committed) and fill in
+// real values. index.html loads config.js before its main script and reads
+// these off `window`.
+window.GOOGLE_MAPS_API_KEY = "REPLACE_WITH_YOUR_GOOGLE_MAPS_API_KEY";
+window.GOOGLE_CLIENT_ID = "REPLACE_WITH_YOUR_GOOGLE_OAUTH_CLIENT_ID";
