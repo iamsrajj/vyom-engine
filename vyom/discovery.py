@@ -16,12 +16,14 @@ from sqlalchemy import select
 
 from vyom.config import settings
 from vyom.auth_broker import auth_broker
+from vyom.cdse_rate_limiter import cdse_request
 from vyom.models import CatalogProduct
 
 logger = logging.getLogger("vyom.discovery")
 
 _S2_TILE_RE = re.compile(r"_T(\d{2}[A-Z]{3})_")
-_S1_TILE_RE = re.compile(r"_([0-9A-F]{6})_")  # relative orbit + mission data-take id fragment
+# relative orbit + mission data-take id fragment
+_S1_TILE_RE = re.compile(r"_([0-9A-F]{6})_")
 
 
 def _extract_tile_id(product_name: str, platform: str) -> str | None:
@@ -55,7 +57,8 @@ def discover_products_for_geometry(
     poly = shape(geometry)
     aoi_wkt = poly.wkt
 
-    date_from = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    date_from = (datetime.now(timezone.utc) -
+                 timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     date_to = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     filter_parts = [
@@ -81,11 +84,12 @@ def discover_products_for_geometry(
         "$expand": "Attributes",
     }
 
-    resp = requests.get(url, params=params, headers=auth_broker.auth_header(), timeout=60)
+    resp = cdse_request("GET", url, params=params, timeout=60)
     resp.raise_for_status()
     results = resp.json().get("value", [])
 
-    logger.info("CDSE discovery (%s) returned %d candidate product(s)", platform, len(results))
+    logger.info("CDSE discovery (%s) returned %d candidate product(s)",
+                platform, len(results))
 
     matched: list[CatalogProduct] = []
 
@@ -103,14 +107,16 @@ def discover_products_for_geometry(
                     break
 
         existing = db.execute(
-            select(CatalogProduct).where(CatalogProduct.product_id == product_id)
+            select(CatalogProduct).where(
+                CatalogProduct.product_id == product_id)
         ).scalar_one_or_none()
 
         if existing:
             matched.append(existing)
             continue
 
-        footprint_shape = shape(footprint_geojson) if footprint_geojson else poly
+        footprint_shape = shape(
+            footprint_geojson) if footprint_geojson else poly
 
         record = CatalogProduct(
             platform=platform,

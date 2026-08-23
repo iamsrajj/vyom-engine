@@ -44,6 +44,11 @@ class Settings(BaseSettings):
 
     # Discovery defaults — Sentinel-2 (optical)
     default_max_cloud_cover: float = 40.0
+
+    # CDSE rate limiting (see vyom/cdse_rate_limiter.py for the documented
+    # limits these are set conservatively under)
+    cdse_max_concurrent_connections: int = 3
+    cdse_max_requests_per_minute: int = 120
     s2_collection: str = "SENTINEL-2"
     s2_product_type: str = "S2MSI2A"
 
