@@ -37,8 +37,12 @@ _BAND_GLOBS = {
     "B03": "*_B03_10m.jp2",   # Green, 10m
     "B04": "*_B04_10m.jp2",   # Red, 10m
     "B05": "*_B05_20m.jp2",   # Red-edge 1, 20m
-    "B08": "*_B08_10m.jp2",   # NIR, 10m
+    "B06": "*_B06_20m.jp2",   # Red-edge 2, 20m
+    "B07": "*_B07_20m.jp2",   # Red-edge 3, 20m
+    "B08": "*_B08_10m.jp2",   # NIR (wide), 10m
+    "B8A": "*_B8A_20m.jp2",   # NIR (narrow/red-edge 4), 20m
     "B11": "*_B11_20m.jp2",   # SWIR1, 20m
+    "B12": "*_B12_20m.jp2",   # SWIR2, 20m
     "SCL": "*_SCL_20m.jp2",   # Scene Classification, 20m
 }
 
@@ -50,6 +54,31 @@ _INDEX_BAND_REQUIREMENTS = {
     "NDRE": {"B08", "B05"},
     "MSAVI2": {"B08", "B04"},
     "SOC_VIS": {"B02", "B03", "B04"},
+    "EVI": {"B08", "B04", "B02"},
+    "ARI1": {"B03", "B05"},
+    "LAI_PROXY": {"B08", "B04", "B02"},
+    "CAR_RE": {"B03", "B04", "B05"},         # CARI
+    "NDREX": {"B8A", "B06"},                 # NDRE variant, B6/B8A
+    "NDRE_B7": {"B8A", "B07"},
+    "EVI2": {"B08", "B04"},
+    "NIRV": {"B08", "B04"},
+    "OSAVI": {"B08", "B04"},
+    "VARI": {"B03", "B04", "B02"},
+    "SAVI": {"B08", "B04"},
+    "MSI": {"B08", "B11"},
+    "NDBI": {"B11", "B08"},
+    "IBI": {"B11", "B08", "B04"},
+    "BSI": {"B11", "B04", "B08", "B02"},
+    "NBR": {"B08", "B12"},
+    "NBR2": {"B11", "B12"},
+    "BAI": {"B04", "B08"},
+    "MNDWI": {"B03", "B11"},
+    "AWEI_SH": {"B02", "B03", "B08", "B11", "B12"},
+    "AWEI_NSH": {"B03", "B11", "B08", "B12"},
+    "WI2015": {"B02", "B03", "B04", "B08", "B11"},
+    "NDSI": {"B03", "B11"},
+    "SNOW_BRIGHTNESS": {"B02", "B03"},
+    "GREEN_BLUE_RATIO": {"B03", "B02"},
 }
 
 
@@ -161,7 +190,7 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
                 if ref_transform is None:
                     ref_transform, ref_crs, ref_shape = transform, crs, arr.shape
 
-        for band in ("B05", "B11"):
+        for band in ("B05", "B06", "B07", "B8A", "B11", "B12"):
             if band in needed_bands:
                 path = _find_band_path(safe_dir, band)
                 arr, _, _ = _read_band(
@@ -195,6 +224,83 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
         if "SOC_VIS" in needed_indices:
             computed["SOC_VIS"] = idx.compute_soc_vis(
                 band_arrays["B02"], band_arrays["B03"], band_arrays["B04"])
+        if "EVI" in needed_indices:
+            computed["EVI"] = idx.compute_evi(
+                band_arrays["B08"], band_arrays["B04"], band_arrays["B02"])
+        if "ARI1" in needed_indices:
+            computed["ARI1"] = idx.compute_ari1(
+                band_arrays["B03"], band_arrays["B05"])
+        if "LAI_PROXY" in needed_indices:
+            computed["LAI_PROXY"] = idx.compute_lai_proxy(
+                band_arrays["B08"], band_arrays["B04"], band_arrays["B02"])
+        if "CAR_RE" in needed_indices:
+            computed["CAR_RE"] = idx.compute_cari(
+                band_arrays["B03"], band_arrays["B04"], band_arrays["B05"])
+        if "NDREX" in needed_indices:
+            computed["NDREX"] = idx.compute_ndre_b6(
+                band_arrays["B8A"], band_arrays["B06"])
+        if "NDRE_B7" in needed_indices:
+            computed["NDRE_B7"] = idx.compute_ndre_b7(
+                band_arrays["B8A"], band_arrays["B07"])
+        if "EVI2" in needed_indices:
+            computed["EVI2"] = idx.compute_evi2(
+                band_arrays["B08"], band_arrays["B04"])
+        if "NIRV" in needed_indices:
+            computed["NIRV"] = idx.compute_nirv(
+                band_arrays["B08"], band_arrays["B04"])
+        if "OSAVI" in needed_indices:
+            computed["OSAVI"] = idx.compute_osavi(
+                band_arrays["B08"], band_arrays["B04"])
+        if "VARI" in needed_indices:
+            computed["VARI"] = idx.compute_vari(
+                band_arrays["B03"], band_arrays["B04"], band_arrays["B02"])
+        if "SAVI" in needed_indices:
+            computed["SAVI"] = idx.compute_savi(
+                band_arrays["B08"], band_arrays["B04"])
+        if "MSI" in needed_indices:
+            computed["MSI"] = idx.compute_msi(
+                band_arrays["B08"], band_arrays["B11"])
+        if "NDBI" in needed_indices:
+            computed["NDBI"] = idx.compute_ndbi(
+                band_arrays["B11"], band_arrays["B08"])
+        if "IBI" in needed_indices:
+            computed["IBI"] = idx.compute_ibi(
+                band_arrays["B11"], band_arrays["B08"], band_arrays["B04"])
+        if "BSI" in needed_indices:
+            computed["BSI"] = idx.compute_bsi(
+                band_arrays["B11"], band_arrays["B04"], band_arrays["B08"], band_arrays["B02"])
+        if "NBR" in needed_indices:
+            computed["NBR"] = idx.compute_nbr(
+                band_arrays["B08"], band_arrays["B12"])
+        if "NBR2" in needed_indices:
+            computed["NBR2"] = idx.compute_nbr2(
+                band_arrays["B11"], band_arrays["B12"])
+        if "BAI" in needed_indices:
+            computed["BAI"] = idx.compute_bai(
+                band_arrays["B04"], band_arrays["B08"])
+        if "MNDWI" in needed_indices:
+            computed["MNDWI"] = idx.compute_mndwi(
+                band_arrays["B03"], band_arrays["B11"])
+        if "AWEI_SH" in needed_indices:
+            computed["AWEI_SH"] = idx.compute_awei_sh(
+                band_arrays["B02"], band_arrays["B03"], band_arrays["B08"],
+                band_arrays["B11"], band_arrays["B12"])
+        if "AWEI_NSH" in needed_indices:
+            computed["AWEI_NSH"] = idx.compute_awei_nsh(
+                band_arrays["B03"], band_arrays["B11"], band_arrays["B08"], band_arrays["B12"])
+        if "WI2015" in needed_indices:
+            computed["WI2015"] = idx.compute_wi2015(
+                band_arrays["B02"], band_arrays["B03"], band_arrays["B04"],
+                band_arrays["B08"], band_arrays["B11"])
+        if "NDSI" in needed_indices:
+            computed["NDSI"] = idx.compute_ndsi(
+                band_arrays["B03"], band_arrays["B11"])
+        if "SNOW_BRIGHTNESS" in needed_indices:
+            computed["SNOW_BRIGHTNESS"] = idx.compute_snow_brightness(
+                band_arrays["B02"], band_arrays["B03"])
+        if "GREEN_BLUE_RATIO" in needed_indices:
+            computed["GREEN_BLUE_RATIO"] = idx.compute_green_blue_ratio(
+                band_arrays["B03"], band_arrays["B02"])
 
         processed_paths = {}
         for name, array in computed.items():

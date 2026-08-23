@@ -54,8 +54,20 @@ class Settings(BaseSettings):
     # Indices computed per platform. Adding a new index later is: implement the
     # formula in processing/indices.py or processing/sar_indices.py, add its name
     # here — no schema migration needed since indices are stored as JSONB.
-    s2_indices: list[str] = ["NDVI", "NDWI",
-                             "NDMI", "MSAVI2", "NDRE", "SOC_VIS"]
+    # Default active index set. Agriculture-relevant subset from the full
+    # library implemented in indices.py -- burn/water/snow/built-up indices
+    # (NBR, NBR2, BAI, MNDWI, AWEI_*, WI2015, NDSI, SNOW_BRIGHTNESS,
+    # GREEN_BLUE_RATIO, NDBI, IBI) are implemented and available but NOT
+    # enabled by default since most Indian farmland doesn't need them day-to-
+    # day -- add any of them here (comma-separated in .env) if you want them
+    # computed for every product. CAR_RE (CARI) and NDREX (NDRE on B6/B8A)
+    # are now implemented per your confirmation. CCC is still not implemented
+    # -- needs SNAP Biophysical Processor integration, a separate task.
+    s2_indices: list[str] = [
+        "NDVI", "NDRE", "NDWI", "NDMI", "EVI", "MSAVI2", "LAI_PROXY", "ARI1",
+        "CAR_RE", "NDREX",
+    ]
+    # RSM not yet implemented -- see indices.py
     s1_indices: list[str] = ["RVI", "VV_VH_RATIO"]
 
     # Beta login gate. AUTH_USERS is "username:password,username2:password2" --
