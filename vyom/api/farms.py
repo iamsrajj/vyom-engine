@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from vyom.config import settings
 from vyom.db import get_db
-from vyom.models import Polygon, ZonalStat, CatalogProduct
+from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat
 from vyom.processing.index_scale import scales_for_api
 from vyom.tasks import refresh_farm
 
@@ -78,6 +78,14 @@ class ZonalStatOut(BaseModel):
     metric: str
     value: Optional[float]
     cloud_pct: Optional[float]
+    # "satellite" = a real zonal-stat computed from an actual acquired scene.
+    # "interpolated" = a gap-filled estimate between two real observations
+    # (see vyom/interpolation.py) -- NEVER a forecast/extrapolation beyond
+    # real data. Every consumer of this field (dashboard, API clients,
+    # reports) MUST preserve and display this distinction -- collapsing
+    # interpolated points into indistinguishable "data" is exactly the
+    # misrepresentation this field exists to prevent.
+    source: str = "satellite"
 
 
 def _geodesic_area_ha(geom_shape) -> float:
@@ -228,9 +236,19 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
 
 
 @router.get("/{farm_id}/timeseries", response_model=list[ZonalStatOut])
-def timeseries(farm_id: uuid.UUID, metric: str = "NDVI_mean", db: Session = Depends(get_db)):
-    """Time series for one metric (e.g. NDVI_mean, RVI_mean, SOC_VIS_mean),
-    read directly from the pre-computed zonal_stats table."""
+def timeseries(
+    farm_id: uuid.UUID, metric: str = "NDVI_mean",
+    include_interpolated: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Time series for one metric (e.g. NDVI_mean, RVI_mean, SOC_VIS_mean).
+
+    Real points always come from zonal_stats (satellite readings). When
+    include_interpolated=true, gap-filled points from interpolated_stats
+    (see vyom/interpolation.py) are merged in on a fixed cadence between
+    real observations -- each one explicitly tagged source="interpolated"
+    in the response. Real and interpolated points are never returned
+    indistinguishably; every point states which one it is."""
     farm = db.get(Polygon, farm_id)
     if not farm:
         raise HTTPException(404, "Farm not found")
@@ -241,7 +259,7 @@ def timeseries(farm_id: uuid.UUID, metric: str = "NDVI_mean", db: Session = Depe
         .order_by(ZonalStat.acquisition_date)
     )
     rows = db.execute(stmt).scalars().all()
-    return [
+    out = [
         ZonalStatOut(
             acquisition_date=r.acquisition_date,
             metric=r.metric,
@@ -249,9 +267,32 @@ def timeseries(farm_id: uuid.UUID, metric: str = "NDVI_mean", db: Session = Depe
                 float(r.value)) if r.value is not None else None,
             cloud_pct=_clean_float(
                 float(r.cloud_pct)) if r.cloud_pct is not None else None,
+            source="satellite",
         )
         for r in rows
     ]
+
+    if include_interpolated:
+        interp_stmt = (
+            select(InterpolatedStat)
+            .where(InterpolatedStat.polygon_id == farm_id, InterpolatedStat.metric == metric)
+            .order_by(InterpolatedStat.date)
+        )
+        interp_rows = db.execute(interp_stmt).scalars().all()
+        out.extend(
+            ZonalStatOut(
+                acquisition_date=r.date,
+                metric=r.metric,
+                value=_clean_float(
+                    float(r.value)) if r.value is not None else None,
+                cloud_pct=None,  # interpolated points have no real cloud reading
+                source="interpolated",
+            )
+            for r in interp_rows
+        )
+        out.sort(key=lambda x: x.acquisition_date)
+
+    return out
 
 
 @router.get("/{farm_id}/latest")

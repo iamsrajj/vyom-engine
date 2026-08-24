@@ -87,6 +87,39 @@ class ZonalStat(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class InterpolatedStat(Base):
+    """Gap-filled points on a fixed cadence (default 6 days), computed BETWEEN
+    two real zonal_stats readings -- never before the first or after the last
+    real observation for a polygon+metric (interpolation, not forecasting).
+
+    Deliberately a SEPARATE table from zonal_stats, not an extra column/flag
+    on it: zonal_stats stays a pure record of what the satellites actually
+    measured. Every row here traces back to the exact two real zonal_stats
+    rows it was computed from (left/right), so a caller can always verify
+    provenance instead of trusting the number blind. Every API response that
+    includes these MUST carry the same distinction -- see ZonalStatOut.source
+    in farms.py. Never remove the source label when displaying to a farmer."""
+    __tablename__ = "interpolated_stats"
+    __table_args__ = (
+        UniqueConstraint("polygon_id", "metric", "date",
+                         name="uq_interpolated_polygon_metric_date"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    polygon_id = Column(UUID(as_uuid=True), ForeignKey(
+        "polygons.id", ondelete="CASCADE"), nullable=False)
+    platform = Column(String, nullable=False)  # 'S1' or 'S2'
+    metric = Column(String, nullable=False)
+    date = Column(DateTime(timezone=True), nullable=False)
+    value = Column(Numeric)
+    method = Column(String, nullable=False, default="linear")
+    left_zonal_stat_id = Column(BigInteger, ForeignKey(
+        "zonal_stats.id", ondelete="CASCADE"), nullable=False)
+    right_zonal_stat_id = Column(BigInteger, ForeignKey(
+        "zonal_stats.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class ErrorLog(Base):
     """Single place every failure across every task/module/API route gets
     written to, so the dashboard's Errors panel is one query instead of
