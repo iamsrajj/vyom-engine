@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     cdse_max_requests_per_minute: int = 120
     s2_collection: str = "SENTINEL-2"
     s2_product_type: str = "S2MSI2A"
+    # Used only for the L1C-without-L2A diagnostic in discovery.py -- this
+    # pipeline still only downloads/processes L2A (S2MSI2A above).
+    s2_l1c_product_type: str = "S2MSI1C"
 
     # Discovery defaults — Sentinel-1 (SAR, cloud-independent — fills gaps during monsoon)
     s1_collection: str = "SENTINEL-1"
