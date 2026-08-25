@@ -79,12 +79,17 @@ class ZonalStatOut(BaseModel):
     value: Optional[float]
     cloud_pct: Optional[float]
     # "satellite" = a real zonal-stat computed from an actual acquired scene.
-    # "interpolated" = a gap-filled estimate between two real observations
-    # (see vyom/interpolation.py) -- NEVER a forecast/extrapolation beyond
-    # real data. Every consumer of this field (dashboard, API clients,
-    # reports) MUST preserve and display this distinction -- collapsing
-    # interpolated points into indistinguishable "data" is exactly the
-    # misrepresentation this field exists to prevent.
+    # "interpolated" = a gap-filled estimate between TWO real observations
+    # (see vyom/interpolation.py) -- never a forecast/extrapolation beyond
+    # real data.
+    # "provisional" = a flat carry-forward of the single most recent real
+    # value, used only when no second real reading exists yet to properly
+    # interpolate against. Weaker than "interpolated" -- gets deleted and
+    # replaced with a real interpolated value the moment a new real reading
+    # arrives. Every consumer of this field (dashboard, API clients,
+    # reports) MUST preserve and display all three distinctly -- collapsing
+    # them into indistinguishable "data" is exactly the misrepresentation
+    # this field exists to prevent.
     source: str = "satellite"
 
 
@@ -244,10 +249,14 @@ def timeseries(
     """Time series for one metric (e.g. NDVI_mean, RVI_mean, SOC_VIS_mean).
 
     Real points always come from zonal_stats (satellite readings). When
-    include_interpolated=true, gap-filled points from interpolated_stats
-    (see vyom/interpolation.py) are merged in on a fixed cadence between
-    real observations -- each one explicitly tagged source="interpolated"
-    in the response. Real and interpolated points are never returned
+    include_interpolated=true, computed points from interpolated_stats
+    (see vyom/interpolation.py) are merged in on a fixed cadence:
+      - source="interpolated": a real reading exists on both sides of the
+        gap, linear interpolation between them.
+      - source="provisional": only the most recent real reading exists so
+        far (flat carry-forward of it) -- gets superseded by a real
+        "interpolated" value the moment a new real reading arrives.
+    Real, interpolated, and provisional points are never returned
     indistinguishably; every point states which one it is."""
     farm = db.get(Polygon, farm_id)
     if not farm:
@@ -285,8 +294,8 @@ def timeseries(
                 metric=r.metric,
                 value=_clean_float(
                     float(r.value)) if r.value is not None else None,
-                cloud_pct=None,  # interpolated points have no real cloud reading
-                source="interpolated",
+                cloud_pct=None,  # interpolated/provisional points have no real cloud reading
+                source=r.source,  # "interpolated" or "provisional" -- read from the row, never hardcoded
             )
             for r in interp_rows
         )

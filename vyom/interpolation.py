@@ -1,52 +1,59 @@
 """
 interpolation -- fills a fixed-cadence grid (default every 6 days) of values
-for a farm+metric, computed BETWEEN two real zonal_stats observations.
+for a farm+metric, using two distinct mechanisms depending on how much real
+data is available. See InterpolatedStat's docstring in models.py for the
+full explanation of the two `source` values this produces.
 
-HARD BOUNDARY, deliberate and non-negotiable: this only INTERPOLATES (fills
-a gap between two known real points) -- it never EXTRAPOLATES (projects
-before the first or after the last real observation). Forecasting a value
-for a date with no real data on either side is a fundamentally different,
-much less defensible claim than estimating a value between two real
-readings, and this module refuses to do it. If the most recent real
-observation is 10 days old, the grid stops there -- it does not invent a
-"today" value.
+HARD BOUNDARY, deliberate and non-negotiable: nothing in this module ever
+projects a TREND forward. The "provisional" mechanism repeats the single
+most recent real value flat (carry-forward) -- it does not guess where the
+value is heading. True interpolation only ever fills a gap strictly BETWEEN
+two real observations, never before the first or after the last. The one
+exception -- provisional carry-forward past the last real point, capped and
+clearly labeled -- exists only because the user explicitly asked for a
+"real data every 6 days" cadence even during a live gap, and it is
+implemented so that:
+  1. it never claims to be a real reading (source="provisional", distinct
+     from both "satellite" and "interpolated" everywhere this is exposed)
+  2. it is immediately superseded the moment real interpolation becomes
+     possible (see the delete-then-reinsert step in _fill_gaps_for_metric)
+  3. it stops extending after MAX_PROVISIONAL_PERIODS if the real gap runs
+     unusually long, rather than silently repeating stale data forever
 
-Every interpolated_stats row records exactly which two real zonal_stats
-rows it was computed from (left_zonal_stat_id, right_zonal_stat_id), so
-provenance is always traceable, never just a bare number.
-
-Method is linear interpolation only for now (see method column) -- simplest
-defensible choice for values between two known points. Anything fancier
-(harmonic/seasonal fitting, Savitzky-Golay smoothing) is a real methodology
-decision that changes what the number means and should be a deliberate
-follow-up, not silently swapped in here.
+Every interpolated_stats row records which real zonal_stats row(s) it was
+computed from, so provenance is always traceable, never just a bare number.
 """
 import logging
-import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from vyom.models import ZonalStat, InterpolatedStat, CatalogProduct
+from vyom.error_log import log_error
 
 logger = logging.getLogger("vyom.interpolation")
 
 DEFAULT_GRID_DAYS = 6
 # If a real observation already exists within this many days of a grid point,
-# skip inserting an interpolated point there -- avoids a near-duplicate value
+# skip inserting a computed point there -- avoids a near-duplicate value
 # sitting right next to a real one for no benefit.
 MIN_DISTANCE_FROM_REAL_DAYS = 1
+# Stop extending provisional carry-forward after this many grid periods with
+# no new real data (10 periods * 6 days = 60 days) -- a live gap this long
+# is itself worth surfacing as a real problem, not quietly papered over
+# with an increasingly stale flat value.
+MAX_PROVISIONAL_PERIODS = 10
 
 
 def fill_gaps_for_polygon(db: Session, polygon_id, platform: str,
                           grid_days: int = DEFAULT_GRID_DAYS) -> int:
     """Fills interpolated_stats for every metric that has real zonal_stats
-    data for this polygon+platform. Returns the number of new interpolated
-    rows inserted (0 if nothing new to fill, e.g. not enough real data yet
-    or the grid is already fully covered)."""
+    data for this polygon+platform -- both true interpolation (between two
+    real points) and provisional carry-forward (past the last real point,
+    pending a new real reading). Returns the number of new/changed rows."""
     metrics = db.execute(
         select(ZonalStat.metric)
         .join(CatalogProduct, ZonalStat.product_id == CatalogProduct.id)
@@ -54,11 +61,18 @@ def fill_gaps_for_polygon(db: Session, polygon_id, platform: str,
         .distinct()
     ).scalars().all()
 
-    total_inserted = 0
+    total_changed = 0
     for metric in metrics:
-        total_inserted += _fill_gaps_for_metric(db,
-                                                polygon_id, platform, metric, grid_days)
-    return total_inserted
+        total_changed += _fill_gaps_for_metric(db,
+                                               polygon_id, platform, metric, grid_days)
+    return total_changed
+
+
+def _normalize(dt: datetime) -> datetime:
+    """DB drivers/dialects can hand back naive datetimes even for a
+    timezone(True) column in edge cases -- treat naive as UTC rather than
+    let a comparison crash a scheduled fill job over a driver quirk."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _fill_gaps_for_metric(db: Session, polygon_id, platform: str, metric: str, grid_days: int) -> int:
@@ -74,72 +88,144 @@ def _fill_gaps_for_metric(db: Session, polygon_id, platform: str, metric: str, g
         .order_by(ZonalStat.acquisition_date)
     ).all()
 
-    if len(real_points) < 2:
-        return 0  # can't interpolate with fewer than 2 real anchor points
+    if len(real_points) == 0:
+        return 0
 
-    existing_dates = set(db.execute(
-        select(InterpolatedStat.date)
-        .where(InterpolatedStat.polygon_id == polygon_id, InterpolatedStat.metric == metric)
-    ).scalars().all())
-    # Defensive normalization: DB drivers/dialects can hand back naive
-    # datetimes even for a timezone(True) column in edge cases (seen this
-    # exact break in SQLite during testing) -- comparing an aware cursor
-    # against a naive existing_dates entry would crash a scheduled fill job
-    # over something that should never be fatal. Treat naive as UTC.
+    changed = 0
+
+    # ---- True interpolation between each consecutive pair of real points ----
+    if len(real_points) >= 2:
+        for left, right in zip(real_points, real_points[1:]):
+            left_id, left_date, left_value = left
+            right_id, right_date, right_value = right
+            left_date, right_date = _normalize(
+                left_date), _normalize(right_date)
+            if left_value is None or right_value is None:
+                continue
+
+            gap_days = (right_date - left_date).days
+            if gap_days <= grid_days:
+                continue  # already at/under target cadence, nothing to fill
+
+            # This gap is now closable with real data -- any provisional
+            # (carry-forward) rows sitting in it are stale placeholders from
+            # before `right` existed. Delete them so they get replaced by
+            # the real interpolated values below, never left lingering next
+            # to a gap that's since become properly fillable.
+            db.execute(
+                delete(InterpolatedStat).where(
+                    InterpolatedStat.polygon_id == polygon_id,
+                    InterpolatedStat.metric == metric,
+                    InterpolatedStat.source == "provisional",
+                    InterpolatedStat.date > left_date,
+                    InterpolatedStat.date < right_date,
+                )
+            )
+            db.flush()
+
+            existing_dates = {
+                _normalize(d) for d in db.execute(
+                    select(InterpolatedStat.date).where(
+                        InterpolatedStat.polygon_id == polygon_id,
+                        InterpolatedStat.metric == metric,
+                    )
+                ).scalars().all()
+            }
+
+            cursor = left_date + timedelta(days=grid_days)
+            while cursor < right_date:
+                too_close_to_real = (
+                    (cursor - left_date) < timedelta(days=MIN_DISTANCE_FROM_REAL_DAYS)
+                    or (right_date - cursor) < timedelta(days=MIN_DISTANCE_FROM_REAL_DAYS)
+                )
+                already_filled = any(
+                    abs((cursor - d).total_seconds()) < 3600 for d in existing_dates)
+
+                if not too_close_to_real and not already_filled:
+                    fraction = (cursor - left_date).total_seconds() / \
+                        (right_date - left_date).total_seconds()
+                    interpolated_value = Decimal(str(left_value)) + (
+                        Decimal(str(right_value)) - Decimal(str(left_value))
+                    ) * Decimal(str(fraction))
+
+                    row = InterpolatedStat(
+                        polygon_id=polygon_id, platform=platform, metric=metric,
+                        date=cursor, value=interpolated_value,
+                        source="interpolated", method="linear",
+                        left_zonal_stat_id=left_id, right_zonal_stat_id=right_id,
+                    )
+                    db.add(row)
+                    try:
+                        db.flush()
+                        changed += 1
+                    except IntegrityError:
+                        db.rollback()  # concurrent run already inserted this exact point
+
+                cursor += timedelta(days=grid_days)
+
+    # ---- Provisional carry-forward past the LAST real point (trailing edge) ----
+    latest_id, latest_date, latest_value = real_points[-1]
+    latest_date = _normalize(latest_date)
+    if latest_value is not None:
+        changed += _provisional_fill_trailing_edge(
+            db, polygon_id, platform, metric, grid_days,
+            latest_id, latest_date, latest_value,
+        )
+
+    db.commit()
+    return changed
+
+
+def _provisional_fill_trailing_edge(db: Session, polygon_id, platform: str, metric: str,
+                                    grid_days: int, anchor_id, anchor_date: datetime,
+                                    anchor_value) -> int:
+    """Flat carry-forward of the single most recent real value, on the same
+    grid cadence, for every grid slot between the last real reading and now
+    that doesn't yet have a real reading. Capped at MAX_PROVISIONAL_PERIODS
+    so an unusually long real gap surfaces as a warning instead of silently
+    repeating an increasingly stale value forever."""
+    now = datetime.now(timezone.utc)
     existing_dates = {
-        d if d.tzinfo is not None else d.replace(tzinfo=timezone.utc)
-        for d in existing_dates
+        _normalize(d) for d in db.execute(
+            select(InterpolatedStat.date).where(
+                InterpolatedStat.polygon_id == polygon_id,
+                InterpolatedStat.metric == metric,
+            )
+        ).scalars().all()
     }
 
     inserted = 0
-    for left, right in zip(real_points, real_points[1:]):
-        left_id, left_date, left_value = left
-        right_id, right_date, right_value = right
-        if left_date.tzinfo is None:
-            left_date = left_date.replace(tzinfo=timezone.utc)
-        if right_date.tzinfo is None:
-            right_date = right_date.replace(tzinfo=timezone.utc)
-        if left_value is None or right_value is None:
-            continue
-
-        gap_days = (right_date - left_date).days
-        if gap_days <= grid_days:
-            continue  # gap already smaller than the target cadence, nothing to fill
-
-        cursor = left_date + timedelta(days=grid_days)
-        while cursor < right_date:
-            too_close_to_real = (
-                (cursor - left_date) < timedelta(days=MIN_DISTANCE_FROM_REAL_DAYS)
-                or (right_date - cursor) < timedelta(days=MIN_DISTANCE_FROM_REAL_DAYS)
+    cursor = anchor_date + timedelta(days=grid_days)
+    periods = 0
+    while cursor <= now and periods < MAX_PROVISIONAL_PERIODS:
+        periods += 1
+        already_filled = any(abs((cursor - d).total_seconds())
+                             < 3600 for d in existing_dates)
+        if not already_filled:
+            row = InterpolatedStat(
+                polygon_id=polygon_id, platform=platform, metric=metric,
+                date=cursor, value=Decimal(str(anchor_value)),
+                source="provisional", method="carry_forward",
+                left_zonal_stat_id=anchor_id, right_zonal_stat_id=None,
             )
-            already_filled = any(
-                abs((cursor - d).total_seconds()) < 3600 for d in existing_dates)
+            db.add(row)
+            try:
+                db.flush()
+                inserted += 1
+            except IntegrityError:
+                db.rollback()
+        cursor += timedelta(days=grid_days)
 
-            if not too_close_to_real and not already_filled:
-                fraction = (cursor - left_date).total_seconds() / \
-                    (right_date - left_date).total_seconds()
-                interpolated_value = Decimal(str(left_value)) + (
-                    Decimal(str(right_value)) - Decimal(str(left_value))
-                ) * Decimal(str(fraction))
+    if periods >= MAX_PROVISIONAL_PERIODS and cursor <= now:
+        log_error(
+            "interpolation",
+            f"Real data gap for metric {metric} has exceeded "
+            f"{MAX_PROVISIONAL_PERIODS * grid_days} days with no new reading -- "
+            f"provisional carry-forward stopped extending further.",
+            level="warning", platform=platform,
+            context={"polygon_id": str(polygon_id), "metric": metric,
+                     "last_real_date": anchor_date.isoformat()},
+            include_traceback=False,
+        )
 
-                row = InterpolatedStat(
-                    polygon_id=polygon_id,
-                    platform=platform,
-                    metric=metric,
-                    date=cursor,
-                    value=interpolated_value,
-                    method="linear",
-                    left_zonal_stat_id=left_id,
-                    right_zonal_stat_id=right_id,
-                )
-                db.add(row)
-                try:
-                    db.flush()
-                    inserted += 1
-                except IntegrityError:
-                    db.rollback()  # a concurrent run already inserted this exact point -- fine, skip
-
-            cursor += timedelta(days=grid_days)
-
-    db.commit()
     return inserted

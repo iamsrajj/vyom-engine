@@ -88,17 +88,31 @@ class ZonalStat(Base):
 
 
 class InterpolatedStat(Base):
-    """Gap-filled points on a fixed cadence (default 6 days), computed BETWEEN
-    two real zonal_stats readings -- never before the first or after the last
-    real observation for a polygon+metric (interpolation, not forecasting).
+    """Gap-filled / provisionally-filled points on a fixed cadence (default 6
+    days). Two distinct kinds, distinguished by `source`:
+
+      source="interpolated": computed BETWEEN two real zonal_stats readings
+      (linear interpolation) -- never before the first or after the last real
+      observation for a polygon+metric. right_zonal_stat_id is set.
+
+      source="provisional": only ONE real anchor exists so far (the most
+      recent real reading) and no second real reading has arrived yet --
+      flat carry-forward of that single anchor's value, clearly weaker than
+      a true interpolation since there's nothing on the other side to draw a
+      line to. right_zonal_stat_id is NULL. These rows are TEMPORARY: the
+      moment a real second reading arrives, fill_gaps_for_polygon() deletes
+      every provisional row in that now-closed gap and replaces them with
+      properly interpolated ones -- provisional data must never linger next
+      to a gap that's since become fillable for real.
 
     Deliberately a SEPARATE table from zonal_stats, not an extra column/flag
     on it: zonal_stats stays a pure record of what the satellites actually
-    measured. Every row here traces back to the exact two real zonal_stats
-    rows it was computed from (left/right), so a caller can always verify
-    provenance instead of trusting the number blind. Every API response that
-    includes these MUST carry the same distinction -- see ZonalStatOut.source
-    in farms.py. Never remove the source label when displaying to a farmer."""
+    measured. Every row here traces back to its real zonal_stats anchor(s),
+    so a caller can always verify provenance instead of trusting the number
+    blind. Every API response that includes these MUST carry the `source`
+    distinction -- see ZonalStatOut.source in farms.py. Never collapse
+    "satellite" / "interpolated" / "provisional" into one undifferentiated
+    "data" field when displaying to a farmer."""
     __tablename__ = "interpolated_stats"
     __table_args__ = (
         UniqueConstraint("polygon_id", "metric", "date",
@@ -112,11 +126,17 @@ class InterpolatedStat(Base):
     metric = Column(String, nullable=False)
     date = Column(DateTime(timezone=True), nullable=False)
     value = Column(Numeric)
+    # "interpolated" (two real anchors) or "provisional" (one real anchor,
+    # flat carry-forward, pending a second real reading to confirm/replace it)
+    source = Column(String, nullable=False, default="interpolated")
+    # "linear" or "carry_forward"
     method = Column(String, nullable=False, default="linear")
     left_zonal_stat_id = Column(BigInteger, ForeignKey(
         "zonal_stats.id", ondelete="CASCADE"), nullable=False)
+    # NULL for provisional rows -- there is no right anchor yet, that's the
+    # whole point of "provisional".
     right_zonal_stat_id = Column(BigInteger, ForeignKey(
-        "zonal_stats.id", ondelete="CASCADE"), nullable=False)
+        "zonal_stats.id", ondelete="CASCADE"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
