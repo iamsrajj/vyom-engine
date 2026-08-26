@@ -18,7 +18,7 @@ from rio_tiler.io import Reader
 from rio_tiler.colormap import cmap as default_cmaps
 
 from vyom.db import get_db
-from vyom.models import CatalogProduct, Polygon, PolygonTileMap
+from vyom.models import CatalogProduct, Polygon, PolygonTileMap, InterpolatedTile
 from vyom.processing.index_scale import rio_tiler_intervals
 from vyom.storage import storage
 
@@ -60,6 +60,57 @@ def _latest_product_for_farm(db: Session, farm_id: uuid.UUID, date: Optional[str
     return product
 
 
+def _resolve_raster(db: Session, farm_id: uuid.UUID, date: Optional[str],
+                    platform: str, index: str, include_interpolated: bool) -> tuple[str, str]:
+    """Returns (storage_path, source_label). source_label is one of
+    "satellite", "interpolated", "provisional" -- the caller must always
+    surface this (see the X-Vyom-Data-Source response header below), never
+    silently serve a computed tile as if it were a real one.
+
+    'latest' always means the most recent REAL product, regardless of
+    include_interpolated -- interpolated/provisional tiles are only ever
+    served for an explicit ISO date, matching the same explicit-opt-in
+    pattern as /farms/{id}/timeseries?include_interpolated=true."""
+    if date and date != "latest":
+        target_date = datetime.fromisoformat(date)
+        real_stmt = (
+            select(CatalogProduct)
+            .join(PolygonTileMap, PolygonTileMap.product_id == CatalogProduct.id)
+            .where(
+                PolygonTileMap.polygon_id == farm_id,
+                CatalogProduct.status == "processed",
+                CatalogProduct.platform == platform,
+                CatalogProduct.acquisition_date == target_date,
+            )
+        )
+        real_product = db.execute(real_stmt).scalars().first()
+        if real_product:
+            stored_path = (real_product.processed_indices or {}).get(index)
+            if stored_path:
+                return stored_path, "satellite"
+
+        if include_interpolated:
+            interp_stmt = select(InterpolatedTile).where(
+                InterpolatedTile.polygon_id == farm_id,
+                InterpolatedTile.platform == platform,
+                InterpolatedTile.index_name == index,
+                InterpolatedTile.date == target_date,
+            )
+            interp_row = db.execute(interp_stmt).scalars().first()
+            if interp_row:
+                return interp_row.storage_path, interp_row.source
+
+        raise HTTPException(
+            404, f"No {index} raster available for this farm/date")
+
+    product = _latest_product_for_farm(db, farm_id, date, platform)
+    stored_path = (product.processed_indices or {}).get(index)
+    if not stored_path:
+        raise HTTPException(
+            404, f"No {index} raster available for this farm/date")
+    return stored_path, "satellite"
+
+
 @router.get("/{farm_id}/{date}/{z}/{x}/{y}.png")
 def index_tile(
     farm_id: uuid.UUID,
@@ -69,6 +120,7 @@ def index_tile(
     y: int,
     index: str = "NDVI",
     platform: str = "S2",
+    include_interpolated: bool = False,
     db: Session = Depends(get_db),
 ):
     """
@@ -76,21 +128,23 @@ def index_tile(
     index: any index name from GET /farms/available-indices (e.g. NDVI, NDMI,
     NDRE, MSAVI2, SOC_VIS, RVI, VV_VH_RATIO).
     platform: 'S2' or 'S1' -- must match which platform computed that index.
+    include_interpolated: when true and no real reading exists for the exact
+    date requested, falls back to a computed tile from interpolated_tiles
+    (see raster_interpolation.py) -- the response's X-Vyom-Data-Source header
+    always says which kind of tile was actually served ("satellite",
+    "interpolated", or "provisional"). Never assume a 200 response is a real
+    satellite reading without checking this header.
     """
     index = index.upper()
     if index not in _INDEX_RENDER_CONFIG:
         raise HTTPException(400, f"Unknown index '{index}'")
 
-    product = _latest_product_for_farm(db, farm_id, date, platform)
-
     farm = db.get(Polygon, farm_id)
     if farm is None:
         raise HTTPException(404, "Farm not found")
 
-    stored_path = (product.processed_indices or {}).get(index)
-    if not stored_path:
-        raise HTTPException(
-            404, f"No {index} raster available for this farm/date")
+    stored_path, source_label = _resolve_raster(
+        db, farm_id, date, platform, index, include_interpolated)
 
     cog_path = storage.open_for_read(stored_path)
     cfg = _INDEX_RENDER_CONFIG[index]
@@ -124,4 +178,7 @@ def index_tile(
         content = img.render(
             img_format="PNG", colormap=default_cmaps.get(cfg["colormap"]))
 
-    return Response(content=content, media_type="image/png")
+    return Response(
+        content=content, media_type="image/png",
+        headers={"X-Vyom-Data-Source": source_label},
+    )

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from vyom.config import settings
 from vyom.db import get_db
-from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat
+from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat, InterpolatedTile
 from vyom.processing.index_scale import scales_for_api
 from vyom.tasks import refresh_farm
 
@@ -185,6 +185,69 @@ def list_farms(user_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db
     return [_to_farm_out(f) for f in farms]
 
 
+@router.get("/current-status")
+def current_status(metric: str = "NDVI_mean", db: Session = Depends(get_db)):
+    """Bulk 'what should the map show right now' endpoint -- one call for
+    every farm instead of N calls, since a map render needs all of them at
+    once. Registered BEFORE the /{farm_id} route below -- FastAPI matches
+    routes in registration order, and "/farms/current-status" would
+    otherwise incorrectly match /{farm_id} with farm_id="current-status"
+    and fail UUID parsing before ever reaching this function.
+
+    For each farm, returns the most recent REAL reading for `metric` plus a
+    freshness signal:
+
+      - source="satellite" if that real reading is within one grid period
+        (DEFAULT_GRID_DAYS, currently 6 days) old -- genuinely current.
+      - source="provisional" if it's older than that -- still the real
+        last-known value (provisional carry-forward never changes the
+        number, see vyom/interpolation.py), but the map should show this
+        visually distinct from fresh data so a farmer isn't misled into
+        thinking today's canopy looks like a reading from over a week ago.
+      - source="no_data" if this farm has no real reading for `metric` yet.
+
+    Deliberately computed from real ZonalStat.acquisition_date age directly,
+    NOT by checking whether an interpolated_stats row happens to exist --
+    that would make the map's freshness indicator depend on whether a
+    background job happened to have run yet, which is fragile. Age-based
+    staleness is always correct regardless of job timing."""
+    from vyom.interpolation import DEFAULT_GRID_DAYS
+    from datetime import timezone as tz
+
+    farms = db.execute(select(Polygon)).scalars().all()
+    now = datetime.now(tz.utc)
+    out = []
+    for farm in farms:
+        stmt = (
+            select(ZonalStat)
+            .where(ZonalStat.polygon_id == farm.id, ZonalStat.metric == metric)
+            .order_by(ZonalStat.acquisition_date.desc())
+            .limit(1)
+        )
+        row = db.execute(stmt).scalar_one_or_none()
+        if row is None or row.value is None:
+            out.append({
+                "farm_id": str(farm.id), "value": None,
+                "real_acquisition_date": None, "days_since_reading": None,
+                "source": "no_data",
+            })
+            continue
+
+        acq_date = row.acquisition_date
+        if acq_date.tzinfo is None:
+            acq_date = acq_date.replace(tzinfo=tz.utc)
+        days_since = (now - acq_date).days
+
+        out.append({
+            "farm_id": str(farm.id),
+            "value": _clean_float(float(row.value)),
+            "real_acquisition_date": row.acquisition_date,
+            "days_since_reading": days_since,
+            "source": "satellite" if days_since <= DEFAULT_GRID_DAYS else "provisional",
+        })
+    return out
+
+
 @router.get("/{farm_id}", response_model=FarmOut)
 def get_farm(farm_id: uuid.UUID, db: Session = Depends(get_db)):
     farm = db.get(Polygon, farm_id)
@@ -342,7 +405,8 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest", db: Session = Depe
 
 
 @router.get("/{farm_id}/available-dates")
-def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[str] = None, db: Session = Depends(get_db)):
+def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[str] = None,
+                    include_interpolated: bool = False, db: Session = Depends(get_db)):
     """Dates with processed imagery for this farm -- populates a date picker in
     the UI instead of only ever showing 'latest'.
 
@@ -352,7 +416,17 @@ def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[st
     stats for a given index are still missing/null, e.g. a fully cloud-masked
     scene, or a prior run that hit the per-index failure this was designed to
     guard against (see zonal_stats.py). Without `index`, returns every
-    processed date regardless of zonal-stat completeness (the old behavior)."""
+    processed date regardless of zonal-stat completeness (the old behavior).
+
+    Pass include_interpolated=true to also get interpolated/provisional map
+    dates (see raster_interpolation.py) -- each entry states its own
+    source ("satellite"/"interpolated"/"provisional") so the UI can label the
+    date picker itself. This is the intended way to know which kind of tile
+    a given date will serve BEFORE requesting it -- the tile PNG response's
+    X-Vyom-Data-Source header carries the same info, but most map libraries
+    (including Google Maps' getTileUrl pattern) load tiles as <img> elements,
+    which JS cannot read response headers from. Use this endpoint, not the
+    header, to drive any UI labeling."""
     farm = db.get(Polygon, farm_id)
     if not farm:
         raise HTTPException(404, "Farm not found")
@@ -376,4 +450,20 @@ def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[st
         ).where(ZonalStat.value.isnot(None))
     stmt = stmt.order_by(CatalogProduct.acquisition_date.desc())
     rows = db.execute(stmt).scalars().all()
-    return [d.isoformat() for d in rows]
+    result = [{"date": d.isoformat(), "source": "satellite"} for d in rows]
+
+    if include_interpolated and index:
+        interp_stmt = (
+            select(InterpolatedTile.date, InterpolatedTile.source)
+            .where(
+                InterpolatedTile.polygon_id == farm_id,
+                InterpolatedTile.platform == platform,
+                InterpolatedTile.index_name == index,
+            )
+            .order_by(InterpolatedTile.date.desc())
+        )
+        for d, src in db.execute(interp_stmt).all():
+            result.append({"date": d.isoformat(), "source": src})
+        result.sort(key=lambda r: r["date"], reverse=True)
+
+    return result

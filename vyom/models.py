@@ -140,6 +140,46 @@ class InterpolatedStat(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class InterpolatedTile(Base):
+    """The pixel-level (raster) counterpart to InterpolatedStat's scalar
+    per-farm numbers. Same source distinction and same supersede rule apply
+    -- see InterpolatedStat's docstring for the full explanation.
+
+    IMPORTANT storage optimization: a "provisional" row does NOT get its own
+    COG file. Provisional is a flat carry-forward of the single most recent
+    real raster, unchanged pixel-for-pixel -- so storage_path just points at
+    that SAME real product's existing COG (right_product_id is NULL, no new
+    file, zero extra Wasabi storage). Only "interpolated" rows (two real
+    anchors, genuine pixel-wise linear interpolation) get a real newly
+    written COG file of their own -- see raster_interpolation.py.
+
+    When a provisional row gets superseded by real interpolation, only the
+    DB row is deleted (it never owned a separate file). When an
+    "interpolated" row's underlying real data is deleted for spatial reasons
+    the storage layer would need real cleanup -- not expected in normal
+    operation, so not handled automatically here."""
+    __tablename__ = "interpolated_tiles"
+    __table_args__ = (
+        UniqueConstraint("polygon_id", "platform", "index_name", "date",
+                         name="uq_interpolated_tile_polygon_platform_index_date"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    polygon_id = Column(UUID(as_uuid=True), ForeignKey(
+        "polygons.id", ondelete="CASCADE"), nullable=False)
+    platform = Column(String, nullable=False)
+    # e.g. "NDVI", "RVI" -- named _name to avoid shadowing SQL INDEX
+    index_name = Column(String, nullable=False)
+    date = Column(DateTime(timezone=True), nullable=False)
+    source = Column(String, nullable=False)  # "interpolated" or "provisional"
+    storage_path = Column(Text, nullable=False)
+    left_product_id = Column(UUID(as_uuid=True), ForeignKey(
+        "catalog_products.id", ondelete="CASCADE"), nullable=False)
+    right_product_id = Column(UUID(as_uuid=True), ForeignKey(
+        "catalog_products.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class ErrorLog(Base):
     """Single place every failure across every task/module/API route gets
     written to, so the dashboard's Errors panel is one query instead of

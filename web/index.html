@@ -1093,6 +1093,17 @@
       .calendar-day.empty {
         visibility: hidden;
       }
+      /* Interpolated/provisional dates: a dashed underline distinguishes
+         them from a solid real-data dot without needing extra UI chrome --
+         see raster_interpolation.py / InterpolatedTile for what these mean.
+         Provisional is a weaker claim than interpolated (one real anchor,
+         not two), so its underline is dotted rather than dashed. */
+      .calendar-day.day-interpolated {
+        border-bottom: 2px dashed var(--canopy);
+      }
+      .calendar-day.day-provisional {
+        border-bottom: 2px dotted var(--text-dim);
+      }
       .calendar-footnote {
         font-size: 10px;
         color: var(--text-dim);
@@ -3674,6 +3685,11 @@
       let sessionExpiryTimer = null;
       let currentPlatform = "S2";
       let availableDates = [];
+      // date (ISO string) -> "satellite" | "interpolated" | "provisional".
+      // Populated by loadDates(). Kept separate from availableDates itself
+      // (which stays a plain string array) so every existing call site that
+      // treats availableDates as strings keeps working unchanged.
+      let dateSourceMap = new Map();
 
       // ================= Theme =================
       const SUN_PATH =
@@ -4493,6 +4509,83 @@
       }
 
       // ================= Farms =================
+      // NDVI-style value -> color gradient (red/amber -> green). Adjust the
+      // stops if you switch the default map metric away from NDVI-shaped
+      // (-1..1) values.
+      function colorForValue(value) {
+        if (value === null || value === undefined) return "#9ca3af"; // gray -- no data
+        const clamped = Math.max(-1, Math.min(1, value));
+        const t = (clamped + 1) / 2; // 0..1
+        if (t < 0.5) {
+          // red -> amber
+          const r = 220,
+            g = Math.round(38 + (158 - 38) * (t / 0.5)),
+            b = 38;
+          return `rgb(${r},${g},${b})`;
+        }
+        // amber -> green
+        const r = Math.round(220 - (220 - 34) * ((t - 0.5) / 0.5)),
+          g = 158 + Math.round((197 - 158) * ((t - 0.5) / 0.5)),
+          b = Math.round(38 + (94 - 38) * ((t - 0.5) / 0.5));
+        return `rgb(${r},${g},${b})`;
+      }
+
+      let farmStatus = {}; // farm_id -> {value, source, days_since_reading, real_acquisition_date}
+
+      async function loadFarmCurrentStatus() {
+        try {
+          const rows = await api("/farms/current-status?metric=NDVI_mean");
+          farmStatus = {};
+          rows.forEach((r) => {
+            farmStatus[r.farm_id] = r;
+          });
+        } catch (e) {
+          console.error(
+            "Failed to load farm current-status for map coloring",
+            e,
+          );
+          farmStatus = {};
+        }
+      }
+
+      function applyFarmStatusStyling(farmId, polygon) {
+        const status = farmStatus[farmId];
+        if (!status || status.source === "no_data") {
+          polygon.setOptions({
+            fillColor: "#9ca3af",
+            fillOpacity: 0.08,
+            strokeColor: "#9ca3af",
+            strokeOpacity: 0.6,
+            strokeWeight: 1.5,
+          });
+          return;
+        }
+        const color = colorForValue(status.value);
+        if (status.source === "satellite") {
+          // Fresh real reading (within the grid cadence) -- full confidence styling.
+          polygon.setOptions({
+            fillColor: color,
+            fillOpacity: 0.3,
+            strokeColor: color,
+            strokeOpacity: 1,
+            strokeWeight: 1.5,
+          });
+        } else {
+          // "provisional" -- real value, but stale (no fresh satellite pass
+          // since real_acquisition_date). Same color (same underlying real
+          // number, unchanged), but visually muted + an amber outline so a
+          // farmer can tell at a glance this isn't a fresh reading, not a
+          // silently-aged one presented as current.
+          polygon.setOptions({
+            fillColor: color,
+            fillOpacity: 0.14,
+            strokeColor: "#d97706",
+            strokeOpacity: 0.9,
+            strokeWeight: 2,
+          });
+        }
+      }
+
       async function loadFarms() {
         farms = await api("/farms");
         const countEl = document.getElementById("farm-count");
@@ -4501,6 +4594,8 @@
 
         Object.values(farmOverlays).forEach((p) => p.setMap(null));
         farmOverlays = {};
+
+        await loadFarmCurrentStatus();
 
         const bounds = new google.maps.LatLngBounds();
         farms.forEach((farm) => {
@@ -4513,7 +4608,17 @@
             fillOpacity: 0.06,
           });
           polygon.setMap(map);
+          applyFarmStatusStyling(farm.id, polygon);
           polygon.addListener("click", () => selectFarm(farm.id));
+
+          const status = farmStatus[farm.id];
+          if (status && status.source === "provisional") {
+            polygon.addListener("mouseover", () => {
+              const label = `No new satellite pass since ${new Date(status.real_acquisition_date).toLocaleDateString()} (${status.days_since_reading} days ago) -- showing last known value.`;
+              polygon.set("title", label); // basic hover affordance; swap for a real InfoWindow if you want a styled tooltip
+            });
+          }
+
           farmOverlays[farm.id] = polygon;
           paths.forEach((p) => bounds.extend(p));
         });
@@ -5009,9 +5114,19 @@
       async function loadDates() {
         const index = document.getElementById("index-select").value;
         try {
-          availableDates = await api(
-            `/farms/${activeFarmId}/available-dates?platform=${currentPlatform}&index=${index}`,
+          // API now returns [{date, source}, ...] (source: "satellite" /
+          // "interpolated" / "provisional" -- see raster_interpolation.py)
+          // instead of a plain string array, to support labeling
+          // interpolated/provisional dates. availableDates itself stays a
+          // plain string array everywhere else in this file (indexOf,
+          // new Date(), tile URL building all assume that) -- only
+          // dateSourceMap carries the new source info, kept separate on
+          // purpose to avoid touching every existing call site.
+          const dateEntries = await api(
+            `/farms/${activeFarmId}/available-dates?platform=${currentPlatform}&index=${index}&include_interpolated=true`,
           );
+          availableDates = dateEntries.map((e) => e.date);
+          dateSourceMap = new Map(dateEntries.map((e) => [e.date, e.source]));
           if (availableDates.length === 0) {
             _lastGoodDate = null;
             updateDateLabels("No data yet");
@@ -5036,6 +5151,7 @@
           updateDateNavButtons();
         } catch (e) {
           availableDates = [];
+          dateSourceMap = new Map();
           _lastGoodDate = null;
           updateDateLabels("Select a date");
           updateDateNavButtons();
@@ -5140,10 +5256,18 @@
           cell.type = "button";
           cell.textContent = day;
           const enabled = !!byDay[dayStr];
+          const source = enabled ? dateSourceMap.get(byDay[dayStr]) : null;
           cell.className =
             "calendar-day" +
             (enabled ? " enabled" : "") +
-            (dayStr === selectedDay ? " selected" : "");
+            (dayStr === selectedDay ? " selected" : "") +
+            (source === "interpolated" ? " day-interpolated" : "") +
+            (source === "provisional" ? " day-provisional" : "");
+          if (source === "interpolated")
+            cell.title = "Interpolated (estimated between two real readings)";
+          if (source === "provisional")
+            cell.title =
+              "Provisional (carried forward from the last real reading)";
           if (enabled) cell.onclick = () => selectCalendarDate(byDay[dayStr]);
           else cell.disabled = true;
           grid.appendChild(cell);

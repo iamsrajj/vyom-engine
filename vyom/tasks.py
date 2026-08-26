@@ -15,6 +15,7 @@ from vyom.download_manager import download_product
 from vyom.processing.pipeline import process_product
 from vyom.zonal_stats import compute_zonal_stats_for_product
 from vyom.interpolation import fill_gaps_for_polygon
+from vyom.raster_interpolation import fill_raster_gaps_for_polygon
 from vyom.tile_grid import link_farm_to_products
 from vyom.error_log import log_error
 
@@ -60,6 +61,13 @@ def _run_pipeline_for_platform(db, farm: Polygon, platform: str, days_back: int 
             logger.exception(
                 "Gap-fill interpolation failed for farm %s (%s), real data unaffected", farm.id, platform)
             log_error("tasks.refresh_farm", "Gap-fill interpolation failed", platform=platform,
+                      context={"farm_id": str(farm.id)})
+        try:
+            fill_raster_gaps_for_polygon(db, farm.id, platform)
+        except Exception:  # noqa: BLE001 -- same isolation as the scalar fill above
+            logger.exception(
+                "Raster gap-fill failed for farm %s (%s), real data unaffected", farm.id, platform)
+            log_error("tasks.refresh_farm", "Raster gap-fill failed", platform=platform,
                       context={"farm_id": str(farm.id)})
     return processed_count
 
