@@ -61,23 +61,21 @@ def _upsert_stat(db: Session, farm: Polygon, product: CatalogProduct, metric: st
         )
 
 
-def compute_zonal_stats_for_product(db: Session, product: CatalogProduct) -> int:
-    """For a processed product, compute {index}_mean/{index}_std for every farm
-    intersecting it. Returns the number of farms updated."""
+def compute_zonal_stats_for_farms(db: Session, product: CatalogProduct, farms: list[Polygon]) -> int:
+    """Core per-index, single-pass-per-raster logic, scoped to an explicit
+    farms list rather than always 'every farm linked to this product'. Used
+    directly by reuse_check.py's backfill path (compute stats for just ONE
+    newly created farm against an already-processed historical product,
+    without wastefully re-running exact_extract for every OTHER farm that
+    already has stats for it). compute_zonal_stats_for_product() below is a
+    thin wrapper over this for the normal 'just finished processing this
+    product, update everyone it covers' case."""
+    if not farms:
+        return 0
     if product.status != "processed":
         raise ValueError(
             f"Product {product.product_name} is not processed yet (status={product.status})")
 
-    farms = farms_for_product(db, product.id)
-    if not farms:
-        logger.info("No farms intersect product %s, nothing to do",
-                    product.product_name)
-        return 0
-
-    # exact_extract needs GeoJSON-style Feature dicts, not bare shapely
-    # geometries -- its prep_vec() only recognizes a list of {"geometry": ...}
-    # dicts (or a GDAL/fiona/geopandas source), and raises a confusing
-    # "argument of type 'Polygon' is not iterable" if handed raw geometries.
     farm_features = [
         {"type": "Feature", "geometry": mapping(to_shape(f.geom)), "properties": {
             "farm_id": str(f.id)}}
@@ -85,12 +83,6 @@ def compute_zonal_stats_for_product(db: Session, product: CatalogProduct) -> int
     ]
 
     for index_name, stored_path in (product.processed_indices or {}).items():
-        # Isolated per index -- if exact_extract throws on one index (a
-        # degenerate/edge-case raster), the other indices still get computed
-        # and saved. Previously one bad index silently discarded ALL indices
-        # for this product, since db.commit() only happens once at the very
-        # end: nothing staged before the exception ever got persisted, even
-        # though it had been computed correctly.
         try:
             raster_path = storage.open_for_read(stored_path)
             results = exact_extract(raster_path, farm_features, [
@@ -119,3 +111,14 @@ def compute_zonal_stats_for_product(db: Session, product: CatalogProduct) -> int
     logger.info("Computed zonal stats for %d farm(s) against product %s", len(
         farms), product.product_name)
     return len(farms)
+
+
+def compute_zonal_stats_for_product(db: Session, product: CatalogProduct) -> int:
+    """For a processed product, compute {index}_mean/{index}_std for every farm
+    intersecting it. Returns the number of farms updated."""
+    farms = farms_for_product(db, product.id)
+    if not farms:
+        logger.info("No farms intersect product %s, nothing to do",
+                    product.product_name)
+        return 0
+    return compute_zonal_stats_for_farms(db, product, farms)

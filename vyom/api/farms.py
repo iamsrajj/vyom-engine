@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import date as date_cls, datetime
 from math import isnan
@@ -16,7 +17,10 @@ from vyom.config import settings
 from vyom.db import get_db
 from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat, InterpolatedTile
 from vyom.processing.index_scale import scales_for_api
+from vyom.reuse_check import backfill_from_existing_products
 from vyom.tasks import refresh_farm
+
+logger = logging.getLogger("vyom.api.farms")
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
@@ -155,6 +159,31 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
     db.add(farm)
     db.commit()
     db.refresh(farm)
+
+    # Reuse-check: if this farm lands inside an already-processed window
+    # (common for farms near existing coverage -- same village/cluster, or
+    # added after an earlier campaign nearby), backfill its historical time
+    # series INSTANTLY from existing data, with zero CDSE calls. This is
+    # synchronous/inline (not a Celery task) because it's a local DB spatial
+    # query + a raster stat computation against already-downloaded data --
+    # fast enough to finish within this request, unlike an actual CDSE
+    # fetch. Never blocks/fails farm creation itself -- see the try/except.
+    try:
+        backfilled = backfill_from_existing_products(db, farm)
+        if any(backfilled.values()):
+            logger.info("Farm %s backfilled instantly: %s",
+                        farm.id, backfilled)
+    except Exception:  # noqa: BLE001 -- reuse-check must never block farm creation
+        logger.exception(
+            "Reuse-check failed for new farm %s, continuing without backfill", farm.id)
+
+    # TODO (queue-parallelism prerequisite + priority queue, not yet built):
+    # still enqueue a normal refresh_farm task here for CURRENT data going
+    # forward -- reuse-check only ever backfills what already exists, it
+    # never guarantees freshness. Once the priority `farm_onboarding` queue
+    # exists, this farm's fresh fetch should jump ahead of any background
+    # work, not wait in a general queue.
+
     return _to_farm_out(farm)
 
 

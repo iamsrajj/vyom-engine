@@ -18,7 +18,10 @@ import zipfile
 import numpy as np
 import rasterio
 import rasterio.windows
+import rasterio.transform
 from rasterio.warp import transform_bounds
+from shapely.geometry import box
+from geoalchemy2.shape import from_shape
 from sqlalchemy.orm import Session
 
 from vyom.config import settings
@@ -313,6 +316,16 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
             processed_paths[name] = stored_path
 
         product.processed_indices = processed_paths
+        # The actual windowed extent just processed, reprojected from the
+        # raster's native CRS (ref_crs -- a UTM zone, not lat/lon) to
+        # EPSG:4326 so it's directly comparable to farm.geom. This is
+        # deliberately NOT the same as `footprint` (the full satellite scene
+        # footprint) -- see the column's docstring in models.py for why the
+        # distinction matters for reuse_check.py.
+        native_bounds = rasterio.transform.array_bounds(
+            ref_shape[0], ref_shape[1], ref_transform)
+        wgs84_bounds = transform_bounds(ref_crs, "EPSG:4326", *native_bounds)
+        product.processed_bounds = from_shape(box(*wgs84_bounds), srid=4326)
         product.status = "processed"
         product.error_message = None
         product.cloud_cover = round(cloud_pct * 100, 2)

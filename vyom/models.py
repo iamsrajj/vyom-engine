@@ -25,6 +25,16 @@ class CatalogProduct(Base):
     cloud_cover = Column(Numeric)  # null/meaningless for S1
     footprint = Column(
         Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
+    # The ACTUAL windowed extent that was read/written when this product was
+    # processed (see pipeline_s2.py/pipeline_s1.py) -- NOT the same as
+    # `footprint` above, which is the full satellite scene footprint. A farm
+    # can spatially intersect `footprint` while falling completely outside
+    # the narrower window that was actually processed (farms_bounds_for_product
+    # windows to whichever farms were linked AT PROCESSING TIME -- a farm
+    # linked later isn't automatically covered). NULL for older rows
+    # processed before this column existed, or for products not yet
+    # processed -- reuse_check.py must treat NULL as "no known coverage".
+    processed_bounds = Column(Geometry(geometry_type="POLYGON", srid=4326))
     status = Column(String, nullable=False, default="discovered")
     raw_path = Column(Text)
 

@@ -27,6 +27,8 @@ import rasterio
 import rasterio.transform
 import rasterio.windows
 from rasterio.warp import reproject, transform_bounds, Resampling
+from shapely.geometry import box
+from geoalchemy2.shape import from_shape
 from sqlalchemy.orm import Session
 
 from vyom.config import settings
@@ -210,6 +212,15 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
             processed_paths[name] = stored_path
 
         product.processed_indices = processed_paths
+        # Same reasoning as pipeline_s2.py -- store the actual windowed
+        # extent, reprojected to EPSG:4326 explicitly (not assumed, even
+        # though _read_band_windowed's default dst_crs is already 4326 --
+        # reprojecting explicitly here is a no-op if so, and stays correct
+        # if that default ever changes).
+        native_bounds = rasterio.transform.array_bounds(
+            vv.shape[0], vv.shape[1], transform)
+        wgs84_bounds = transform_bounds(crs, "EPSG:4326", *native_bounds)
+        product.processed_bounds = from_shape(box(*wgs84_bounds), srid=4326)
         product.status = "processed"
         product.error_message = None
 
