@@ -31,7 +31,7 @@ from celery import chain, chord, group
 from shapely.geometry import mapping
 from geoalchemy2.shape import to_shape
 
-from vyom.celery_app import celery_app
+from vyom.celery_app import celery_app, priority_queue_name
 from vyom.db import SessionLocal
 from vyom.models import Polygon, CatalogProduct
 from vyom.discovery import discover_products_for_geometry
@@ -178,11 +178,26 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str) -> dict:
 
 @celery_app.task(name="vyom.discovery.refresh_farm", bind=True, max_retries=3, default_retry_delay=60)
 def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
-                 days_back: int = 30, max_cloud_cover: float | None = None):
+                 days_back: int = 30, max_cloud_cover: float | None = None,
+                 priority: bool = False):
     """Discovers imagery for a farm and DISPATCHES the download/process/stats
     work as independent, parallel per-product chains across their own
     queues -- it does NOT run that work itself and does NOT block waiting
     for it to finish.
+
+    priority=True routes every dispatched stage task to the "_priority"
+    twin of its normal queue (download_priority, process_priority,
+    stats_priority -- see celery_app.py). Use this for a real person
+    waiting on their farm's data RIGHT NOW (new farm creation, an explicit
+    manual refresh) -- never for background/bulk work (poll_all_farms
+    always calls this with priority=False, the default). This ONLY
+    actually protects a farmer's wait time if a separate worker process is
+    dedicated to consuming just the _priority queues -- see
+    deploy/vyom-celery-worker-priority.service. Discovery itself
+    (this task's own synchronous work, before dispatch) is NOT
+    priority-routed -- it's already fast (a couple of CDSE calls, not the
+    bottleneck), and this task itself always runs on the plain "discover"
+    queue regardless of the priority flag, by name-based routing.
 
     REAL BEHAVIOR CHANGE from before: this task used to run the whole
     pipeline serially in-process and only return once everything was done.
@@ -203,8 +218,7 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
     interpolation gap-fill once all of a platform's product chains for this
     refresh have completed.
 
-    days_back/max_cloud_cover behave exactly as before -- see prior
-    docstring content preserved in git history if needed."""
+    days_back/max_cloud_cover behave exactly as before."""
     platforms = platforms or ["S2", "S1"]
     db = SessionLocal()
     try:
@@ -230,20 +244,29 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
                 dispatched[platform] = {"products_found": 0, "chord_id": None}
                 continue
 
+            def _stage_sig(task, pid: str, base_queue: str):
+                sig = task.si(pid)
+                if priority:
+                    sig = sig.set(queue=priority_queue_name(base_queue))
+                return sig
+
             per_product_chains = [
                 chain(
-                    download_product_task.si(pid),
-                    process_product_task.si(pid),
-                    compute_stats_task.si(pid),
+                    _stage_sig(download_product_task, pid, "download"),
+                    _stage_sig(process_product_task, pid, "process"),
+                    _stage_sig(compute_stats_task, pid, "stats"),
                 )
                 for pid in product_ids
             ]
-            result = chord(group(per_product_chains))(
-                fill_gaps_callback.s(farm_id, platform))
+            callback_sig = fill_gaps_callback.s(farm_id, platform)
+            if priority:
+                callback_sig = callback_sig.set(
+                    queue=priority_queue_name("stats"))
+            result = chord(group(per_product_chains))(callback_sig)
             dispatched[platform] = {
                 "products_found": len(product_ids), "chord_id": result.id}
 
-        return {"farm_id": farm_id, "dispatched": dispatched}
+        return {"farm_id": farm_id, "priority": priority, "dispatched": dispatched}
 
     except Exception as exc:  # noqa: BLE001 -- covers discovery-stage failures (e.g. CDSE unreachable)
         logger.exception("refresh_farm failed for %s", farm_id)

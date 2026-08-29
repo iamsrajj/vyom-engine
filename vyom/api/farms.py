@@ -177,12 +177,13 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
         logger.exception(
             "Reuse-check failed for new farm %s, continuing without backfill", farm.id)
 
-    # TODO (queue-parallelism prerequisite + priority queue, not yet built):
-    # still enqueue a normal refresh_farm task here for CURRENT data going
-    # forward -- reuse-check only ever backfills what already exists, it
-    # never guarantees freshness. Once the priority `farm_onboarding` queue
-    # exists, this farm's fresh fetch should jump ahead of any background
-    # work, not wait in a general queue.
+    # Both the queue-parallelism fix and the priority mechanism now exist
+    # (see tasks.py) -- dispatch a priority-routed refresh so this farm's
+    # fresh/current data fetch jumps ahead of any background poll_all_farms
+    # sweep work, instead of waiting in the general queue behind it.
+    # Reuse-check above only ever backfills what ALREADY exists; this is
+    # still required for genuinely current data.
+    refresh_farm.delay(str(farm.id), priority=True)
 
     return _to_farm_out(farm)
 
@@ -299,6 +300,12 @@ class RefreshRequest(BaseModel):
     platforms: Optional[list[str]] = None
     days_back: int = 30
     max_cloud_cover: Optional[float] = None
+    # Routes this refresh's stage tasks to the priority queues (see
+    # tasks.py/celery_app.py) so it isn't stuck behind background sweep
+    # work. Defaults to False -- a manual refresh call isn't automatically
+    # assumed to be someone actively waiting; pass true explicitly when it
+    # is (e.g. an onboarding flow, a "refresh now" button a user just clicked).
+    priority: bool = False
 
 
 @router.post("/{farm_id}/refresh")
@@ -310,7 +317,11 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
     mean 30 days doesn't turn up much (S2 during monsoon season, for example).
     max_cloud_cover (S2 only) defaults to None, meaning "use settings.
     default_max_cloud_cover" (40%) -- pass a higher value to get results back
-    when the default is too strict for the season. Runs async via Celery."""
+    when the default is too strict for the season. priority=true jumps this
+    refresh's work ahead of background sweeps (see RefreshRequest.priority
+    above) -- only actually effective once a dedicated priority worker
+    process is running, see deploy/vyom-celery-worker-priority.service.
+    Runs async via Celery."""
     farm = db.get(Polygon, farm_id)
     if not farm:
         raise HTTPException(404, "Farm not found")
@@ -321,7 +332,7 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
         raise HTTPException(422, "max_cloud_cover must be between 0 and 100")
 
     task = refresh_farm.delay(
-        str(farm_id), payload.platforms, payload.days_back, payload.max_cloud_cover)
+        str(farm_id), payload.platforms, payload.days_back, payload.max_cloud_cover, payload.priority)
     return {
         "farm_id": str(farm_id),
         "task_id": task.id,
@@ -329,6 +340,7 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
         "platforms": payload.platforms or ["S2", "S1"],
         "days_back": payload.days_back,
         "max_cloud_cover": payload.max_cloud_cover,
+        "priority": payload.priority,
     }
 
 

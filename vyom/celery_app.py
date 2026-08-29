@@ -9,6 +9,23 @@ celery_app = Celery(
     include=["vyom.tasks"],
 )
 
+# Every pipeline stage has a normal queue and a "_priority" twin. A farm-
+# onboarding request (a real person waiting for their new farm's data) gets
+# dispatched to the _priority queues; background work (poll_all_farms sweeps)
+# always uses the plain ones. This ONLY matters if a separate worker PROCESS
+# is dedicated to consuming just the _priority queues -- see
+# deploy/vyom-celery-worker-priority.service. If the same worker process
+# consumes both plain and _priority queues together, Redis-backed Celery
+# workers interleave queues rather than strictly prioritizing one, so
+# "priority" would be nominal, not real -- the dedicated worker process is
+# what actually makes background work unable to block a real farmer's request.
+PRIORITY_QUEUE_SUFFIX = "_priority"
+
+
+def priority_queue_name(base_queue: str) -> str:
+    return f"{base_queue}{PRIORITY_QUEUE_SUFFIX}"
+
+
 celery_app.conf.update(
     task_routes={
         "vyom.download.*": {"queue": "download"},
@@ -30,6 +47,7 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "poll-all-farms-daily": {
         "task": "vyom.discovery.poll_all_farms",
-        "schedule": 6 * 60 * 60,  # every 6 hours; Sentinel-2 revisit is ~5 days so this is generous headroom
+        # every 6 hours; Sentinel-2 revisit is ~5 days so this is generous headroom
+        "schedule": 6 * 60 * 60,
     },
 }
