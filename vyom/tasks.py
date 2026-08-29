@@ -32,6 +32,7 @@ from shapely.geometry import mapping
 from geoalchemy2.shape import to_shape
 
 from vyom.celery_app import celery_app, priority_queue_name
+from vyom.config import settings
 from vyom.db import SessionLocal
 from vyom.models import Polygon, CatalogProduct
 from vyom.discovery import discover_products_for_geometry
@@ -179,7 +180,7 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str) -> dict:
 @celery_app.task(name="vyom.discovery.refresh_farm", bind=True, max_retries=3, default_retry_delay=60)
 def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
                  days_back: int = 30, max_cloud_cover: float | None = None,
-                 priority: bool = False):
+                 priority: bool = False, cold_start_platforms: list[str] | None = None):
     """Discovers imagery for a farm and DISPATCHES the download/process/stats
     work as independent, parallel per-product chains across their own
     queues -- it does NOT run that work itself and does NOT block waiting
@@ -198,6 +199,19 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
     priority-routed -- it's already fast (a couple of CDSE calls, not the
     bottleneck), and this task itself always runs on the plain "discover"
     queue regardless of the priority flag, by name-based routing.
+
+    cold_start_platforms: platforms reuse_check.py found ZERO existing
+    coverage for on this farm -- i.e. genuinely new territory, not just a
+    farm near existing coverage. For those platforms only, any newly
+    discovered (not-yet-processed) product gets its window sized to
+    settings.cold_start_buffer_deg (~3.3km) instead of the normal ~500m
+    buffer, so neighboring farms added afterward in the same real-world
+    cluster fall inside this window and hit reuse-check's instant path
+    instead of each triggering their own separate CDSE fetch. Only applies
+    to products still status='discovered' -- an already-processed product's
+    window can't be retroactively resized without reprocessing, so this is
+    a no-op (correctly) for anything another farm already caused to be
+    processed.
 
     REAL BEHAVIOR CHANGE from before: this task used to run the whole
     pipeline serially in-process and only return once everything was done.
@@ -220,6 +234,7 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
 
     days_back/max_cloud_cover behave exactly as before."""
     platforms = platforms or ["S2", "S1"]
+    cold_start_platforms = set(cold_start_platforms or [])
     db = SessionLocal()
     try:
         farm = db.get(Polygon, uuid.UUID(farm_id))
@@ -238,6 +253,23 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
             # chains dispatched below run in separate worker processes with
             # separate DB connections and would not see uncommitted rows.
             link_farm_to_products(db, farm, products)
+
+            if platform in cold_start_platforms:
+                widened = 0
+                for product in products:
+                    # Only still-'discovered' products -- an already-
+                    # processed one's window is fixed, resizing here would
+                    # be a no-op nobody reads (pipeline only reads this
+                    # column at first processing, see pipeline_s1.py/
+                    # pipeline_s2.py).
+                    if product.status == "discovered" and product.cold_start_buffer_deg is None:
+                        product.cold_start_buffer_deg = settings.cold_start_buffer_deg
+                        db.add(product)
+                        widened += 1
+                if widened:
+                    db.commit()
+                    logger.info("Farm %s: widened %d product window(s) to cold-start size (%.3f deg) for %s",
+                                farm_id, widened, settings.cold_start_buffer_deg, platform)
 
             product_ids = [str(p.id) for p in products]
             if not product_ids:

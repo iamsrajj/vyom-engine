@@ -178,7 +178,10 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
         # product instead of reading the full scene into memory. See
         # tile_grid.farms_bounds_for_product for why we use *all* linked farms,
         # not just the one that triggered this run.
-        farm_bounds = farms_bounds_for_product(db, product.id)
+        buffer_deg = float(
+            product.cold_start_buffer_deg) if product.cold_start_buffer_deg is not None else 0.005
+        farm_bounds = farms_bounds_for_product(
+            db, product.id, buffer_deg=buffer_deg)
         if farm_bounds is None:
             raise RuntimeError(
                 f"No farms linked to product {product.product_name} yet -- "

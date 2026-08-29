@@ -45,6 +45,21 @@ class Settings(BaseSettings):
     # Discovery defaults — Sentinel-2 (optical)
     default_max_cloud_cover: float = 40.0
 
+    # How much to pad a product's processing window for a genuine cold-start
+    # farm (reuse-check found zero existing coverage nearby -- see
+    # reuse_check.py) instead of the normal 0.005 deg (~500m) buffer in
+    # tile_grid.farms_bounds_for_product. 0.03 deg is ~3.3km at the equator
+    # (latitude degrees are ~111km everywhere; longitude shrinks with
+    # cos(latitude), so this is an approximation, not a surveyed village
+    # radius -- close enough across India's ~8-37N latitude range to size a
+    # window a real village/cluster onboarding is likely to fit inside,
+    # without approaching anything like a full satellite tile). Paying this
+    # modest one-time extra cost on the FIRST farm in a new area is the
+    # whole point -- every neighboring farm added afterward should fall
+    # inside this same window and hit the reuse-check instant path instead
+    # of triggering its own separate CDSE fetch.
+    cold_start_buffer_deg: float = 0.03
+
     # CDSE rate limiting (see vyom/cdse_rate_limiter.py for the documented
     # limits these are set conservatively under)
     cdse_max_concurrent_connections: int = 3

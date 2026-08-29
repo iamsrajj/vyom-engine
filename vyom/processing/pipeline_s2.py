@@ -165,7 +165,10 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
         # instead of loading the full ~110km x 110km tile -- that's the fix for
         # the OOM/SIGKILL: a farm-scale AOI is a few hundred pixels, not the
         # ~11000x11000 a full tile reads as at 10m.
-        farm_bounds = farms_bounds_for_product(db, product.id)
+        buffer_deg = float(
+            product.cold_start_buffer_deg) if product.cold_start_buffer_deg is not None else 0.005
+        farm_bounds = farms_bounds_for_product(
+            db, product.id, buffer_deg=buffer_deg)
         if farm_bounds is None:
             raise RuntimeError(
                 f"No farms linked to product {product.product_name} yet -- "

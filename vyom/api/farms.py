@@ -176,6 +176,16 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
     except Exception:  # noqa: BLE001 -- reuse-check must never block farm creation
         logger.exception(
             "Reuse-check failed for new farm %s, continuing without backfill", farm.id)
+        backfilled = {}
+
+    # A platform reuse-check found ZERO existing coverage for is genuinely
+    # new territory -- pass this through so refresh_farm sizes that
+    # platform's first product window as a cluster-sized cold-start window
+    # (settings.cold_start_buffer_deg) instead of the normal ~500m buffer.
+    # A platform WITH backfill hits stays at the normal buffer -- coverage
+    # already exists there, there's nothing to "seed" for future neighbors.
+    cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
+        if backfilled else ["S2", "S1"]
 
     # Both the queue-parallelism fix and the priority mechanism now exist
     # (see tasks.py) -- dispatch a priority-routed refresh so this farm's
@@ -183,7 +193,8 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
     # sweep work, instead of waiting in the general queue behind it.
     # Reuse-check above only ever backfills what ALREADY exists; this is
     # still required for genuinely current data.
-    refresh_farm.delay(str(farm.id), priority=True)
+    refresh_farm.delay(str(farm.id), priority=True,
+                       cold_start_platforms=cold_start_platforms)
 
     return _to_farm_out(farm)
 

@@ -35,6 +35,14 @@ class CatalogProduct(Base):
     # processed before this column existed, or for products not yet
     # processed -- reuse_check.py must treat NULL as "no known coverage".
     processed_bounds = Column(Geometry(geometry_type="POLYGON", srid=4326))
+    # Overrides tile_grid.farms_bounds_for_product's default buffer for THIS
+    # product's window, set once at discovery time for a genuine cold-start
+    # farm (see reuse_check.py + settings.cold_start_buffer_deg). NULL means
+    # "use the normal default" -- read once, at first processing, by
+    # pipeline_s1.py/pipeline_s2.py; irrelevant after the window is fixed
+    # (an already-processed product's extent can't be retroactively resized
+    # without reprocessing, same as processed_bounds above).
+    cold_start_buffer_deg = Column(Numeric)
     status = Column(String, nullable=False, default="discovered")
     raw_path = Column(Text)
 
