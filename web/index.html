@@ -920,6 +920,31 @@
         font-size: 13px;
         font-weight: 400;
       }
+      /* Same source distinction as the calendar's dashed/dotted underline
+         (see .calendar-day.day-interpolated / .day-provisional) -- a
+         reading card must never show an interpolated/provisional number
+         looking identical to a real satellite reading. */
+      .source-badge {
+        font-family: "Inter", sans-serif;
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        vertical-align: middle;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 4px;
+      }
+      .source-badge.source-interpolated {
+        color: var(--canopy);
+        background: var(--bg-raised);
+        border: 1px dashed var(--canopy);
+      }
+      .source-badge.source-provisional {
+        color: var(--text-dim);
+        background: var(--bg-raised);
+        border: 1px dotted var(--text-dim);
+      }
       .readout.selected {
         border-color: var(--canopy-bright);
       }
@@ -5452,7 +5477,7 @@
             : `(${new Date(date).toLocaleDateString()})`;
 
         const latest = await api(
-          `/farms/${activeFarmId}/latest?date=${encodeURIComponent(date)}`,
+          `/farms/${activeFarmId}/latest?date=${encodeURIComponent(date)}&include_interpolated=true`,
         );
         const grid = document.getElementById("readout-grid");
         const selectedIndex = document.getElementById("index-select").value;
@@ -5464,9 +5489,20 @@
             "readout" + (name === selectedIndex ? " selected" : "");
           const band = bandForValue(name, data.value);
           if (band) div.style.borderLeftColor = band.color;
+          // Same three-way distinction as the calendar's dashed/dotted
+          // underline and the tile endpoint's date-source labeling --
+          // never show an interpolated/provisional number without saying
+          // so, same requirement enforced across every surface that can
+          // display one of these values.
+          let sourceBadge = "";
+          if (data.source === "interpolated") {
+            sourceBadge = ` <span class="source-badge source-interpolated" title="Estimated between two real readings">interpolated</span>`;
+          } else if (data.source === "provisional") {
+            sourceBadge = ` <span class="source-badge source-provisional" title="Carried forward from the last real reading">provisional</span>`;
+          }
           div.innerHTML = `
       <div class="rname">${name.replace(/_/g, " ")}${band ? ` <span style="color:${band.color};">\u25cf ${band.tier}</span>` : ""}</div>
-      <div class="rval ${data.value == null ? "empty" : ""}">${data.value != null ? data.value.toFixed(3) : "no data"}</div>
+      <div class="rval ${data.value == null ? "empty" : ""}">${data.value != null ? data.value.toFixed(3) : "no data"}${sourceBadge}</div>
     `;
           grid.appendChild(div);
         });

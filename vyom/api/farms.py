@@ -468,13 +468,27 @@ def timeseries(
 
 
 @router.get("/{farm_id}/latest")
-def latest_snapshot(farm_id: uuid.UUID, date: str = "latest", db: Session = Depends(get_db)):
+def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
+                    include_interpolated: bool = False, db: Session = Depends(get_db)):
     """Reading for every index this deployment computes, for one specific
     acquisition date (or the most recent one if date='latest' / omitted) --
     what a farm dashboard's summary cards bind to. `date` should be an exact
     ISO acquisition_date string, the same value the date-picker/date-chips use
     (from /available-dates), so switching dates on the dashboard shows the
-    reading for that date instead of always the latest."""
+    reading for that date instead of always the latest.
+
+    include_interpolated=true: when no real ZonalStat row matches the exact
+    date+index (true for any interpolated/provisional date -- those never
+    have a real satellite reading by definition), falls back to
+    InterpolatedStat. Every index in the response carries its own `source`
+    ("satellite"/"interpolated"/"provisional"/null when no data at all) --
+    the UI MUST show this, not just the number, same requirement as
+    /timeseries and the tile endpoint's date-source labeling. Without this
+    flag, an interpolated/provisional date correctly returns null values for
+    every index (the old, pre-interpolation behavior) -- 'latest' is never
+    affected either way, since 'latest' always means the most recent REAL
+    reading (see tiles.py's _resolve_raster docstring for the same rule
+    applied to map tiles)."""
     farm = db.get(Polygon, farm_id)
     if not farm:
         raise HTTPException(404, "Farm not found")
@@ -497,10 +511,32 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest", db: Session = Depe
             stmt = stmt.where(ZonalStat.acquisition_date == target_date)
         stmt = stmt.order_by(ZonalStat.acquisition_date.desc()).limit(1)
         row = db.execute(stmt).scalar_one_or_none()
-        out[index_name] = {
-            "value": _clean_float(float(row.value)) if row and row.value is not None else None,
-            "acquisition_date": row.acquisition_date if row else None,
-        }
+
+        if row is not None:
+            out[index_name] = {
+                "value": _clean_float(float(row.value)) if row.value is not None else None,
+                "acquisition_date": row.acquisition_date,
+                "source": "satellite",
+            }
+        elif include_interpolated and target_date is not None:
+            interp_stmt = select(InterpolatedStat).where(
+                InterpolatedStat.polygon_id == farm_id,
+                InterpolatedStat.metric == metric,
+                InterpolatedStat.date == target_date,
+            )
+            interp_row = db.execute(interp_stmt).scalar_one_or_none()
+            if interp_row is not None:
+                out[index_name] = {
+                    "value": _clean_float(float(interp_row.value)) if interp_row.value is not None else None,
+                    "acquisition_date": interp_row.date,
+                    "source": interp_row.source,  # "interpolated" or "provisional"
+                }
+            else:
+                out[index_name] = {"value": None,
+                                   "acquisition_date": None, "source": None}
+        else:
+            out[index_name] = {"value": None,
+                               "acquisition_date": None, "source": None}
     return out
 
 
