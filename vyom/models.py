@@ -73,6 +73,15 @@ class Polygon(Base):
     country = Column(String)
     # crop age is always derived as (today - sowing_date), never stored
     sowing_date = Column(Date)
+    # True for a rough placeholder polygon created immediately from a
+    # map-pin/village selection, before the farmer has finished tracing the
+    # real boundary -- see the parallel-fetch-during-drawing flow in
+    # farms.py (create_farm with is_draft=True, then update_farm with the
+    # real geometry to finalize). A draft still gets the full reuse-check +
+    # priority cold-start fetch immediately, same as any other farm -- the
+    # flag is purely a lifecycle/display marker (e.g. list_farms excludes
+    # drafts by default), it does not change fetch behavior at all.
+    is_draft = Column(Boolean, nullable=False, server_default="false")
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 

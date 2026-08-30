@@ -50,14 +50,29 @@ class FarmCreate(BaseModel):
     crop_type: Optional[str] = None
     country: Optional[str] = None
     sowing_date: Optional[date_cls] = None
+    # True when `geometry` is a rough placeholder (e.g. a small square around
+    # a dropped map pin), not the farmer's final traced boundary. Used to
+    # kick off the cold-start fetch (see refresh_farm/reuse_check) the
+    # instant a rough location is known, running in parallel while the
+    # farmer finishes drawing -- finalize with PATCH /farms/{id} once they
+    # have the real polygon. Purely a lifecycle marker; fetch behavior is
+    # identical either way.
+    is_draft: bool = False
 
 
 class FarmUpdate(BaseModel):
     """All fields optional -- only what's provided gets changed. Used mainly to
-    set crop_type/sowing_date on a farm after it's already been created."""
+    set crop_type/sowing_date on a farm after it's already been created, or
+    to finalize a draft farm's real geometry once the farmer finishes
+    tracing it (see FarmCreate.is_draft) -- passing `geometry` here always
+    clears is_draft and re-runs reuse-check + priority dispatch against the
+    new shape, since it may now reach further than the rough placeholder
+    did, or fall in different coverage entirely."""
     name: Optional[str] = None
     crop_type: Optional[str] = None
     country: Optional[str] = None
+    geometry: Optional[dict] = Field(
+        None, description="GeoJSON Polygon -- the farmer's final traced boundary, replacing a draft's rough placeholder")
     sowing_date: Optional[date_cls] = None
 
 
@@ -72,6 +87,7 @@ class FarmOut(BaseModel):
     sowing_date: Optional[date_cls]
     crop_age_days: Optional[int]
     geometry: dict
+    is_draft: bool
 
     class Config:
         from_attributes = True
@@ -122,6 +138,7 @@ def _to_farm_out(farm: Polygon) -> FarmOut:
         sowing_date=farm.sowing_date,
         crop_age_days=crop_age_days,
         geometry=mapping(to_shape(farm.geom)),
+        is_draft=farm.is_draft,
     )
 
 
@@ -142,6 +159,31 @@ def index_scales():
     return scales_for_api()
 
 
+def _backfill_and_dispatch_refresh(db: Session, farm: Polygon) -> dict:
+    """Shared by create_farm and update_farm's geometry-finalize step:
+    reuse-check this farm's CURRENT geometry against existing coverage, then
+    dispatch a priority-routed refresh for genuinely current data, sized as
+    a cold-start cluster window for any platform reuse-check found zero
+    coverage for. Returns the backfilled counts dict, mainly for logging by
+    the caller."""
+    try:
+        backfilled = backfill_from_existing_products(db, farm)
+        if any(backfilled.values()):
+            logger.info("Farm %s backfilled instantly: %s",
+                        farm.id, backfilled)
+    except Exception:  # noqa: BLE001 -- reuse-check must never block farm creation/update
+        logger.exception(
+            "Reuse-check failed for farm %s, continuing without backfill", farm.id)
+        backfilled = {}
+
+    cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
+        if backfilled else ["S2", "S1"]
+
+    refresh_farm.delay(str(farm.id), priority=True,
+                       cold_start_platforms=cold_start_platforms)
+    return backfilled
+
+
 @router.post("", response_model=FarmOut)
 def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
     geom_shape = shape(payload.geometry)
@@ -155,46 +197,21 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
         country=payload.country,
         sowing_date=payload.sowing_date,
         area_ha=area_ha,
+        is_draft=payload.is_draft,
     )
     db.add(farm)
     db.commit()
     db.refresh(farm)
 
-    # Reuse-check: if this farm lands inside an already-processed window
-    # (common for farms near existing coverage -- same village/cluster, or
-    # added after an earlier campaign nearby), backfill its historical time
-    # series INSTANTLY from existing data, with zero CDSE calls. This is
-    # synchronous/inline (not a Celery task) because it's a local DB spatial
-    # query + a raster stat computation against already-downloaded data --
-    # fast enough to finish within this request, unlike an actual CDSE
-    # fetch. Never blocks/fails farm creation itself -- see the try/except.
-    try:
-        backfilled = backfill_from_existing_products(db, farm)
-        if any(backfilled.values()):
-            logger.info("Farm %s backfilled instantly: %s",
-                        farm.id, backfilled)
-    except Exception:  # noqa: BLE001 -- reuse-check must never block farm creation
-        logger.exception(
-            "Reuse-check failed for new farm %s, continuing without backfill", farm.id)
-        backfilled = {}
-
-    # A platform reuse-check found ZERO existing coverage for is genuinely
-    # new territory -- pass this through so refresh_farm sizes that
-    # platform's first product window as a cluster-sized cold-start window
-    # (settings.cold_start_buffer_deg) instead of the normal ~500m buffer.
-    # A platform WITH backfill hits stays at the normal buffer -- coverage
-    # already exists there, there's nothing to "seed" for future neighbors.
-    cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
-        if backfilled else ["S2", "S1"]
-
-    # Both the queue-parallelism fix and the priority mechanism now exist
-    # (see tasks.py) -- dispatch a priority-routed refresh so this farm's
-    # fresh/current data fetch jumps ahead of any background poll_all_farms
-    # sweep work, instead of waiting in the general queue behind it.
-    # Reuse-check above only ever backfills what ALREADY exists; this is
-    # still required for genuinely current data.
-    refresh_farm.delay(str(farm.id), priority=True,
-                       cold_start_platforms=cold_start_platforms)
+    # Reuse-check + priority fetch: if this farm lands inside an already-
+    # processed window (common for farms near existing coverage -- same
+    # village/cluster, or added after an earlier campaign nearby, or from a
+    # draft pin's own earlier cold-start fetch -- see update_farm's
+    # geometry-finalize branch below), backfill its historical time series
+    # INSTANTLY from existing data, with zero CDSE calls, then dispatch a
+    # priority refresh for genuinely current data. Never blocks/fails farm
+    # creation itself -- see _backfill_and_dispatch_refresh's try/except.
+    _backfill_and_dispatch_refresh(db, farm)
 
     return _to_farm_out(farm)
 
@@ -202,26 +219,52 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
 @router.patch("/{farm_id}", response_model=FarmOut)
 def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, db: Session = Depends(get_db)):
     """Partial update -- mainly for setting crop_type/sowing_date on a farm
-    that was created before those were filled in, or correcting them later."""
+    that was created before those were filled in, or correcting them later.
+
+    Passing `geometry` finalizes a draft's rough placeholder boundary (or
+    corrects any farm's boundary) -- recomputes area_ha, clears is_draft,
+    and re-runs reuse-check + priority dispatch against the NEW shape. This
+    is what makes the parallel-fetch-during-drawing flow actually pay off:
+    the draft's cold-start fetch (triggered back at POST /farms time) has
+    likely been running the whole time the farmer was tracing, so by the
+    time this finalize call lands, the real final boundary often already
+    falls inside that same window and hits reuse-check's instant path
+    rather than triggering a second fresh CDSE fetch."""
     farm = db.get(Polygon, farm_id)
     if not farm:
         raise HTTPException(404, "Farm not found")
 
-    updates = payload.model_dump(exclude_unset=True)
+    updates = payload.model_dump(exclude_unset=True, exclude={"geometry"})
     for field, value in updates.items():
         setattr(farm, field, value)
+
+    if payload.geometry is not None:
+        geom_shape = shape(payload.geometry)
+        farm.geom = from_shape(geom_shape, srid=4326)
+        farm.area_ha = _geodesic_area_ha(geom_shape)
+        farm.is_draft = False
 
     db.add(farm)
     db.commit()
     db.refresh(farm)
+
+    if payload.geometry is not None:
+        _backfill_and_dispatch_refresh(db, farm)
+
     return _to_farm_out(farm)
 
 
 @router.get("", response_model=list[FarmOut])
-def list_farms(user_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
+def list_farms(user_id: Optional[uuid.UUID] = None, include_drafts: bool = False, db: Session = Depends(get_db)):
+    """include_drafts=False (default) hides rough placeholder farms still
+    being traced (see FarmCreate.is_draft) -- a farmer shouldn't see a tiny
+    square around their map pin sitting in their farm list before they've
+    finished drawing the real boundary."""
     stmt = select(Polygon)
     if user_id:
         stmt = stmt.where(Polygon.user_id == user_id)
+    if not include_drafts:
+        stmt = stmt.where(Polygon.is_draft == False)  # noqa: E712 -- SQLAlchemy needs `== False`, not `is False`
     farms = db.execute(stmt).scalars().all()
     return [_to_farm_out(f) for f in farms]
 
