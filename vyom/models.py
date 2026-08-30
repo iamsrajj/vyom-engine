@@ -82,6 +82,16 @@ class Polygon(Base):
     # flag is purely a lifecycle/display marker (e.g. list_farms excludes
     # drafts by default), it does not change fetch behavior at all.
     is_draft = Column(Boolean, nullable=False, server_default="false")
+    # A purely synthetic seed created by the prewarm tool (vyom/prewarm.py)
+    # to trigger coverage for a region ahead of any real farmer -- NEVER a
+    # real farm, unlike is_draft above. Its only purpose is to exist long
+    # enough for its refresh to complete and leave real processed_bounds
+    # coverage behind on the CatalogProduct rows it caused to be processed
+    # -- that coverage persists independently of this seed polygon (reuse-
+    # check queries processed_bounds directly, not "is a farm still linked
+    # here"), so these rows can be deleted later without undoing the
+    # benefit. Always excluded from list_farms, same as is_draft.
+    is_prewarm_seed = Column(Boolean, nullable=False, server_default="false")
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 

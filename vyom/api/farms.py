@@ -159,13 +159,19 @@ def index_scales():
     return scales_for_api()
 
 
-def _backfill_and_dispatch_refresh(db: Session, farm: Polygon) -> dict:
-    """Shared by create_farm and update_farm's geometry-finalize step:
-    reuse-check this farm's CURRENT geometry against existing coverage, then
-    dispatch a priority-routed refresh for genuinely current data, sized as
-    a cold-start cluster window for any platform reuse-check found zero
-    coverage for. Returns the backfilled counts dict, mainly for logging by
-    the caller."""
+def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = True) -> dict:
+    """Shared by create_farm, update_farm's geometry-finalize step, and the
+    prewarm tool (vyom/prewarm.py): reuse-check this farm's CURRENT geometry
+    against existing coverage, then dispatch a refresh for genuinely current
+    data, sized as a cold-start cluster window for any platform reuse-check
+    found zero coverage for. Returns the backfilled counts dict, mainly for
+    logging by the caller.
+
+    priority=True (the default, used by create_farm/update_farm) means a
+    real person is waiting on this right now. priority=False MUST be used
+    for any non-urgent/bulk dispatch (prewarm seeds) -- background work must
+    never compete with a real farmer's request for the priority queues'
+    dedicated capacity (see deploy/vyom-celery-worker-priority.service)."""
     try:
         backfilled = backfill_from_existing_products(db, farm)
         if any(backfilled.values()):
@@ -179,7 +185,7 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon) -> dict:
     cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
         if backfilled else ["S2", "S1"]
 
-    refresh_farm.delay(str(farm.id), priority=True,
+    refresh_farm.delay(str(farm.id), priority=priority,
                        cold_start_platforms=cold_start_platforms)
     return backfilled
 
@@ -257,14 +263,13 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, db: Session = Depends(g
 @router.get("", response_model=list[FarmOut])
 def list_farms(user_id: Optional[uuid.UUID] = None, include_drafts: bool = False, db: Session = Depends(get_db)):
     """include_drafts=False (default) hides rough placeholder farms still
-    being traced (see FarmCreate.is_draft) -- a farmer shouldn't see a tiny
-    square around their map pin sitting in their farm list before they've
-    finished drawing the real boundary."""
+    being traced (see FarmCreate.is_draft) AND prewarm seeds (see
+    is_prewarm_seed) -- neither is a real farm a user should see."""
     stmt = select(Polygon)
     if user_id:
         stmt = stmt.where(Polygon.user_id == user_id)
     if not include_drafts:
-        stmt = stmt.where(Polygon.is_draft == False)  # noqa: E712 -- SQLAlchemy needs `== False`, not `is False`
+        stmt = stmt.where(Polygon.is_draft == False, Polygon.is_prewarm_seed == False)  # noqa: E712
     farms = db.execute(stmt).scalars().all()
     return [_to_farm_out(f) for f in farms]
 
