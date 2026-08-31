@@ -5632,7 +5632,7 @@
         }
 
         const series = await api(
-          `/farms/${activeFarmId}/timeseries?metric=${index}_mean`,
+          `/farms/${activeFarmId}/timeseries?metric=${index}_mean&include_interpolated=true`,
         );
         updateCloudBadge(series);
         const gridColor = getComputedStyle(document.documentElement)
@@ -5657,6 +5657,29 @@
           new Date(s.acquisition_date).toLocaleDateString(),
         );
         const values = series.map((s) => s.value);
+        // Same three-way distinction as the calendar underline and the
+        // reading-card badge -- a chart is the easiest place of all to
+        // accidentally present an estimated point as if it were a real
+        // reading, since a line naturally smooths everything together
+        // visually. Filled dot = satellite, hollow ring = interpolated or
+        // provisional (color distinguishes which) -- explained in both the
+        // tooltip (on hover) and the caption under the chart (always
+        // visible, no hover required to notice the distinction exists).
+        const canopyColor = "#8fce76";
+        const dimColor =
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--text-dim")
+            .trim() || "#7a8f7f";
+        const isReal = (s) => s.source === "satellite" || !s.source;
+        const pointColors = series.map((s) =>
+          s.source === "provisional" ? dimColor : canopyColor,
+        );
+        const pointRadii = series.map((s) => (isReal(s) ? 2 : 4));
+        const pointBackgrounds = series.map((s) =>
+          isReal(s) ? canopyColor : "transparent",
+        );
+        const pointBorderWidths = series.map((s) => (isReal(s) ? 1 : 2));
+        const hasNonSatellitePoints = series.some((s) => !isReal(s));
 
         trendChart = new Chart(document.getElementById("trend-chart"), {
           type: "line",
@@ -5665,18 +5688,37 @@
             datasets: [
               {
                 data: values,
-                borderColor: "#8fce76",
+                borderColor: canopyColor,
                 backgroundColor: "rgba(139,206,118,0.12)",
                 fill: true,
                 tension: 0.25,
-                pointRadius: 2,
+                pointRadius: pointRadii,
+                pointBackgroundColor: pointBackgrounds,
+                pointBorderColor: pointColors,
+                pointBorderWidth: pointBorderWidths,
               },
             ],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (context) => {
+                    const point = series[context.dataIndex];
+                    const val =
+                      point.value != null ? point.value.toFixed(3) : "no data";
+                    if (point.source === "interpolated")
+                      return `${val} (interpolated)`;
+                    if (point.source === "provisional")
+                      return `${val} (provisional)`;
+                    return val;
+                  },
+                },
+              },
+            },
             scales: {
               x: {
                 ticks: { color: tickColor, font: { size: 10 } },
@@ -5689,6 +5731,29 @@
             },
           },
         });
+
+        // Always-visible caption (not just on hover) explaining the hollow
+        // points, only shown when this series actually has any -- most
+        // farms with steady real coverage will never see this at all.
+        let caption = wrap.querySelector(".trend-source-caption");
+        if (caption) caption.remove();
+        if (hasNonSatellitePoints) {
+          caption = document.createElement("div");
+          caption.className = "trend-source-caption";
+          caption.style.cssText =
+            "font-size:11px;color:var(--text-dim);margin-top:6px;text-align:center;";
+          caption.innerHTML =
+            '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' +
+            canopyColor +
+            ';margin-right:4px;"></span>Satellite reading &nbsp;&nbsp;' +
+            '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:2px solid ' +
+            canopyColor +
+            ';margin-right:4px;"></span>Interpolated &nbsp;&nbsp;' +
+            '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;border:2px solid ' +
+            dimColor +
+            ';margin-right:4px;"></span>Provisional';
+          wrap.appendChild(caption);
+        }
       }
 
       async function refreshFarm() {
