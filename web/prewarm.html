@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prewarm — Vyom Engine</title>
+    <style>
+      :root {
+        --canopy: #16a34a;
+        --canopy-bright: #22c55e;
+        --canopy-deep: #166534;
+        --danger: #dc2626;
+        --danger-bg: #fef2f2;
+        --warning: #b45309;
+        --warning-bg: #fffbeb;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-lg: 18px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 20px;
+        --sp-6: 28px;
+        --bg-deep: #f4f7f2;
+        --bg-panel: #ffffff;
+        --bg-raised: #f7faf5;
+        --line: #e6ebe2;
+        --text-primary: #16241a;
+        --text-muted: #5c6b60;
+        --text-dim: #8b9a8f;
+        --shadow-sm: 0 2px 10px rgba(30, 50, 30, 0.06);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        background: var(--bg-deep);
+        color: var(--text-primary);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--sp-4) var(--sp-6);
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--line);
+        box-shadow: var(--shadow-sm);
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      header .badge {
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-left: var(--sp-2);
+      }
+
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: var(--sp-6);
+      }
+
+      .card {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--sp-5);
+        margin-bottom: var(--sp-4);
+        box-shadow: var(--shadow-sm);
+      }
+      .card h2 {
+        font-size: 15px;
+        margin: 0 0 var(--sp-2) 0;
+      }
+      .card p.hint {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin: 0 0 var(--sp-4) 0;
+        line-height: 1.5;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin: var(--sp-3) 0 var(--sp-1) 0;
+      }
+      input[type="text"],
+      input[type="number"],
+      textarea {
+        width: 100%;
+        padding: 9px 11px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--line);
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+      textarea {
+        min-height: 140px;
+        font-family: ui-monospace, monospace;
+        font-size: 12.5px;
+        resize: vertical;
+      }
+      .field-hint {
+        font-size: 11.5px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+
+      button.submit {
+        margin-top: var(--sp-4);
+        width: 100%;
+        padding: 11px;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: var(--canopy);
+        color: white;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.submit:disabled {
+        background: var(--line);
+        color: var(--text-dim);
+        cursor: not-allowed;
+      }
+      button.submit:not(:disabled):hover {
+        background: var(--canopy-deep);
+      }
+
+      #result {
+        margin-top: var(--sp-4);
+        padding: var(--sp-3);
+        border-radius: var(--radius-sm);
+        font-size: 13.5px;
+        display: none;
+      }
+      #result.success {
+        background: var(--bg-raised);
+        border: 1px solid var(--canopy);
+        display: block;
+      }
+      #result.error {
+        background: var(--danger-bg);
+        color: var(--danger);
+        border: 1px solid var(--danger);
+        display: block;
+      }
+
+      .warning-box {
+        background: var(--warning-bg);
+        color: var(--warning);
+        border: 1px solid var(--warning);
+        border-radius: var(--radius-sm);
+        padding: var(--sp-3);
+        font-size: 13px;
+        margin-bottom: var(--sp-4);
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>
+        Prewarm a region <span class="badge">Vyom Engine — admin only</span>
+      </h1>
+    </header>
+
+    <main>
+      <div class="warning-box">
+        Deliberate, targeted use only — for a known upcoming rollout (e.g. a
+        partner campaign starting in a specific district next month). This is
+        <strong>not</strong> a tool for covering all of India — see the item-8
+        research notes on why blind national pre-processing wastes
+        compute/storage and doesn't beat CDSE's own rate limits anyway. Every
+        fetch this dispatches runs in the background (non-priority) and can
+        never block a real farmer's own onboarding request.
+      </div>
+
+      <div class="card">
+        <h2>Region boundary</h2>
+        <p class="hint">
+          Paste a GeoJSON Polygon or MultiPolygon for the target area — e.g. a
+          district boundary drawn and exported from
+          <a href="https://geojson.io" target="_blank" rel="noopener"
+            >geojson.io</a
+          >.
+        </p>
+
+        <label for="region-name">Region name</label>
+        <input
+          type="text"
+          id="region-name"
+          placeholder="e.g. Sehore District — ITCMAARS Q3 rollout"
+        />
+
+        <label for="region-geometry">GeoJSON geometry</label>
+        <textarea
+          id="region-geometry"
+          placeholder='{"type": "Polygon", "coordinates": [[[76.9, 22.9], [77.3, 22.9], [77.3, 23.3], [76.9, 23.3], [76.9, 22.9]]]}'
+        ></textarea>
+        <div class="field-hint">
+          Coordinates are [longitude, latitude], matching standard GeoJSON
+          order.
+        </div>
+
+        <label for="cell-size">Cell size (degrees)</label>
+        <input
+          type="number"
+          id="cell-size"
+          value="0.04"
+          step="0.01"
+          min="0.01"
+        />
+        <div class="field-hint">
+          ~4.4km at the equator by default. Smaller = denser/more overlapping
+          coverage, more cells dispatched.
+        </div>
+
+        <label for="user-id">Attributed to (user ID)</label>
+        <input
+          type="text"
+          id="user-id"
+          value="00000000-0000-0000-0000-000000000001"
+        />
+
+        <button class="submit" id="submit-btn" onclick="submitPrewarm()">
+          Dispatch prewarm
+        </button>
+
+        <div id="result"></div>
+      </div>
+    </main>
+
+    <script>
+      const API_BASE = window.location.origin;
+
+      function authHeaders() {
+        try {
+          const raw = localStorage.getItem("vyom_session");
+          if (raw) {
+            const token = JSON.parse(raw).token;
+            if (token) return { Authorization: "Bearer " + token };
+          }
+        } catch (e) {
+          /* falls through to unauthenticated */
+        }
+        return {};
+      }
+
+      async function submitPrewarm() {
+        const resultEl = document.getElementById("result");
+        const btn = document.getElementById("submit-btn");
+        resultEl.className = "";
+        resultEl.style.display = "none";
+
+        const regionName =
+          document.getElementById("region-name").value.trim() || "prewarm";
+        const geometryRaw = document
+          .getElementById("region-geometry")
+          .value.trim();
+        const cellSize = parseFloat(document.getElementById("cell-size").value);
+        const userId = document.getElementById("user-id").value.trim();
+
+        let geometry;
+        try {
+          geometry = JSON.parse(geometryRaw);
+        } catch (e) {
+          resultEl.className = "error";
+          resultEl.textContent =
+            "That geometry isn't valid JSON — paste the raw GeoJSON geometry object (not a Feature or FeatureCollection).";
+          resultEl.style.display = "block";
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "Dispatching...";
+
+        try {
+          const res = await fetch(`${API_BASE}/admin/prewarm`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders() },
+            body: JSON.stringify({
+              region_geometry: geometry,
+              user_id: userId,
+              region_name: regionName,
+              cell_size_deg: cellSize,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            resultEl.className = "error";
+            resultEl.textContent =
+              data.detail || `Request failed (${res.status})`;
+          } else {
+            resultEl.className = "success";
+            resultEl.innerHTML = `
+          <strong>Dispatched.</strong><br>
+          Region: ${data.region_name}<br>
+          Cells generated: ${data.cells_generated}<br>
+          Seeds dispatched: ${data.seeds_dispatched}<br><br>
+          Fetches are now running in the background across the normal (non-priority)
+          queues, paced by the CDSE rate limiter — a large region takes real time
+          proportional to its cell count. Check the Errors panel for any individual
+          cell failures.
+        `;
+          }
+        } catch (e) {
+          resultEl.className = "error";
+          resultEl.textContent = "Could not reach the server: " + e.message;
+        } finally {
+          resultEl.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "Dispatch prewarm";
+        }
+      }
+    </script>
+  </body>
+</html>

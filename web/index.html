@@ -2918,6 +2918,19 @@
           </svg>
           Errors
         </div>
+        <div class="nav-item" onclick="window.open('prewarm.html', '_blank')">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 12h4l3-9 4 18 3-9h4" />
+          </svg>
+          Prewarm
+        </div>
         <div style="margin-top: auto; padding-top: 14px">
           <div class="card" style="text-align: center; padding: 14px 12px">
             <div
@@ -3703,6 +3716,15 @@
       let activeFarmId = null;
       let draftPolygon = null;
       let draftGeoJSON = null;
+      // Set once the farmer's first click on the map creates a background
+      // draft farm (see startDrawing()'s click listener below) -- finalized
+      // in place via PATCH in saveDraft() once they finish drawing, instead
+      // of creating a second farm. This is the parallel-fetch-during-
+      // drawing flow: the draft's cold-start fetch runs the whole time the
+      // farmer is still placing points, so by the time they finish, the
+      // real boundary often already falls inside coverage that fetch
+      // already triggered.
+      let draftFarmId = null;
       let indexTileLayer = null;
       let trendChart = null;
       let availableIndices = { S2: [], S1: [] };
@@ -4277,13 +4299,61 @@
           draftPolygon = null;
         }
         draftPath = [];
+        draftFarmId = null;
         isDrawing = true;
         map.setOptions({ draggableCursor: "crosshair" });
         draftClickListener = map.addListener("click", (e) => {
+          const isFirstPoint = draftPath.length === 0;
           draftPath.push(e.latLng);
           renderDraftPreview();
+          // Kick off the background cold-start fetch the moment we have a
+          // rough location -- don't await it, the farmer keeps drawing
+          // uninterrupted while this runs. A failure here just means
+          // saveDraft() falls back to its normal single-step create path
+          // (see the draftFarmId check there) -- never blocks drawing.
+          if (isFirstPoint) createDraftFarmFromPoint(e.latLng);
         });
         updateDrawUI();
+      }
+
+      async function createDraftFarmFromPoint(latLng) {
+        // Small placeholder square around the first click -- its own size
+        // barely matters, since the backend pads a genuinely cold-start
+        // product's processing window to a cluster size (~3.3km) regardless
+        // of how big this placeholder itself is (see cold_start_buffer_deg
+        // in tile_grid.py/tasks.py). ~110m per side is plenty.
+        const d = 0.001;
+        const lat = latLng.lat(),
+          lng = latLng.lng();
+        const placeholderGeoJSON = {
+          type: "Polygon",
+          coordinates: [
+            [
+              [lng - d, lat - d],
+              [lng + d, lat - d],
+              [lng + d, lat + d],
+              [lng - d, lat + d],
+              [lng - d, lat - d],
+            ],
+          ],
+        };
+        try {
+          const farm = await api("/farms", {
+            method: "POST",
+            body: JSON.stringify({
+              name: "Untitled field (drawing...)",
+              user_id: "00000000-0000-0000-0000-000000000001",
+              geometry: placeholderGeoJSON,
+              is_draft: true,
+            }),
+          });
+          draftFarmId = farm.id;
+        } catch (e) {
+          // Silent -- saveDraft() falls back to a normal one-step create if
+          // draftFarmId never got set. Not worth interrupting the farmer's
+          // drawing over a background prefetch that failed to start.
+          console.warn("Draft farm prefetch failed to start:", e);
+        }
       }
 
       function renderDraftPreview() {
@@ -4325,6 +4395,12 @@
         stopDrawingListeners();
         draftPath = [];
         isDrawing = false;
+        // draftFarmId is deliberately NOT deleted server-side here -- an
+        // abandoned draft's cold-start fetch already ran (or is running)
+        // and leaves real processed_bounds coverage behind that benefits
+        // any future real farm nearby, same as a prewarm seed. Just stop
+        // tracking it locally so a later drawing session starts clean.
+        draftFarmId = null;
         updateDrawUI();
       }
 
@@ -4728,6 +4804,7 @@
           draftPolygon = null;
           draftGeoJSON = null;
         }
+        draftFarmId = null;
         document.getElementById("create-form").style.display = "none";
         document.getElementById("draw-field-modal").style.display = "none";
         // Put #map back where the Imagery & Indices page expects it.
@@ -4887,25 +4964,44 @@
         if (!draftGeoJSON)
           return showToast("Draw a boundary on the map first.");
 
+        const farmFields = {
+          name,
+          crop_type:
+            document.getElementById("new-farm-crop").value.trim() || null,
+          sowing_date:
+            document.getElementById("new-farm-sowing-date").value || null,
+          country:
+            document.getElementById("new-farm-country").value.trim() || null,
+        };
+
         try {
-          const farm = await api("/farms", {
-            method: "POST",
-            body: JSON.stringify({
-              name,
-              user_id: "00000000-0000-0000-0000-000000000001",
-              geometry: draftGeoJSON,
-              crop_type:
-                document.getElementById("new-farm-crop").value.trim() || null,
-              sowing_date:
-                document.getElementById("new-farm-sowing-date").value || null,
-              country:
-                document.getElementById("new-farm-country").value.trim() ||
-                null,
-            }),
-          });
+          let farm;
+          if (draftFarmId) {
+            // Finalize the draft created at first-click time -- same
+            // farm.id throughout, so any coverage its cold-start fetch
+            // already pulled carries straight over via reuse-check instead
+            // of triggering a second fresh CDSE fetch for the real shape.
+            farm = await api(`/farms/${draftFarmId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ ...farmFields, geometry: draftGeoJSON }),
+            });
+          } else {
+            // Fallback: the background draft-create at first-click either
+            // failed or never fired (e.g. a very fast draw) -- same
+            // single-step create as before, nothing lost.
+            farm = await api("/farms", {
+              method: "POST",
+              body: JSON.stringify({
+                ...farmFields,
+                user_id: "00000000-0000-0000-0000-000000000001",
+                geometry: draftGeoJSON,
+              }),
+            });
+          }
           if (draftPolygon) draftPolygon.setMap(null);
           draftPolygon = null;
           draftGeoJSON = null;
+          draftFarmId = null;
           document.getElementById("create-form").style.display = "none";
           document.getElementById("new-farm-name").value = "";
           document.getElementById("new-farm-crop").value = "";
