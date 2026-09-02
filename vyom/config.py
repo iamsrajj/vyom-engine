@@ -103,12 +103,25 @@ class Settings(BaseSettings):
     # the Errors panel. Empty = every logged-in beta user can see it (fine for
     # a small trusted beta list; tighten once real user roles exist -- see the
     # auth/signup rebuild, which will replace this with a proper role check).
+    # DEPRECATED, no longer used -- require_error_panel_access (auth.py) now
+    # checks a real role column on the users table instead of this allowlist
+    # (the allowlist was fail-open when unset, and unsatisfiable for real
+    # Google/OTP accounts). Kept only so an existing .env with this var set
+    # doesn't error on an unknown key; safe to remove from .env entirely.
     error_panel_usernames: str = ""
 
     # Google Sign-In (Google Identity Services). Create an OAuth Client ID
     # (type: Web application) at https://console.cloud.google.com/apis/credentials
     # -- the frontend needs the same client ID to init the Google button.
     google_client_id: str = ""
+
+    # CORS: comma-separated real origins (e.g.
+    # "https://vyom.agridoot.in,https://dashboard.agridoot.in"). Defaults to
+    # localhost-only for local dev -- security fix, was previously a
+    # hardcoded wildcard ("*") allowing ANY website to call this API. Set
+    # this to your real deployed frontend origin(s) in .env before serving
+    # real traffic; never use "*" once real user data is involved.
+    cors_allowed_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
 
     # AgriDoot's own phone-OTP SMS API (see vyom/otp_client.py)
     agridoot_otp_url: str = "https://apiv2.agridoot.co.in:12443/ad/v2/user/genotp"

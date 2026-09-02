@@ -266,6 +266,11 @@ class User(Base):
     phone_cc = Column(String, nullable=False, default="91")
     phone = Column(String, unique=True, nullable=False)
     phone_verified = Column(Boolean, nullable=False, server_default="false")
+    # 'user' (default) or 'admin'. Gates the Errors panel and prewarm tool
+    # (see auth.py's require_error_panel_access) -- fails closed, no role
+    # means no access. Promoting the first admin is a one-time manual step:
+    # UPDATE users SET role = 'admin' WHERE email = '<you>';
+    role = Column(String, nullable=False, server_default="user")
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True),

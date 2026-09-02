@@ -6,9 +6,26 @@ from fastapi.responses import JSONResponse
 
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api
 from vyom.auth import require_auth, require_auth_query
+from vyom.config import settings
 from vyom.error_log import log_error
 
 logger = logging.getLogger("vyom.api")
+
+# Security fix: refuse to start if the JWT signing secret is still the
+# well-known placeholder from config.py's default. That default is
+# documented in .env.production.example as something to replace -- this is
+# the code-level backstop for when that documentation gets missed (a
+# skipped .env line, a rushed deploy). If this fires, generate a real
+# secret: `openssl rand -hex 32`, set AUTH_SECRET_KEY in .env, restart.
+_INSECURE_DEFAULT_SECRET = "change-this-to-a-long-random-string"
+if settings.auth_secret_key == _INSECURE_DEFAULT_SECRET:
+    raise RuntimeError(
+        "AUTH_SECRET_KEY is still set to its insecure default. Anyone who "
+        "knows this default value (it's public, in the source code) could "
+        "forge a valid session token for any user. Set a real random value "
+        "in .env before starting: `openssl rand -hex 32`, then set "
+        "AUTH_SECRET_KEY=<that value> and restart."
+    )
 
 app = FastAPI(
     title="Vyom Engine - By AgriDoot",
@@ -16,12 +33,14 @@ app = FastAPI(
     version="0.2.0",
 )
 
-# Permissive CORS for local dev so web/index.html (served from any port/host)
-# can call this API directly. Tighten this to your actual dashboard origin
-# before anything resembling wider production use.
+# Security fix: was allow_origins=["*"] (any website could call this API).
+# Now driven by settings.cors_allowed_origins (see config.py) -- defaults to
+# localhost-only for local dev. Set CORS_ALLOWED_ORIGINS in .env to your
+# real frontend domain(s) before serving real traffic.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip()
+                   for o in settings.cors_allowed_origins.split(",") if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )

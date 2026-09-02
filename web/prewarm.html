@@ -231,13 +231,6 @@
           coverage, more cells dispatched.
         </div>
 
-        <label for="user-id">Attributed to (user ID)</label>
-        <input
-          type="text"
-          id="user-id"
-          value="00000000-0000-0000-0000-000000000001"
-        />
-
         <button class="submit" id="submit-btn" onclick="submitPrewarm()">
           Dispatch prewarm
         </button>
@@ -274,7 +267,6 @@
           .getElementById("region-geometry")
           .value.trim();
         const cellSize = parseFloat(document.getElementById("cell-size").value);
-        const userId = document.getElementById("user-id").value.trim();
 
         let geometry;
         try {
@@ -296,7 +288,6 @@
             headers: { "Content-Type": "application/json", ...authHeaders() },
             body: JSON.stringify({
               region_geometry: geometry,
-              user_id: userId,
               region_name: regionName,
               cell_size_deg: cellSize,
             }),

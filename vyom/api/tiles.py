@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from rio_tiler.io import Reader
 from rio_tiler.colormap import cmap as default_cmaps
 
+from vyom.auth import require_auth_query, stable_owner_uuid
 from vyom.db import get_db
 from vyom.models import CatalogProduct, Polygon, PolygonTileMap, InterpolatedTile
 from vyom.processing.index_scale import rio_tiler_intervals
@@ -121,6 +122,7 @@ def index_tile(
     index: str = "NDVI",
     platform: str = "S2",
     include_interpolated: bool = False,
+    current_user: str = Depends(require_auth_query),
     db: Session = Depends(get_db),
 ):
     """
@@ -140,7 +142,12 @@ def index_tile(
         raise HTTPException(400, f"Unknown index '{index}'")
 
     farm = db.get(Polygon, farm_id)
-    if farm is None:
+    # Security fix (BOLA): this used to return any farm's tiles to any
+    # authenticated caller with no ownership check at all -- same class of
+    # bug as farms.py's endpoints before that fix, see
+    # _get_owned_farm's docstring there for the reasoning (404, not 403,
+    # so a caller can't distinguish "no such farm" from "not yours").
+    if farm is None or farm.user_id != stable_owner_uuid(current_user):
         raise HTTPException(404, "Farm not found")
 
     stored_path, source_label = _resolve_raster(

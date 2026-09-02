@@ -4342,7 +4342,6 @@
             method: "POST",
             body: JSON.stringify({
               name: "Untitled field (drawing...)",
-              user_id: "00000000-0000-0000-0000-000000000001",
               geometry: placeholderGeoJSON,
               is_draft: true,
             }),
@@ -4465,6 +4464,26 @@
       }
 
       // ================= Helpers =================
+      // Security: farm.name/crop_type are free text set by whoever calls
+      // POST /farms -- the backend does NOT HTML-escape them (Pydantic only
+      // validates they're strings). Every place one of these gets inserted
+      // via innerHTML MUST run it through this first, or a malicious farm
+      // name becomes stored XSS that executes for anyone who views that
+      // farm (e.g. <img src=x onerror="steal(localStorage.vyom_session)">).
+      function escapeHtml(s) {
+        return (s == null ? "" : String(s)).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
+
       function showToast(msg) {
         const t = document.getElementById("toast");
         t.textContent = msg;
@@ -4823,8 +4842,8 @@
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
       </div>
       <div class="fc-body">
-        <div class="fc-name">${farm.name || "Unnamed field"}</div>
-        <div class="fc-crop">${farm.crop_type || "Crop not set"}</div>
+        <div class="fc-name">${escapeHtml(farm.name) || "Unnamed field"}</div>
+        <div class="fc-crop">${escapeHtml(farm.crop_type) || "Crop not set"}</div>
         <div class="fc-meta">
           <span>${farm.sowing_date ? new Date(farm.sowing_date).toLocaleDateString() : "No sowing date"}</span>
           <span class="fc-area">${area}</span>
@@ -4922,8 +4941,8 @@
               "farm-item" + (farm.id === activeFarmId ? " active" : "");
             item.innerHTML = `
         <div class="fname">
-          <span>${farm.name || "Unnamed field"}</span>
-          ${farm.crop_type ? `<span class="fcrop">${farm.crop_type}</span>` : ""}
+          <span>${escapeHtml(farm.name) || "Unnamed field"}</span>
+          ${farm.crop_type ? `<span class="fcrop">${escapeHtml(farm.crop_type)}</span>` : ""}
         </div>
         <span class="area mono">${farm.area_acre ? farm.area_acre.toFixed(2) + " ac" : ""}</span>`;
             item.onclick = () => selectFarm(farm.id);
@@ -4993,7 +5012,6 @@
               method: "POST",
               body: JSON.stringify({
                 ...farmFields,
-                user_id: "00000000-0000-0000-0000-000000000001",
                 geometry: draftGeoJSON,
               }),
             });

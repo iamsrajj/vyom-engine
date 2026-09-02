@@ -24,12 +24,15 @@ image requests (map tiles):
 import secrets
 import string
 import time
+import uuid
 from typing import Optional
 
 import jwt
-from fastapi import Header, HTTPException, Query
+from fastapi import Depends, Header, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from vyom.config import settings
+from vyom.db import get_db
 
 
 def _parse_users() -> dict[str, str]:
@@ -124,14 +127,56 @@ def require_auth_query(token: Optional[str] = Query(None)) -> str:
     return _decode(token)
 
 
-def require_error_panel_access(authorization: Optional[str] = Header(None)) -> str:
-    """Gate for the Errors panel. There is no real role system yet (auth_users
-    is a flat username:password list, no roles column) -- error_panel_usernames
-    in .env is an honest stopgap allowlist, not a real permissions model.
-    Replace this with a proper role check once the user-accounts rebuild lands."""
+def require_error_panel_access(authorization: Optional[str] = Header(None),
+                               db: Session = Depends(get_db)) -> str:
+    """Gate for the Errors panel and the prewarm admin tool.
+
+    SECURITY FIX (was fail-open): the previous version checked `sub` against
+    a comma-separated ERROR_PANEL_USERNAMES allowlist, with `if allowed and
+    sub not in allowed`. An empty/unset allowlist made that condition always
+    False, silently letting EVERY authenticated user through as if they were
+    an admin -- and even when configured, `sub` for a real Google/OTP user is
+    a UUID, which can never match a plain username string, making the
+    allowlist path permanently unsatisfiable for the primary auth system.
+
+    This now checks a real `role` column on the users table (see models.py),
+    defaults to denying access (fail closed) for: no matching user row,
+    no role set, or a legacy AUTH_USERS session (sub is not a UUID -- those
+    predate the real accounts system and have no role to check). Promoting
+    the first real admin is a one-time manual step:
+        UPDATE users SET role = 'admin' WHERE email = '<you>';
+    """
+    from vyom.models import User  # local import: avoids a circular import (models -> db -> ... -> auth)
+
     sub = require_auth(authorization)
-    allowed = [u.strip()
-               for u in settings.error_panel_usernames.split(",") if u.strip()]
-    if allowed and sub not in allowed:
-        raise HTTPException(403, "Not authorized to view error logs")
+    try:
+        user_id = uuid.UUID(sub)
+    except ValueError:
+        # legacy/non-account session -- no role to check, deny
+        raise HTTPException(403, "Not authorized")
+
+    user = db.get(User, user_id)
+    if user is None or getattr(user, "role", None) != "admin":
+        raise HTTPException(403, "Not authorized")
     return sub
+
+
+def stable_owner_uuid(sub: str) -> uuid.UUID:
+    """Every authenticated identity, from EITHER auth path, mapped to one
+    stable UUID used for resource ownership (Polygon.user_id) -- this is
+    what farms.py's ownership checks compare against, never a client-
+    supplied value (see the BOLA fix in farms.py: user_id used to be taken
+    straight from the request body/query string with no relationship to
+    who was actually authenticated).
+
+    A real account's `sub` (from Google/OTP signup) already IS the User
+    row's own UUID -- returned as-is. A legacy AUTH_USERS session's `sub`
+    is a plain username with no Users row at all; uuid5 gives it a
+    deterministic, stable, collision-resistant UUID derived from that
+    username, so each distinct legacy account still gets consistent,
+    isolated ownership without requiring a schema change on that fallback
+    path."""
+    try:
+        return uuid.UUID(sub)
+    except ValueError:
+        return uuid.uuid5(uuid.NAMESPACE_URL, f"vyom-legacy-user:{sub}")

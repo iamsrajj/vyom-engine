@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from vyom.config import settings
+from vyom.auth import require_auth, stable_owner_uuid
 from vyom.db import get_db
 from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat, InterpolatedTile
 from vyom.processing.index_scale import scales_for_api
@@ -44,7 +45,12 @@ def _clean_float(value):
 
 class FarmCreate(BaseModel):
     name: str
-    user_id: uuid.UUID
+    # user_id REMOVED (security fix): this used to be a client-supplied field
+    # trusted at face value for ownership, meaning any authenticated caller
+    # could create a farm attributed to ANY other user's UUID just by putting
+    # it in the request body. Ownership is now always derived server-side
+    # from the authenticated session (see create_farm's use of
+    # stable_owner_uuid(current_user)) -- never accepted from the client.
     geometry: dict = Field(...,
                            description="GeoJSON Polygon, any location worldwide")
     crop_type: Optional[str] = None
@@ -142,6 +148,17 @@ def _to_farm_out(farm: Polygon) -> FarmOut:
     )
 
 
+def _get_owned_farm(db: Session, farm_id: uuid.UUID, current_user: str) -> Polygon:
+    """Fetches a farm and enforces ownership -- the BOLA fix. Returns 404
+    (not 403) whether the farm doesn't exist at all OR belongs to someone
+    else, so a caller can't distinguish 'no such farm' from 'that's not
+    yours' and enumerate valid farm IDs belonging to other users."""
+    farm = db.get(Polygon, farm_id)
+    if not farm or farm.user_id != stable_owner_uuid(current_user):
+        raise HTTPException(404, "Farm not found")
+    return farm
+
+
 @router.get("/available-indices")
 def available_indices():
     """What indices this deployment computes, per platform -- drives the index
@@ -191,13 +208,13 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = 
 
 
 @router.post("", response_model=FarmOut)
-def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
+def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     geom_shape = shape(payload.geometry)
     area_ha = _geodesic_area_ha(geom_shape)
 
     farm = Polygon(
         name=payload.name,
-        user_id=payload.user_id,
+        user_id=stable_owner_uuid(current_user),
         geom=from_shape(geom_shape, srid=4326),
         crop_type=payload.crop_type,
         country=payload.country,
@@ -223,7 +240,7 @@ def create_farm(payload: FarmCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{farm_id}", response_model=FarmOut)
-def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, db: Session = Depends(get_db)):
+def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Partial update -- mainly for setting crop_type/sowing_date on a farm
     that was created before those were filled in, or correcting them later.
 
@@ -236,9 +253,7 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, db: Session = Depends(g
     time this finalize call lands, the real final boundary often already
     falls inside that same window and hits reuse-check's instant path
     rather than triggering a second fresh CDSE fetch."""
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+    farm = _get_owned_farm(db, farm_id, current_user)
 
     updates = payload.model_dump(exclude_unset=True, exclude={"geometry"})
     for field, value in updates.items():
@@ -261,13 +276,16 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, db: Session = Depends(g
 
 
 @router.get("", response_model=list[FarmOut])
-def list_farms(user_id: Optional[uuid.UUID] = None, include_drafts: bool = False, db: Session = Depends(get_db)):
-    """include_drafts=False (default) hides rough placeholder farms still
-    being traced (see FarmCreate.is_draft) AND prewarm seeds (see
-    is_prewarm_seed) -- neither is a real farm a user should see."""
-    stmt = select(Polygon)
-    if user_id:
-        stmt = stmt.where(Polygon.user_id == user_id)
+def list_farms(include_drafts: bool = False, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Always scoped to the authenticated caller's own farms (security fix:
+    this used to take an arbitrary `user_id` query param with no check that
+    it matched the caller, and returned EVERY user's farms when that param
+    was omitted entirely). include_drafts=False (default) hides rough
+    placeholder farms still being traced (see FarmCreate.is_draft) AND
+    prewarm seeds (see is_prewarm_seed) -- neither is a real farm a user
+    should see."""
+    owner = stable_owner_uuid(current_user)
+    stmt = select(Polygon).where(Polygon.user_id == owner)
     if not include_drafts:
         stmt = stmt.where(Polygon.is_draft == False, Polygon.is_prewarm_seed == False)  # noqa: E712
     farms = db.execute(stmt).scalars().all()
@@ -275,13 +293,18 @@ def list_farms(user_id: Optional[uuid.UUID] = None, include_drafts: bool = False
 
 
 @router.get("/current-status")
-def current_status(metric: str = "NDVI_mean", db: Session = Depends(get_db)):
+def current_status(metric: str = "NDVI_mean", current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Bulk 'what should the map show right now' endpoint -- one call for
     every farm instead of N calls, since a map render needs all of them at
     once. Registered BEFORE the /{farm_id} route below -- FastAPI matches
     routes in registration order, and "/farms/current-status" would
     otherwise incorrectly match /{farm_id} with farm_id="current-status"
     and fail UUID parsing before ever reaching this function.
+
+    Scoped to the authenticated caller's own farms only (security fix: this
+    used to query every farm from every user with no ownership filter at
+    all -- the same BOLA class as list_farms/get_farm/etc, see
+    _get_owned_farm's docstring).
 
     For each farm, returns the most recent REAL reading for `metric` plus a
     freshness signal:
@@ -303,7 +326,9 @@ def current_status(metric: str = "NDVI_mean", db: Session = Depends(get_db)):
     from vyom.interpolation import DEFAULT_GRID_DAYS
     from datetime import timezone as tz
 
-    farms = db.execute(select(Polygon)).scalars().all()
+    owner = stable_owner_uuid(current_user)
+    farms = db.execute(select(Polygon).where(
+        Polygon.user_id == owner)).scalars().all()
     now = datetime.now(tz.utc)
     out = []
     for farm in farms:
@@ -338,18 +363,14 @@ def current_status(metric: str = "NDVI_mean", db: Session = Depends(get_db)):
 
 
 @router.get("/{farm_id}", response_model=FarmOut)
-def get_farm(farm_id: uuid.UUID, db: Session = Depends(get_db)):
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+def get_farm(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    farm = _get_owned_farm(db, farm_id, current_user)
     return _to_farm_out(farm)
 
 
 @router.delete("/{farm_id}")
-def delete_farm(farm_id: uuid.UUID, db: Session = Depends(get_db)):
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+def delete_farm(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    farm = _get_owned_farm(db, farm_id, current_user)
     db.delete(farm)
     db.commit()
     return {"status": "deleted"}
@@ -368,7 +389,8 @@ class RefreshRequest(BaseModel):
 
 
 @router.post("/{farm_id}/refresh")
-def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: Session = Depends(get_db)):
+def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(),
+            current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Kick off discover -> download -> process -> zonal-stats for this farm's
     imagery. platforms defaults to both S2 and S1. days_back defaults to 30 --
     pass a larger value (e.g. 60 or 90) to backfill more history in one go, such
@@ -381,9 +403,7 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
     above) -- only actually effective once a dedicated priority worker
     process is running, see deploy/vyom-celery-worker-priority.service.
     Runs async via Celery."""
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+    farm = _get_owned_farm(db, farm_id, current_user)
 
     if payload.days_back < 1 or payload.days_back > 365:
         raise HTTPException(422, "days_back must be between 1 and 365")
@@ -407,6 +427,7 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(), db: 
 def timeseries(
     farm_id: uuid.UUID, metric: str = "NDVI_mean",
     include_interpolated: bool = False,
+    current_user: str = Depends(require_auth),
     db: Session = Depends(get_db),
 ):
     """Time series for one metric (e.g. NDVI_mean, RVI_mean, SOC_VIS_mean).
@@ -421,9 +442,7 @@ def timeseries(
         "interpolated" value the moment a new real reading arrives.
     Real, interpolated, and provisional points are never returned
     indistinguishably; every point states which one it is."""
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+    farm = _get_owned_farm(db, farm_id, current_user)
 
     stmt = (
         select(ZonalStat)
@@ -469,7 +488,8 @@ def timeseries(
 
 @router.get("/{farm_id}/latest")
 def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
-                    include_interpolated: bool = False, db: Session = Depends(get_db)):
+                    include_interpolated: bool = False,
+                    current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Reading for every index this deployment computes, for one specific
     acquisition date (or the most recent one if date='latest' / omitted) --
     what a farm dashboard's summary cards bind to. `date` should be an exact
@@ -489,9 +509,7 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
     affected either way, since 'latest' always means the most recent REAL
     reading (see tiles.py's _resolve_raster docstring for the same rule
     applied to map tiles)."""
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+    farm = _get_owned_farm(db, farm_id, current_user)
 
     target_date = None
     if date and date != "latest":
@@ -542,7 +560,8 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
 
 @router.get("/{farm_id}/available-dates")
 def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[str] = None,
-                    include_interpolated: bool = False, db: Session = Depends(get_db)):
+                    include_interpolated: bool = False,
+                    current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Dates with processed imagery for this farm -- populates a date picker in
     the UI instead of only ever showing 'latest'.
 
@@ -563,9 +582,7 @@ def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[st
     (including Google Maps' getTileUrl pattern) load tiles as <img> elements,
     which JS cannot read response headers from. Use this endpoint, not the
     header, to drive any UI labeling."""
-    farm = db.get(Polygon, farm_id)
-    if not farm:
-        raise HTTPException(404, "Farm not found")
+    farm = _get_owned_farm(db, farm_id, current_user)
 
     from vyom.models import PolygonTileMap
     stmt = (
