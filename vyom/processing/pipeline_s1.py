@@ -163,15 +163,13 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
     if not product.raw_path:
         raise FileNotFoundError(f"Raw file missing for {product.product_name}")
 
-    local_zip_path = storage.open_for_read(product.raw_path)
-    if local_zip_path.startswith("/vsis3/"):
-        raise NotImplementedError(
-            "Direct S3 zip processing not wired up in this slice for S1, same as S2."
-        )
-
     work_dir = tempfile.mkdtemp(prefix="vyom_proc_s1_")
 
     try:
+        # Same fix as pipeline_s2.py: get a genuine local file for zipfile
+        # extraction rather than open_for_read's GDAL-only /vsis3/ virtual path.
+        local_zip_path = storage.ensure_local_copy(product.raw_path, work_dir)
+
         safe_dir = _extract_safe_zip(local_zip_path)
 
         # Same fix as pipeline_s2: window to the farms actually linked to this

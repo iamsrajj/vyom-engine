@@ -142,22 +142,15 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
     if not product.raw_path:
         raise FileNotFoundError(f"Raw file missing for {product.product_name}")
 
-    # Storage abstraction gives us a local path to read from (downloads from S3
-    # to a temp file if needed; no-op if already on local disk).
-    local_zip_path = storage.open_for_read(product.raw_path)
     work_dir = tempfile.mkdtemp(prefix="vyom_proc_")
 
     try:
-        if local_zip_path.startswith("/vsis3/"):
-            # rasterio can read the zip's *contents* via /vsizip//vsis3/... without
-            # a full local download -- but simplest/most robust for now is to
-            # download once to local temp before extracting.
-            import boto3
-            raise NotImplementedError(
-                "Direct S3 zip processing not wired up in this slice -- "
-                "download_manager currently keeps a local copy path in raw_path "
-                "even under S3 storage for the SAFE-zip extraction step."
-            )
+        # The raw .SAFE.zip needs a genuine local file for zipfile extraction --
+        # open_for_read's /vsis3/ virtual path is a GDAL-only construct that
+        # plain Python file I/O (zipfile) can't open. ensure_local_copy downloads
+        # it into work_dir when on S3 storage; for local storage it's a no-op
+        # that returns the existing on-disk path.
+        local_zip_path = storage.ensure_local_copy(product.raw_path, work_dir)
 
         safe_dir = _extract_safe_zip(local_zip_path)
 

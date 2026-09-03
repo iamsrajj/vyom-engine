@@ -38,6 +38,15 @@ class Storage(ABC):
         (or returns a /vsis3/ GDAL virtual path — see note in S3Storage)."""
 
     @abstractmethod
+    def ensure_local_copy(self, stored_path: str, dest_dir: str) -> str:
+        """Return a path to a REAL local file for `stored_path`, downloading it
+        first if it isn't one already. Unlike open_for_read -- which for S3 can
+        hand back a /vsis3/ GDAL virtual path that only GDAL's own raster
+        drivers know how to read -- this guarantees a plain path that ordinary
+        Python file I/O (zipfile, open()) can use. Needed for extracting the
+        raw SAFE.zip, which isn't a raster GDAL can stream out of a VFS."""
+
+    @abstractmethod
     def delete(self, stored_path: str) -> None:
         """Remove a file — used to clean up raw downloads after processing,
         since they're always re-fetchable from Copernicus and are the single
@@ -68,6 +77,10 @@ class LocalStorage(Storage):
         return dest
 
     def open_for_read(self, stored_path: str) -> str:
+        return stored_path
+
+    def ensure_local_copy(self, stored_path: str, dest_dir: str) -> str:
+        # Already a plain path on this machine's disk -- nothing to download.
         return stored_path
 
     def delete(self, stored_path: str) -> None:
@@ -129,6 +142,19 @@ class S3Storage(Storage):
             without_scheme = stored_path[len("s3://"):]
             return f"/vsis3/{without_scheme}"
         return stored_path
+
+    def ensure_local_copy(self, stored_path: str, dest_dir: str) -> str:
+        if not stored_path.startswith("s3://"):
+            return stored_path
+        bucket, key = stored_path[len("s3://"):].split("/", 1)
+        os.makedirs(dest_dir, exist_ok=True)
+        local_path = os.path.join(dest_dir, os.path.basename(key))
+        logger.info(
+            "Downloading %s to local temp %s for zip extraction",
+            stored_path, local_path,
+        )
+        self._client.download_file(bucket, key, local_path)
+        return local_path
 
     def delete(self, stored_path: str) -> None:
         if stored_path.startswith("s3://"):
