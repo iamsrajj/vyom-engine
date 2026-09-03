@@ -5461,7 +5461,7 @@
             let x = coord.x % numTiles;
             if (x < 0) x += numTiles;
             if (coord.y < 0 || coord.y >= numTiles) return null;
-            return `${API_BASE}/tiles/${activeFarmId}/${date}/${zoom}/${x}/${coord.y}.png?index=${index}&platform=${currentPlatform}${tileTokenParam()}`;
+            return `${API_BASE}/tiles/${activeFarmId}/${date}/${zoom}/${x}/${coord.y}.png?index=${index}&platform=${currentPlatform}&include_interpolated=true${tileTokenParam()}`;
           },
           tileSize: new google.maps.Size(256, 256),
           opacity:
