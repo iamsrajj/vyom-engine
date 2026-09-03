@@ -36,6 +36,46 @@ _INDEX_RENDER_CONFIG = {
     "SOC_VIS":     {"colormap": "bugn",    "range": (0, 1)},
     "RVI":         {"colormap": "viridis", "range": (0, 1)},
     "VV_VH_RATIO": {"colormap": "viridis", "range": (0, 10)},
+    # Everything below is in settings.s2_indices (config.py) and gets computed
+    # and written to processed_indices for every product (pipeline_s2.py) --
+    # any of them missing here means tile requests 400 outright before
+    # _resolve_raster runs, even though a real COG exists in storage (this bit
+    # us for EVI/ARI1/LAI_PROXY/CAR_RE/NDREX already). Add an entry here for
+    # every index enabled in S2_INDICES, or its map layer will silently break
+    # even though Readings/timeseries still show numbers for it.
+    #
+    # Ranges/colormaps are first-pass defaults reusing only colormap names
+    # already proven to work in this file (rdylgn/rdbu/bugn/viridis) --
+    # derived from each formula's documented value range in indices.py, not
+    # validated against real farm imagery. Several (BAI, AWEI_*, WI2015,
+    # MSI) are close to unbounded in theory, so their ranges are rough
+    # clipping windows, not a claim about the "true" data range -- revisit
+    # once there's real tile output to eyeball for each.
+    "EVI":              {"colormap": "rdylgn",  "range": (-1, 1)},
+    "ARI1":             {"colormap": "viridis", "range": (0, 0.3)},
+    "LAI_PROXY":        {"colormap": "bugn",    "range": (0, 6)},
+    "CAR_RE":           {"colormap": "viridis", "range": (0, 5)},
+    "NDREX":            {"colormap": "rdylgn",  "range": (-1, 1)},
+    "NDRE_B7":          {"colormap": "rdylgn",  "range": (-1, 1)},
+    "EVI2":             {"colormap": "rdylgn",  "range": (-1, 1)},
+    "NIRV":             {"colormap": "rdylgn",  "range": (-1, 1)},
+    "OSAVI":            {"colormap": "rdylgn",  "range": (-1, 1)},
+    "VARI":             {"colormap": "rdylgn",  "range": (-1, 1)},
+    "SAVI":             {"colormap": "rdylgn",  "range": (-1, 1)},
+    "MSI":              {"colormap": "viridis", "range": (0, 3)},
+    "NDBI":             {"colormap": "viridis", "range": (-1, 1)},
+    "IBI":              {"colormap": "viridis", "range": (-1, 1)},
+    "BSI":              {"colormap": "viridis", "range": (-1, 1)},
+    "NBR":              {"colormap": "rdbu",    "range": (-1, 1)},
+    "NBR2":             {"colormap": "rdbu",    "range": (-1, 1)},
+    "BAI":              {"colormap": "viridis", "range": (0, 50)},
+    "MNDWI":            {"colormap": "rdbu",    "range": (-1, 1)},
+    "AWEI_SH":          {"colormap": "rdbu",    "range": (-2, 2)},
+    "AWEI_NSH":         {"colormap": "rdbu",    "range": (-3, 3)},
+    "WI2015":           {"colormap": "rdbu",    "range": (-1, 2)},
+    "NDSI":             {"colormap": "rdbu",    "range": (-1, 1)},
+    "SNOW_BRIGHTNESS":  {"colormap": "viridis", "range": (0, 1)},
+    "GREEN_BLUE_RATIO": {"colormap": "viridis", "range": (0, 3)},
 }
 
 
