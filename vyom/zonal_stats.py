@@ -6,8 +6,10 @@ raster (doc's critical single-pass-per-tile performance pattern).
 import logging
 import math
 
+import rasterio
 from exactextract import exact_extract
 from geoalchemy2.shape import to_shape
+from rasterio.warp import transform_geom
 from shapely.geometry import mapping
 from sqlalchemy.orm import Session
 
@@ -76,15 +78,41 @@ def compute_zonal_stats_for_farms(db: Session, product: CatalogProduct, farms: l
         raise ValueError(
             f"Product {product.product_name} is not processed yet (status={product.status})")
 
-    farm_features = [
-        {"type": "Feature", "geometry": mapping(to_shape(f.geom)), "properties": {
-            "farm_id": str(f.id)}}
-        for f in farms
-    ]
+    # Farm polygons are stored in EPSG:4326 (lat/lon), but processed index
+    # rasters are written in whatever CRS the source imagery used natively
+    # (a UTM zone in meters, for S2; already EPSG:4326 for S1's GCP-based
+    # read path -- see pipeline_s1.py). exact_extract does NOT reproject for
+    # you: it assumes the vector and raster share a CRS. Passing WGS84-degree
+    # coordinates against a raster whose pixel grid is in UTM meters gives
+    # zero geometric overlap -- every "mean" comes back NaN, silently, for
+    # every index and every date, which is exactly what was happening to S2.
+    # Fix: reproject each farm's geometry into the raster's own CRS right
+    # before extraction. Cached per-CRS since every index for one product
+    # normally shares the same CRS, so this is at most one reprojection per
+    # product, not per index. A no-op (EPSG:4326 -> EPSG:4326) for S1, so
+    # this doesn't change S1's already-correct behavior.
+    farm_geoms_wgs84 = [mapping(to_shape(f.geom)) for f in farms]
+    reprojected_cache: dict[str, list[dict]] = {}
+
+    def _farm_features_for_crs(raster_crs) -> list[dict]:
+        crs_key = raster_crs.to_string()
+        if crs_key not in reprojected_cache:
+            reprojected_cache[crs_key] = [
+                {
+                    "type": "Feature",
+                    "geometry": transform_geom("EPSG:4326", raster_crs, geom),
+                    "properties": {"farm_id": str(f.id)},
+                }
+                for f, geom in zip(farms, farm_geoms_wgs84)
+            ]
+        return reprojected_cache[crs_key]
 
     for index_name, stored_path in (product.processed_indices or {}).items():
         try:
             raster_path = storage.open_for_read(stored_path)
+            with rasterio.open(raster_path) as _ref:
+                raster_crs = _ref.crs
+            farm_features = _farm_features_for_crs(raster_crs)
             results = exact_extract(raster_path, farm_features, [
                                     "mean", "stdev", "count"])
 
