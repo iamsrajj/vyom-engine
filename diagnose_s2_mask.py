@@ -22,7 +22,7 @@ import sys
 import numpy as np
 import rasterio
 
-from vyom.database import SessionLocal
+from vyom.db import SessionLocal
 from vyom.models import CatalogProduct, PolygonTileMap, Polygon
 from vyom.processing.pipeline_s2 import _read_band, _find_band_path, _extract_safe_zip
 from vyom.processing.cloud_mask import build_valid_pixel_mask, cloud_fraction
