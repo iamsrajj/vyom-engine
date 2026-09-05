@@ -2173,7 +2173,7 @@
                 </svg>
               </div>
               <div>
-                <div class="hval">15K+</div>
+                <div class="hval">30K+</div>
                 <div class="hlabel">Farmers</div>
               </div>
             </div>
@@ -2189,7 +2189,7 @@
                 </svg>
               </div>
               <div>
-                <div class="hval">2K+</div>
+                <div class="hval">5K+</div>
                 <div class="hlabel">Acres Monitored</div>
               </div>
             </div>
@@ -2206,8 +2206,8 @@
                 </svg>
               </div>
               <div>
-                <div class="hval">2.5L+</div>
-                <div class="hlabel">AI Queries</div>
+                <div class="hval">4.5L+</div>
+                <div class="hlabel">Gyan AI Queries Solved</div>
               </div>
             </div>
             <div class="hero-stat">
@@ -2222,7 +2222,7 @@
                 </svg>
               </div>
               <div>
-                <div class="hval">98%</div>
+                <div class="hval">95%</div>
                 <div class="hlabel">Satisfaction</div>
               </div>
             </div>
@@ -2253,7 +2253,6 @@
             <div class="login-tagline">
               Access your dashboard and farm insights
             </div>
-            <span class="login-beta-badge">Beta &middot; Invite only</span>
 
             <div
               id="googleSignInBtn"
@@ -2278,87 +2277,7 @@
               </svg>
               Continue with phone number
             </button>
-
-            <div class="login-divider">or</div>
-
-            <div class="login-form">
-              <label>Email or Phone Number</label>
-              <div class="input-with-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"
-                  />
-                  <path d="m22 6-10 7L2 6" />
-                </svg>
-                <input
-                  type="text"
-                  id="login-username"
-                  autocomplete="username"
-                  placeholder="Enter email, phone, or username"
-                />
-              </div>
-              <label>Password</label>
-              <div class="input-with-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <input
-                  type="password"
-                  id="login-password"
-                  autocomplete="current-password"
-                  placeholder="Enter your password"
-                  style="padding-right: 34px"
-                />
-                <button
-                  type="button"
-                  class="eye-toggle"
-                  onclick="togglePasswordVisibility()"
-                  aria-label="Show password"
-                >
-                  <svg
-                    id="eye-icon"
-                    viewBox="0 0 24 24"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    width="15"
-                    height="15"
-                    stroke="var(--text-dim)"
-                    fill="none"
-                    stroke-width="1.8"
-                  >
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                </button>
-              </div>
-              <div class="login-links-row">
-                <a onclick="showHonestPlaceholder('Password reset')"
-                  >Forgot Password?</a
-                >
-              </div>
-              <div id="login-error" class="login-error"></div>
-              <button
-                class="btn btn-primary login-submit"
-                onclick="handleLogin()"
-              >
-                Sign In
-              </button>
-            </div>
-            <div class="login-footnote">
-              Don't have an account?
-              <a onclick="showHonestPlaceholder('Self-serve sign-up')"
-                >Sign Up</a
-              >
-            </div>
+            <div id="login-error" class="login-error"></div>
           </div>
 
           <!-- ================= Phone sign-in (existing accounts) ================= -->
@@ -2370,13 +2289,13 @@
             <div class="login-form" style="margin-top: 18px">
               <label>Phone number</label>
               <div style="display: flex; gap: 8px">
-                <input
-                  type="text"
+                <select
                   id="phone-cc"
-                  value="91"
-                  style="width: 56px; text-align: center; flex: none"
+                  style="width: 92px; flex: none"
                   class="input-with-icon"
-                />
+                >
+                  <option value="91" selected>&#127470;&#127475; +91</option>
+                </select>
                 <input
                   type="tel"
                   id="phone-signin-number"
@@ -2387,7 +2306,7 @@
               <div id="phone-signin-error" class="login-error"></div>
               <button
                 class="btn btn-primary login-submit"
-                onclick="sendOtp('signin')"
+                onclick="handlePhoneContinue()"
               >
                 Send code
               </button>
@@ -2435,6 +2354,7 @@
               Just a few details to finish setting up your account
             </div>
             <div
+              id="signup-google-block"
               style="
                 display: flex;
                 align-items: center;
@@ -2462,6 +2382,15 @@
               </div>
             </div>
             <div class="login-form">
+              <label id="signup-fullname-label" style="display: none"
+                >Full name</label
+              >
+              <input
+                type="text"
+                id="signup-fullname"
+                placeholder="Your full name"
+                style="display: none"
+              />
               <label>Organization</label>
               <input
                 type="text"
@@ -2482,13 +2411,13 @@
               />
               <label>Phone number</label>
               <div style="display: flex; gap: 8px">
-                <input
-                  type="text"
+                <select
                   id="signup-phone-cc"
-                  value="91"
-                  style="width: 56px; text-align: center; flex: none"
+                  style="width: 92px; flex: none"
                   class="input-with-icon"
-                />
+                >
+                  <option value="91" selected>&#127470;&#127475; +91</option>
+                </select>
                 <input
                   type="tel"
                   id="signup-phone-number"
@@ -2734,9 +2663,11 @@
               style="display: flex; flex-direction: column; line-height: 1.2"
             >
               <span id="user-name-label"></span>
-              <span style="font-size: 9.5px; color: var(--text-dim)"
-                >Beta access</span
-              >
+              <span
+                id="session-countdown"
+                style="font-size: 9.5px; color: var(--text-dim)"
+                title="Time until you're automatically signed out"
+              ></span>
             </div>
             <svg
               class="chevron"
@@ -2813,27 +2744,14 @@
           </svg>
           My Fields
         </div>
-        <div
-          class="nav-item"
-          data-page="imagery"
-          onclick="switchPage('imagery')"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="9" cy="9" r="2" />
-            <path d="M21 15l-5-5L5 21" />
-          </svg>
-          Imagery &amp; Indices
-        </div>
         <div class="nav-divider"></div>
         <div
           class="nav-item"
           data-page="comparisons"
-          onclick="switchPage('comparisons')"
+          onclick="
+            switchPage('comparisons');
+            renderComparisonsPage();
+          "
         >
           <svg
             viewBox="0 0 24 24"
@@ -2843,50 +2761,7 @@
             <path d="M3 3v18h18" />
             <path d="M18 9l-5 5-3-3-4 4" />
           </svg>
-          Comparisons<span class="nav-soon">Soon</span>
-        </div>
-        <div class="nav-item" data-page="alerts" onclick="switchPage('alerts')">
-          <svg
-            viewBox="0 0 24 24"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-          Alerts<span class="nav-soon">Soon</span>
-        </div>
-        <div
-          class="nav-item"
-          data-page="reports"
-          onclick="switchPage('reports')"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path
-              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-            />
-            <path d="M14 2v6h6M9 13h6M9 17h6" />
-          </svg>
-          Reports<span class="nav-soon">Soon</span>
-        </div>
-        <div
-          class="nav-item"
-          data-page="downloads"
-          onclick="switchPage('downloads')"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="M7 10l5 5 5-5M12 15V3" />
-          </svg>
-          Downloads<span class="nav-soon">Soon</span>
+          Comparisons
         </div>
         <div class="nav-divider"></div>
         <div
@@ -2904,32 +2779,7 @@
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
             />
           </svg>
-          Settings<span class="nav-soon">Soon</span>
-        </div>
-        <div class="nav-item" onclick="window.open('errors.html', '_blank')">
-          <svg
-            viewBox="0 0 24 24"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          Errors
-        </div>
-        <div class="nav-item" onclick="window.open('prewarm.html', '_blank')">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M3 12h4l3-9 4 18 3-9h4" />
-          </svg>
-          Prewarm
+          Settings
         </div>
         <div style="margin-top: auto; padding-top: 14px">
           <div class="card" style="text-align: center; padding: 14px 12px">
@@ -3088,6 +2938,46 @@
               </button>
             </div>
             <div class="field-grid" id="myfields-grid"></div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="link-google-modal" style="display: none">
+          <div class="modal-card" style="max-width: 380px">
+            <div class="modal-header">
+              <h3>Add your Gmail</h3>
+              <button
+                class="icon-btn"
+                onclick="dismissLinkGoogle()"
+                aria-label="Close"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p
+                style="
+                  margin: 0 0 14px;
+                  color: var(--text-dim);
+                  font-size: 14px;
+                "
+              >
+                Your account is set up with your phone number. Linking Gmail is
+                optional -- it just gives you another way to sign in.
+              </p>
+              <div
+                id="linkGoogleBtn"
+                style="display: flex; justify-content: center"
+              ></div>
+              <div class="login-footnote" style="margin-top: 14px">
+                <a onclick="dismissLinkGoogle()">Maybe later</a>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3573,99 +3463,87 @@
         <!-- /#page-imagery -->
 
         <div class="page-view" id="page-comparisons" style="display: none">
-          <div class="empty-page">
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <h2 style="margin: 0 0 4px">Comparisons</h2>
+          <p style="color: var(--text-dim); margin: 0 0 20px">
+            Pick a field and two dates to see every index side by side, or
+            filter down to just the indices you care about.
+          </p>
+          <div class="card" style="padding: 18px; margin-bottom: 18px">
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                gap: 12px;
+                align-items: end;
+              "
             >
-              <path d="M3 3v18h18" />
-              <path d="M18 9l-5 5-3-3-4 4" />
-            </svg>
-            <h2>Comparisons</h2>
-            <p>
-              Compare field health across dates and fields. Not built yet --
-              needs a design decision on what a "comparison" computes before
-              implementing (date-vs-date diff, field-vs-field, or both).
-            </p>
-          </div>
-        </div>
-
-        <div class="page-view" id="page-alerts" style="display: none">
-          <div class="empty-page">
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <h2>Alerts</h2>
-            <p>
-              Automatic notifications for things like low vegetation or pest
-              risk. Not built yet -- needs a real detection engine and a weather
-              data source behind it, not just a UI.
-            </p>
-          </div>
-        </div>
-
-        <div class="page-view" id="page-reports" style="display: none">
-          <div class="empty-page">
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Field</label
+                >
+                <select
+                  id="cmp-farm-select"
+                  onchange="loadCompareDates()"
+                ></select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Reference index (for date list)</label
+                >
+                <select
+                  id="cmp-index-select"
+                  onchange="loadCompareDates()"
+                ></select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Date A</label
+                >
+                <select id="cmp-date-a"></select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Date B</label
+                >
+                <select id="cmp-date-b"></select>
+              </div>
+              <button class="btn btn-primary" onclick="runComparison()">
+                Compare
+              </button>
+            </div>
+            <div style="margin-top: 12px">
+              <input
+                type="text"
+                id="cmp-filter"
+                placeholder="Filter indices (e.g. NDVI, NDWI)..."
+                oninput="renderComparisonResults()"
+                style="max-width: 320px"
               />
-              <path d="M14 2v6h6M9 13h6M9 17h6" />
-            </svg>
-            <h2>Reports</h2>
-            <p>
-              Generate and download PDF field-health reports. Not built yet --
-              needs a report-generation service.
-            </p>
+            </div>
           </div>
-        </div>
-
-        <div class="page-view" id="page-downloads" style="display: none">
-          <div class="empty-page">
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <path d="M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            <h2>Downloads</h2>
-            <p>
-              Access previously generated reports, maps, and advisory documents.
-              Depends on Reports existing first.
-            </p>
-          </div>
+          <div id="cmp-results"></div>
         </div>
 
         <div class="page-view" id="page-settings" style="display: none">
-          <div class="empty-page">
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <h2 style="margin: 0 0 4px">Settings</h2>
+          <p style="color: var(--text-dim); margin: 0 0 20px">
+            Preferences beyond your account info aren't built yet -- there's no
+            persisted user-settings concept in the backend besides the profile
+            fields below.
+          </p>
+          <div class="card" style="max-width: 560px; padding: 20px">
+            <h3 style="margin: 0 0 14px">Account</h3>
+            <div
+              id="account-info-grid"
+              style="
+                display: grid;
+                grid-template-columns: 140px 1fr;
+                row-gap: 12px;
+                font-size: 14px;
+              "
             >
-              <circle cx="12" cy="12" r="3" />
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-              />
-            </svg>
-            <h2>Settings</h2>
-            <p>
-              Profile, preferences, and account settings. Not built yet -- the
-              backend has no persisted user-settings concept beyond login
-              credentials today.
-            </p>
+              <!-- populated by renderAccountSettings() -->
+            </div>
           </div>
         </div>
       </div>
@@ -3709,6 +3587,11 @@
       const GOOGLE_MAPS_API_KEY = window.GOOGLE_MAPS_API_KEY || "";
 
       const SESSION_KEY = "vyom_session"; // {token, expires_at (ms), username}
+      // Shown when an account has no profile_img_url (phone-only signup with
+      // no linked Google avatar) -- reuses the existing AgriDoot mark rather
+      // than adding a new asset.
+      const DEFAULT_AVATAR_URL =
+        "https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png";
 
       let map, geocoder, searchMarker;
       let farms = [];
@@ -3822,15 +3705,6 @@
         }
       }
 
-      function togglePasswordVisibility() {
-        const input = document.getElementById("login-password");
-        const isHidden = input.type === "password";
-        input.type = isHidden ? "text" : "password";
-        document.getElementById("eye-icon").innerHTML = isHidden
-          ? '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/>'
-          : '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>';
-      }
-
       // Google/Apple sign-in, password reset, self-serve sign-up, and the help
       // center all need backend support that doesn't exist yet (no OAuth
       // integration, no reset-token endpoint, no signup flow -- still invite-only).
@@ -3840,42 +3714,6 @@
         showToast(
           `${feature} isn't set up yet -- contact AgriDoot directly for now.`,
         );
-      }
-
-      async function handleLogin() {
-        const username = document.getElementById("login-username").value.trim();
-        const password = document.getElementById("login-password").value;
-        const err = document.getElementById("login-error");
-        if (!username || !password) {
-          err.textContent = "Enter both a user ID and password.";
-          err.style.display = "block";
-          return;
-        }
-        try {
-          const res = await fetch(`${API_BASE}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
-          if (!res.ok) {
-            err.textContent = "Invalid user ID or password.";
-            err.style.display = "block";
-            return;
-          }
-          const data = await res.json();
-          setSession({
-            token: data.token,
-            expires_at: data.expires_at * 1000,
-            username: data.username,
-          });
-          err.style.display = "none";
-          document.getElementById("login-password").value = "";
-          startApp();
-        } catch (e) {
-          err.textContent =
-            "Could not reach the server. Check your connection.";
-          err.style.display = "block";
-        }
       }
 
       // ============================================================
@@ -3963,16 +3801,88 @@
 
       function startSignupFlow(registrationToken, prefill) {
         otpFlowState = { registrationToken, prefill };
+        document.getElementById("signup-google-block").style.display = "flex";
         document.getElementById("signup-avatar").src = prefill.picture || "";
         document.getElementById("signup-name").textContent = prefill.name || "";
         document.getElementById("signup-email").textContent =
           prefill.email || "";
+        document.getElementById("signup-fullname-label").style.display = "none";
+        document.getElementById("signup-fullname").style.display = "none";
         document.getElementById("signup-organization").value = "";
         document.getElementById("signup-designation").value = "";
         document.getElementById("signup-address").value = "";
         document.getElementById("signup-phone-number").value = "";
+        document.getElementById("signup-phone-number").disabled = false;
         document.getElementById("signup-error").style.display = "none";
         showLoginStep("signup");
+      }
+
+      // Phone-first signup: no Google identity yet, so show a "Full name"
+      // field instead of the Google avatar/name/email block, and carry over
+      // the phone number the person already typed into the signin card
+      // rather than making them re-enter it.
+      function startPhoneOnlySignupFlow(phone, cc) {
+        otpFlowState = { registrationToken: null };
+        document.getElementById("signup-google-block").style.display = "none";
+        document.getElementById("signup-fullname-label").style.display =
+          "block";
+        document.getElementById("signup-fullname").style.display = "block";
+        document.getElementById("signup-fullname").value = "";
+        document.getElementById("signup-organization").value = "";
+        document.getElementById("signup-designation").value = "";
+        document.getElementById("signup-address").value = "";
+        document.getElementById("signup-phone-cc").value = cc;
+        document.getElementById("signup-phone-number").value = phone;
+        document.getElementById("signup-phone-number").disabled = true; // already verified-pending on this number
+        document.getElementById("signup-error").style.display = "none";
+        showLoginStep("signup");
+        showToast("No account found for this number -- let's set one up");
+      }
+
+      // Single entry point for the phone card: the person never explicitly
+      // picks "sign in" vs "sign up" -- we try signin first, and if the
+      // backend says this phone isn't registered, we pivot straight into
+      // the signup form with the phone already carried over.
+      async function handlePhoneContinue() {
+        const phone = document
+          .getElementById("phone-signin-number")
+          .value.trim();
+        const cc = document.getElementById("phone-cc").value.trim() || "91";
+        const errElId = "phone-signin-error";
+        if (!/^\d{7,15}$/.test(phone)) {
+          setFieldError(errElId, "Enter a valid phone number.");
+          return;
+        }
+        document.getElementById(errElId).style.display = "none";
+        try {
+          const res = await fetch(`${API_BASE}/auth/otp/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, cc, purpose: "signin" }),
+          });
+          if (res.status === 404) {
+            startPhoneOnlySignupFlow(phone, cc);
+            return;
+          }
+          const data = await res.json();
+          if (!res.ok) {
+            setFieldError(errElId, data.detail || "Could not send code.");
+            return;
+          }
+          otpFlowState = {
+            purpose: "signin",
+            phone,
+            cc,
+            otpSession: data.otp_session,
+          };
+          document.getElementById("otp-sent-to-label").textContent =
+            `We sent a 6-digit code to +${cc} ${phone}`;
+          document.getElementById("otp-code-input").value = "";
+          document.getElementById("otp-error").style.display = "none";
+          showLoginStep("otp");
+        } catch (e) {
+          setFieldError(errElId, "Could not reach the server.");
+        }
       }
 
       function setFieldError(elId, message) {
@@ -4001,6 +3911,14 @@
           const address = document
             .getElementById("signup-address")
             .value.trim();
+          const isPhoneOnly = !otpFlowState || !otpFlowState.registrationToken;
+          const fullName = document
+            .getElementById("signup-fullname")
+            .value.trim();
+          if (isPhoneOnly && !fullName) {
+            setFieldError(errElId, "Please enter your full name.");
+            return;
+          }
           if (!organization || !designation || !address) {
             setFieldError(
               errElId,
@@ -4037,6 +3955,9 @@
             const address = document
               .getElementById("signup-address")
               .value.trim();
+            const fullName = document
+              .getElementById("signup-fullname")
+              .value.trim();
             otpFlowState = {
               ...otpFlowState,
               purpose: "signup",
@@ -4046,6 +3967,7 @@
               organization,
               designation,
               address,
+              name: fullName || undefined, // undefined for Google-first signups, which get name from the token instead
             };
           } else {
             otpFlowState = {
@@ -4101,7 +4023,8 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              registration_token: otpFlowState.registrationToken,
+              registration_token: otpFlowState.registrationToken || null,
+              name: otpFlowState.name || null,
               organization: otpFlowState.organization,
               designation: otpFlowState.designation,
               address: otpFlowState.address,
@@ -4123,6 +4046,9 @@
             completeData.expires_at,
             completeData.user,
           );
+          if (!completeData.user || !completeData.user.email) {
+            promptLinkGoogle();
+          }
         } catch (e) {
           setFieldError("otp-error", "Could not reach the server.");
         }
@@ -4136,6 +4062,58 @@
         });
         otpFlowState = null;
         startApp();
+      }
+
+      // ---- Optional post-phone-signup Gmail linking ----
+      let linkGoogleButtonRendered = false;
+      function promptLinkGoogle() {
+        document.getElementById("link-google-modal").style.display = "flex";
+        if (
+          !linkGoogleButtonRendered &&
+          window.google &&
+          GOOGLE_CLIENT_ID &&
+          !GOOGLE_CLIENT_ID.startsWith("REPLACE_")
+        ) {
+          // Re-point the SDK's global callback at the link handler while this
+          // modal owns the button; the main sign-in button on the login
+          // screen isn't visible at this point anyway (the person is already
+          // logged in), so there's no conflict.
+          google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleLinkCredential,
+          });
+          google.accounts.id.renderButton(
+            document.getElementById("linkGoogleBtn"),
+            {
+              type: "standard",
+              theme: "outline",
+              size: "large",
+              shape: "pill",
+              text: "continue_with",
+              width: 300,
+            },
+          );
+          linkGoogleButtonRendered = true;
+        }
+      }
+
+      function dismissLinkGoogle() {
+        document.getElementById("link-google-modal").style.display = "none";
+      }
+
+      async function handleGoogleLinkCredential(response) {
+        try {
+          const data = await api("/auth/google/link", {
+            method: "POST",
+            body: JSON.stringify({ id_token: response.credential }),
+          });
+          showToast("Gmail linked to your account");
+          dismissLinkGoogle();
+          if (typeof refreshAccountInfo === "function")
+            refreshAccountInfo(data);
+        } catch (e) {
+          showToast("Could not link that Google account");
+        }
       }
 
       function handleLogout() {
@@ -4176,12 +4154,6 @@
           handleLogout();
         }
       }
-
-      document
-        .getElementById("login-password")
-        .addEventListener("keydown", (e) => {
-          if (e.key === "Enter") handleLogin();
-        });
 
       // ================= API helper (auto-attaches session token) =================
       async function api(path, opts = {}) {
@@ -4910,6 +4882,186 @@
         grid.innerHTML = shown.length
           ? shown.map(fieldCardHtml).join("")
           : `<div class="empty-state">${farms.length ? "No fields match your search." : 'No fields yet -- click "+ Add New Field" to draw one.'}</div>`;
+      }
+
+      // ================= Comparisons (item 10: index-vs-index / date-vs-date) =================
+      // One table does both jobs at once: the two columns ARE the date
+      // comparison, and every row is an index -- so filtering rows down to
+      // just the indices someone cares about is "compare indices", and
+      // picking two different dates is "compare dates". No separate mode
+      // toggle needed, since neither request excludes the other.
+      let compareLastResult = null; // { indices: [{name, a, b}] } from the most recent runComparison()
+
+      function renderComparisonsPage() {
+        const farmSel = document.getElementById("cmp-farm-select");
+        const previousFarm = farmSel.value;
+        farmSel.innerHTML = farms.length
+          ? farms
+              .map(
+                (f) =>
+                  `<option value="${f.id}">${escapeHtml(f.name) || "Unnamed field"}</option>`,
+              )
+              .join("")
+          : '<option value="">No fields yet</option>';
+        if (previousFarm && farms.some((f) => f.id === previousFarm)) {
+          farmSel.value = previousFarm;
+        }
+
+        const idxSel = document.getElementById("cmp-index-select");
+        const previousIdx = idxSel.value;
+        idxSel.innerHTML =
+          (availableIndices.S2 || [])
+            .map(
+              (idx) =>
+                `<option value="S2|${idx}">${idx.replace(/_/g, " ")} (S2)</option>`,
+            )
+            .join("") +
+          (availableIndices.S1 || [])
+            .map(
+              (idx) =>
+                `<option value="S1|${idx}">${idx.replace(/_/g, " ")} (S1)</option>`,
+            )
+            .join("");
+        if (
+          previousIdx &&
+          [...idxSel.options].some((o) => o.value === previousIdx)
+        ) {
+          idxSel.value = previousIdx;
+        }
+
+        compareLastResult = null;
+        document.getElementById("cmp-results").innerHTML = "";
+        if (farmSel.value) loadCompareDates();
+      }
+
+      async function loadCompareDates() {
+        const farmId = document.getElementById("cmp-farm-select").value;
+        const [platform, index] = (
+          document.getElementById("cmp-index-select").value || ""
+        ).split("|");
+        const dateASel = document.getElementById("cmp-date-a");
+        const dateBSel = document.getElementById("cmp-date-b");
+        if (!farmId || !platform || !index) {
+          dateASel.innerHTML = dateBSel.innerHTML = "";
+          return;
+        }
+        try {
+          const dates = await api(
+            `/farms/${farmId}/available-dates?platform=${platform}&index=${index}&include_interpolated=true`,
+          );
+          const options = dates
+            .map(
+              (d) =>
+                `<option value="${d.date}">${new Date(d.date).toLocaleDateString()} (${d.source})</option>`,
+            )
+            .join("");
+          dateASel.innerHTML = options;
+          dateBSel.innerHTML = options;
+          // Default to the two most recent dates so a first click on
+          // "Compare" is immediately useful rather than comparing a date to itself.
+          if (dates.length > 1) dateBSel.selectedIndex = 1;
+        } catch (e) {
+          showToast("Could not load dates for this field/index");
+        }
+      }
+
+      async function runComparison() {
+        const farmId = document.getElementById("cmp-farm-select").value;
+        const dateA = document.getElementById("cmp-date-a").value;
+        const dateB = document.getElementById("cmp-date-b").value;
+        if (!farmId || !dateA || !dateB) {
+          showToast("Pick a field and both dates first");
+          return;
+        }
+        document.getElementById("cmp-results").innerHTML =
+          '<div class="empty-state">Loading...</div>';
+        try {
+          const [snapA, snapB] = await Promise.all([
+            api(
+              `/farms/${farmId}/latest?date=${encodeURIComponent(dateA)}&include_interpolated=true`,
+            ),
+            api(
+              `/farms/${farmId}/latest?date=${encodeURIComponent(dateB)}&include_interpolated=true`,
+            ),
+          ]);
+          const allIndexNames = [
+            ...new Set([...Object.keys(snapA), ...Object.keys(snapB)]),
+          ];
+          compareLastResult = {
+            dateA,
+            dateB,
+            indices: allIndexNames.map((name) => ({
+              name,
+              a: snapA[name] || { value: null, source: null },
+              b: snapB[name] || { value: null, source: null },
+            })),
+          };
+          renderComparisonResults();
+        } catch (e) {
+          document.getElementById("cmp-results").innerHTML =
+            '<div class="empty-state">Could not load comparison data.</div>';
+        }
+      }
+
+      function renderComparisonResults() {
+        if (!compareLastResult) return;
+        const filter = (
+          document.getElementById("cmp-filter").value || ""
+        ).toLowerCase();
+        const rows = compareLastResult.indices.filter((row) =>
+          row.name.toLowerCase().includes(filter),
+        );
+        const fmt = (v) => (v == null ? "--" : Number(v).toFixed(4));
+        const sourceTag = (s) =>
+          s
+            ? `<span style="font-size: 10px; color: var(--text-dim)">${s}</span>`
+            : "";
+        const container = document.getElementById("cmp-results");
+        if (!rows.length) {
+          container.innerHTML =
+            '<div class="empty-state">No indices match that filter.</div>';
+          return;
+        }
+        container.innerHTML = `
+          <div class="card" style="overflow-x: auto; padding: 0">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
+              <thead>
+                <tr style="text-align: left; border-bottom: 1px solid var(--border)">
+                  <th style="padding: 10px 14px">Index</th>
+                  <th style="padding: 10px 14px">${new Date(compareLastResult.dateA).toLocaleDateString()}</th>
+                  <th style="padding: 10px 14px">${new Date(compareLastResult.dateB).toLocaleDateString()}</th>
+                  <th style="padding: 10px 14px">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows
+                  .map((row) => {
+                    const a = row.a.value;
+                    const b = row.b.value;
+                    let delta = "--";
+                    if (a != null && b != null) {
+                      const diff = b - a;
+                      const color =
+                        diff > 0
+                          ? "var(--canopy-bright)"
+                          : diff < 0
+                            ? "#d9534f"
+                            : "var(--text-dim)";
+                      delta = `<span style="color: ${color}">${diff >= 0 ? "+" : ""}${diff.toFixed(4)}</span>`;
+                    }
+                    return `
+                    <tr style="border-bottom: 1px solid var(--border)">
+                      <td style="padding: 9px 14px">${row.name.replace(/_/g, " ")}</td>
+                      <td style="padding: 9px 14px">${fmt(a)} ${sourceTag(row.a.source)}</td>
+                      <td style="padding: 9px 14px">${fmt(b)} ${sourceTag(row.b.source)}</td>
+                      <td style="padding: 9px 14px">${delta}</td>
+                    </tr>`;
+                  })
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
       }
 
       // Superseded by the My Fields / Overview grids (matchingFarms()) -- the
@@ -5863,9 +6015,78 @@
         document.getElementById("user-name-label").textContent =
           session.username;
         scheduleSessionExpiry(session);
+        startSessionCountdown(session.expires_at);
         showApp();
         checkApiHealth();
         loadAvailableIndices().then(loadFarms);
+        refreshAccountInfo();
+      }
+
+      // Dynamic profile image + name/account fields (item 5: no more static
+      // profile_img asset) -- also backs the Settings > Account section.
+      let currentAccountInfo = null;
+      async function refreshAccountInfo(preloaded) {
+        try {
+          const info = preloaded || (await api("/auth/me"));
+          currentAccountInfo = info;
+          document.getElementById("user-avatar").src =
+            info.profile_img_url || DEFAULT_AVATAR_URL;
+          document.getElementById("user-name-label").textContent =
+            info.name || info.account_id || "";
+          if (typeof renderAccountSettings === "function")
+            renderAccountSettings(info);
+        } catch (e) {
+          // Non-fatal -- keep whatever was already shown (session username,
+          // default avatar). api() itself already handles a 401 by logging out.
+        }
+      }
+
+      // Renders the Settings > Account grid from whatever /auth/me returned.
+      // Called from refreshAccountInfo() on load and again after linking
+      // Google, so it's always showing current data, not a load-time snapshot.
+      function renderAccountSettings(info) {
+        const grid = document.getElementById("account-info-grid");
+        if (!grid) return; // settings page markup not needed yet -- re-called on next refresh
+        const row = (label, value) => `
+          <div style="color: var(--text-dim)">${label}</div>
+          <div>${value != null && value !== "" ? value : '<span style="color:var(--text-dim)">Not set</span>'}</div>
+        `;
+        grid.innerHTML =
+          row("Account ID", info.account_id) +
+          row("Name", info.name) +
+          row("Email", info.email) +
+          row(
+            "Phone",
+            info.phone ? `+${info.phone_cc || "91"} ${info.phone}` : null,
+          ) +
+          row("Organization", info.organization) +
+          row("Designation", info.designation) +
+          row("Address", info.address);
+      }
+
+      // Visible countdown to the fixed session expiry (not activity-based --
+      // ticks down to session.expires_at regardless of what the person does).
+      let sessionCountdownTimer = null;
+      function startSessionCountdown(expiresAtMs) {
+        if (sessionCountdownTimer) clearInterval(sessionCountdownTimer);
+        const el = document.getElementById("session-countdown");
+        const tick = () => {
+          const msLeft = expiresAtMs - Date.now();
+          if (msLeft <= 0) {
+            el.textContent = "Signed out";
+            clearInterval(sessionCountdownTimer);
+            return;
+          }
+          const totalMinutes = Math.floor(msLeft / 60000);
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          el.textContent =
+            hours > 0
+              ? `Auto sign-out in ${hours}h ${minutes}m`
+              : `Auto sign-out in ${minutes}m`;
+        };
+        tick();
+        sessionCountdownTimer = setInterval(tick, 30000);
       }
 
       function startApp() {

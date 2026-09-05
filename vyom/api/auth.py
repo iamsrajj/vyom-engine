@@ -154,7 +154,12 @@ def verify_otp_endpoint(payload: VerifyOtpRequest, db: Session = Depends(get_db)
 
 # ---------------------------------------------------------- signup finish ---
 class CompleteSignupRequest(BaseModel):
-    registration_token: str
+    # Present when this signup started from "Continue with Google" (identity
+    # comes from the token). Absent for a phone-only signup -- in that case
+    # `name` below is required instead, since there's no Google identity to
+    # pull it from.
+    registration_token: str | None = None
+    name: str | None = None
     organization: str
     designation: str
     address: str
@@ -166,7 +171,18 @@ class CompleteSignupRequest(BaseModel):
 
 @router.post("/signup/complete")
 def complete_signup(payload: CompleteSignupRequest, db: Session = Depends(get_db)):
-    identity = decode_registration_token(payload.registration_token)
+    if payload.registration_token:
+        identity = decode_registration_token(payload.registration_token)
+        google_sub, email, name, picture = identity["sub"], identity["email"], identity["name"], identity.get(
+            "picture")
+    else:
+        # Phone-only signup: no Google identity yet. The frontend is
+        # responsible for collecting a name in this case since there's
+        # nowhere else to get one from.
+        if not payload.name or not payload.name.strip():
+            raise HTTPException(
+                400, "Full name is required to create an account")
+        google_sub, email, name, picture = None, None, payload.name.strip(), None
 
     otp_row = db.get(OtpVerification, payload.otp_session)
     if (otp_row is None or not otp_row.verified or otp_row.purpose != "signup"
@@ -177,7 +193,7 @@ def complete_signup(payload: CompleteSignupRequest, db: Session = Depends(get_db
     if db.query(User).filter(User.phone == payload.phone).first() is not None:
         raise HTTPException(
             409, "This phone number is already registered to an account")
-    if db.query(User).filter(User.google_sub == identity["sub"]).first() is not None:
+    if google_sub is not None and db.query(User).filter(User.google_sub == google_sub).first() is not None:
         raise HTTPException(
             409, "An account already exists for this Google identity")
 
@@ -187,10 +203,10 @@ def complete_signup(payload: CompleteSignupRequest, db: Session = Depends(get_db
             user = User(
                 id=uuid.uuid4(),
                 account_id=generate_account_id(),
-                email=identity["email"],
-                google_sub=identity["sub"],
-                name=identity["name"],
-                profile_img_url=identity.get("picture"),
+                email=email,
+                google_sub=google_sub,
+                name=name,
+                profile_img_url=picture,
                 organization=payload.organization,
                 designation=payload.designation,
                 address=payload.address,
@@ -213,6 +229,41 @@ def complete_signup(payload: CompleteSignupRequest, db: Session = Depends(get_db
 
     token, expires_at = issue_token(str(user.id))
     return {"status": "signin", "token": token, "expires_at": expires_at, "user": _user_out(user)}
+
+
+# ------------------------------------------------------------- link Google ---
+@router.post("/google/link")
+def link_google(payload: GoogleAuthRequest, user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Attaches a Google identity to the CURRENTLY signed-in account -- for
+    someone who signed up via phone only and later wants to add Gmail.
+    Distinct from /auth/google, which is the anonymous pre-login entry point
+    used before any session exists."""
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(404, "No profile for this session type")
+    user = db.get(User, uid)
+    if user is None:
+        raise HTTPException(404, "User not found")
+
+    try:
+        identity = verify_google_id_token(payload.id_token)
+    except ValueError as exc:
+        log_error("auth", f"Google ID token verification failed: {exc}")
+        raise HTTPException(401, "Could not verify Google sign-in")
+
+    other = db.query(User).filter(User.google_sub == identity.sub).first()
+    if other is not None and other.id != user.id:
+        raise HTTPException(
+            409, "This Google account is already linked to a different account")
+
+    user.google_sub = identity.sub
+    if not user.email:
+        user.email = identity.email
+    if not user.profile_img_url:
+        user.profile_img_url = identity.picture
+    db.commit()
+    return _user_out(user)
 
 
 # ------------------------------------------------------------------- /me ---

@@ -253,9 +253,9 @@ class User(Base):
     # e.g. "AGD-7F3K2Q" -- distinct from the internal uuid `id`.
     account_id = Column(String, unique=True, nullable=False)
 
-    email = Column(String, unique=True, nullable=False)
-    # Google's stable user id
-    google_sub = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=True)
+    # Google's stable user id -- null until/unless the account links Google
+    google_sub = Column(String, unique=True, nullable=True)
     name = Column(String, nullable=False)
     profile_img_url = Column(Text)
 
