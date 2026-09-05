@@ -27,7 +27,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -76,22 +76,38 @@ def _normalize(dt: datetime) -> datetime:
 
 
 def _fill_gaps_for_metric(db: Session, polygon_id, platform: str, metric: str, grid_days: int) -> int:
-    real_points = db.execute(
+    all_rows = db.execute(
         select(ZonalStat.id, ZonalStat.acquisition_date, ZonalStat.value)
         .join(CatalogProduct, ZonalStat.product_id == CatalogProduct.id)
         .where(
             CatalogProduct.platform == platform,
             ZonalStat.polygon_id == polygon_id,
             ZonalStat.metric == metric,
-            ZonalStat.value.isnot(None),
         )
         .order_by(ZonalStat.acquisition_date)
     ).all()
+
+    if len(all_rows) == 0:
+        return 0
+
+    real_points = [(rid, rdate, rvalue)
+                   for rid, rdate, rvalue in all_rows if rvalue is not None]
+    cloudy_points = [(rid, rdate)
+                     for rid, rdate, rvalue in all_rows if rvalue is None]
 
     if len(real_points) == 0:
         return 0
 
     changed = 0
+
+    # ---- Exact-date fill for real satellite passes that came back fully
+    # cloud-masked. A ZonalStat row existing with value=None means a pass
+    # genuinely happened on that date -- it's not a gap in coverage, just a
+    # bad read. The fixed-cadence grid fill below doesn't help here since it
+    # steps every `grid_days` from the last real point and essentially never
+    # lands exactly on this specific acquisition date. Fill it directly.
+    changed += _fill_exact_cloudy_dates(db,
+                                        polygon_id, platform, metric, grid_days, real_points, cloudy_points)
 
     # ---- True interpolation between each consecutive pair of real points ----
     if len(real_points) >= 2:
@@ -173,6 +189,92 @@ def _fill_gaps_for_metric(db: Session, polygon_id, platform: str, metric: str, g
         )
 
     db.commit()
+    return changed
+
+
+def _fill_exact_cloudy_dates(db: Session, polygon_id, platform: str, metric: str, grid_days: int,
+                             real_points: list, cloudy_points: list) -> int:
+    """For every real satellite acquisition that came back fully cloud-masked
+    (a ZonalStat row exists -- a pass happened -- but value is None), fill an
+    InterpolatedStat at that EXACT date. Same boundary rules as the grid fill:
+      - strictly between two real values -> true linear interpolation
+      - after the last real value -> provisional carry-forward, capped the
+        same way as the grid's trailing edge (MAX_PROVISIONAL_PERIODS worth
+        of grid_days stale), so an unusually long real gap still surfaces as
+        a warning instead of quietly repeating a stale value forever
+      - before the first real value -> left alone. Nothing to interpolate
+        from, and the hard boundary in this module's docstring is that
+        nothing here ever projects backward any more than it projects a
+        trend forward.
+    """
+    if not cloudy_points:
+        return 0
+
+    changed = 0
+    first_real_date = _normalize(real_points[0][1])
+    last_id, last_date, last_value = real_points[-1]
+    last_date = _normalize(last_date)
+    max_provisional_age = timedelta(
+        days=MAX_PROVISIONAL_PERIODS * grid_days)
+
+    for _cloudy_id, cloudy_date in cloudy_points:
+        cloudy_date = _normalize(cloudy_date)
+        if cloudy_date <= first_real_date:
+            continue  # nothing real before this to interpolate from
+
+        left = None
+        right = None
+        for rid, rdate, rvalue in real_points:
+            rdate = _normalize(rdate)
+            if rdate < cloudy_date:
+                left = (rid, rdate, rvalue)
+            elif rdate > cloudy_date and right is None:
+                right = (rid, rdate, rvalue)
+        if left is None:
+            continue
+        left_id, left_date, left_value = left
+
+        if right is not None:
+            right_id, right_date, right_value = right
+            fraction = (cloudy_date - left_date).total_seconds() / \
+                (right_date - left_date).total_seconds()
+            value = Decimal(str(left_value)) + (
+                Decimal(str(right_value)) - Decimal(str(left_value))
+            ) * Decimal(str(fraction))
+            source, method, ref_left_id, ref_right_id = "interpolated", "linear", left_id, right_id
+        else:
+            if cloudy_date - last_date > max_provisional_age:
+                continue  # same staleness cap as the grid trailing edge
+            value = Decimal(str(last_value))
+            source, method, ref_left_id, ref_right_id = "provisional", "carry_forward", last_id, None
+
+        existing_id = db.execute(
+            select(InterpolatedStat.id).where(
+                InterpolatedStat.polygon_id == polygon_id,
+                InterpolatedStat.metric == metric,
+                InterpolatedStat.date == cloudy_date,
+            )
+        ).scalar_one_or_none()
+
+        try:
+            if existing_id is not None:
+                db.execute(
+                    update(InterpolatedStat).where(InterpolatedStat.id == existing_id).values(
+                        value=value, source=source, method=method,
+                        left_zonal_stat_id=ref_left_id, right_zonal_stat_id=ref_right_id,
+                    )
+                )
+            else:
+                db.add(InterpolatedStat(
+                    polygon_id=polygon_id, platform=platform, metric=metric,
+                    date=cloudy_date, value=value, source=source, method=method,
+                    left_zonal_stat_id=ref_left_id, right_zonal_stat_id=ref_right_id,
+                ))
+            db.flush()
+            changed += 1
+        except IntegrityError:
+            db.rollback()  # concurrent run already filled this exact point
+
     return changed
 
 

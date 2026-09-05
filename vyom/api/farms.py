@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date as date_cls, datetime
+from datetime import date as date_cls, datetime, timezone
 from math import isnan
 from typing import Optional
 
@@ -26,6 +26,14 @@ logger = logging.getLogger("vyom.api.farms")
 router = APIRouter(prefix="/farms", tags=["farms"])
 
 _HA_TO_ACRE = 2.4710538147
+
+
+def _to_utc(dt: datetime) -> datetime:
+    """DB drivers can hand back a naive datetime for a timezone(True) column
+    in edge cases -- treat naive as UTC so date-equality comparisons (used to
+    match a cloudy ZonalStat row against its InterpolatedStat fill by exact
+    date) don't silently fail to match, or crash, over a driver quirk."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _clean_float(value):
@@ -450,26 +458,44 @@ def timeseries(
         .order_by(ZonalStat.acquisition_date)
     )
     rows = db.execute(stmt).scalars().all()
-    out = [
-        ZonalStatOut(
-            acquisition_date=r.acquisition_date,
-            metric=r.metric,
-            value=_clean_float(
-                float(r.value)) if r.value is not None else None,
-            cloud_pct=_clean_float(
-                float(r.cloud_pct)) if r.cloud_pct is not None else None,
-            source="satellite",
-        )
-        for r in rows
-    ]
 
+    interp_by_date = {}
     if include_interpolated:
         interp_stmt = (
             select(InterpolatedStat)
             .where(InterpolatedStat.polygon_id == farm_id, InterpolatedStat.metric == metric)
             .order_by(InterpolatedStat.date)
         )
-        interp_rows = db.execute(interp_stmt).scalars().all()
+        interp_by_date = {
+            _to_utc(r.date): r for r in db.execute(interp_stmt).scalars().all()
+        }
+
+    out = []
+    for r in rows:
+        # A cloud-masked real acquisition (row exists, value is None) gets
+        # its exact-date fill from interp_by_date if one exists (see
+        # interpolation.py's _fill_exact_cloudy_dates) instead of surfacing
+        # as a dead null -- a pass that happened but was unreadable is filled
+        # in exactly like a gap between passes is.
+        fill = interp_by_date.pop(_to_utc(
+            r.acquisition_date), None) if r.value is None else None
+        out.append(ZonalStatOut(
+            acquisition_date=r.acquisition_date,
+            metric=r.metric,
+            value=_clean_float(float(r.value)) if r.value is not None else (
+                _clean_float(
+                    float(fill.value)) if fill is not None and fill.value is not None else None
+            ),
+            cloud_pct=_clean_float(
+                float(r.cloud_pct)) if r.cloud_pct is not None else None,
+            source="satellite" if r.value is not None else (
+                fill.source if fill is not None else "satellite"),
+        ))
+
+    if include_interpolated:
+        # Remaining interpolated/provisional points are the fixed-cadence
+        # grid fills that don't correspond to any real acquisition date at
+        # all -- those still get appended as their own points, same as before.
         out.extend(
             ZonalStatOut(
                 acquisition_date=r.date,
@@ -479,7 +505,7 @@ def timeseries(
                 cloud_pct=None,  # interpolated/provisional points have no real cloud reading
                 source=r.source,  # "interpolated" or "provisional" -- read from the row, never hardcoded
             )
-            for r in interp_rows
+            for r in interp_by_date.values()
         )
         out.sort(key=lambda x: x.acquisition_date)
 
@@ -527,12 +553,17 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
                                        farm_id, ZonalStat.metric == metric)
         if target_date is not None:
             stmt = stmt.where(ZonalStat.acquisition_date == target_date)
+        else:
+            # "latest" means the most recent REAL reading -- skip cloud-masked
+            # rows (value IS NULL) rather than returning whichever row simply
+            # has the newest date even if that specific pass was unusable.
+            stmt = stmt.where(ZonalStat.value.isnot(None))
         stmt = stmt.order_by(ZonalStat.acquisition_date.desc()).limit(1)
         row = db.execute(stmt).scalar_one_or_none()
 
-        if row is not None:
+        if row is not None and row.value is not None:
             out[index_name] = {
-                "value": _clean_float(float(row.value)) if row.value is not None else None,
+                "value": _clean_float(float(row.value)),
                 "acquisition_date": row.acquisition_date,
                 "source": "satellite",
             }
