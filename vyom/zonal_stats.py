@@ -11,6 +11,8 @@ from exactextract import exact_extract
 from geoalchemy2.shape import to_shape
 from rasterio.warp import transform_geom
 from shapely.geometry import mapping
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from vyom.models import CatalogProduct, Polygon, ZonalStat
@@ -40,27 +42,29 @@ def _clean_float(value):
 
 
 def _upsert_stat(db: Session, farm: Polygon, product: CatalogProduct, metric: str, value, pixel_count, cloud_pct):
-    existing = (
-        db.query(ZonalStat)
-        .filter_by(polygon_id=farm.id, product_id=product.id, metric=metric)
-        .one_or_none()
+    """Atomic upsert on (polygon_id, product_id, metric) via Postgres'
+    ON CONFLICT DO UPDATE. This used to be a SELECT-then-add-or-mutate, which
+    raced with any other session (notably reuse_check.py's own call into this
+    same function, for the same farm+product, triggered by a concurrent
+    POST /farms) doing the same SELECT before either side had committed --
+    both would see "no existing row" and both would try to INSERT, and
+    whichever committed second hit the uq_zstats_polygon_product_metric
+    UniqueViolation and rolled back everything else pending in that session.
+    A single DB-level upsert statement has no such window: Postgres resolves
+    the conflict atomically regardless of what else is writing concurrently."""
+    stmt = pg_insert(ZonalStat).values(
+        polygon_id=farm.id,
+        product_id=product.id,
+        acquisition_date=product.acquisition_date,
+        metric=metric,
+        value=value,
+        pixel_count=pixel_count,
+        cloud_pct=cloud_pct,
+    ).on_conflict_do_update(
+        constraint="uq_zstats_polygon_product_metric",
+        set_={"value": value, "pixel_count": pixel_count, "cloud_pct": cloud_pct},
     )
-    if existing:
-        existing.value = value
-        existing.pixel_count = pixel_count
-        existing.cloud_pct = cloud_pct
-    else:
-        db.add(
-            ZonalStat(
-                polygon_id=farm.id,
-                product_id=product.id,
-                acquisition_date=product.acquisition_date,
-                metric=metric,
-                value=value,
-                pixel_count=pixel_count,
-                cloud_pct=cloud_pct,
-            )
-        )
+    db.execute(stmt)
 
 
 def compute_zonal_stats_for_farms(db: Session, product: CatalogProduct, farms: list[Polygon]) -> int:
@@ -123,10 +127,28 @@ def compute_zonal_stats_for_farms(db: Session, product: CatalogProduct, farms: l
                 std_val = _clean_float(props.get("stdev"))
                 count_val = props.get("count")
 
-                _upsert_stat(
-                    db, farm, product, f"{index_name}_mean", mean_val, count_val, product.cloud_cover)
-                _upsert_stat(
-                    db, farm, product, f"{index_name}_std", std_val, count_val, product.cloud_cover)
+                # Each farm gets its own SAVEPOINT. A farm can be deleted by
+                # a concurrent request in the moment between when this batch
+                # was assembled and when we get here (reuse_check.py builds
+                # its farm list, then this function runs against it) -- that
+                # shows up as a ForeignKeyViolation on polygon_id. Without an
+                # isolating savepoint, that one stale farm poisons the whole
+                # transaction and every OTHER farm's perfectly good stats in
+                # this same commit get rolled back with it.
+                try:
+                    with db.begin_nested():
+                        _upsert_stat(
+                            db, farm, product, f"{index_name}_mean", mean_val, count_val, product.cloud_cover)
+                        _upsert_stat(
+                            db, farm, product, f"{index_name}_std", std_val, count_val, product.cloud_cover)
+                except IntegrityError:
+                    logger.warning(
+                        "Zonal stat write skipped for farm %s (likely deleted concurrently), product %s, index %s",
+                        farm.id, product.product_name, index_name,
+                    )
+                    log_error("zonal_stats", f"Stat write skipped for farm {farm.id} (likely deleted concurrently)",
+                              platform=product.platform,
+                              context={"product_id": str(product.id), "farm_id": str(farm.id), "index": index_name})
         except Exception:  # noqa: BLE001
             logger.exception(
                 "Zonal stats failed for index %s on product %s, skipping just this index",
