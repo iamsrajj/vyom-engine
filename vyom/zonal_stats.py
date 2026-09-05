@@ -61,7 +61,7 @@ def _upsert_stat(db: Session, farm: Polygon, product: CatalogProduct, metric: st
         pixel_count=pixel_count,
         cloud_pct=cloud_pct,
     ).on_conflict_do_update(
-        constraint="uq_zstats_polygon_product_metric",
+        index_elements=["polygon_id", "product_id", "metric"],
         set_={"value": value, "pixel_count": pixel_count, "cloud_pct": cloud_pct},
     )
     db.execute(stmt)
