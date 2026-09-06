@@ -280,6 +280,42 @@ def me(user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
     return _user_out(user)
 
 
+class UpdateProfileRequest(BaseModel):
+    # Deliberately excludes email and phone: email is tied to a linked
+    # Google identity (changing it here would desync google_sub) and phone
+    # is OTP-verified (changing it should require re-verifying the new
+    # number, not a silent overwrite). Both need their own dedicated flow,
+    # not a plain profile edit.
+    name: str | None = None
+    organization: str | None = None
+    designation: str | None = None
+    address: str | None = None
+
+
+@router.patch("/me")
+def update_me(payload: UpdateProfileRequest, user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(404, "No profile for this session type")
+    user = db.get(User, uid)
+    if user is None:
+        raise HTTPException(404, "User not found")
+
+    if payload.name is not None:
+        if not payload.name.strip():
+            raise HTTPException(400, "Name cannot be empty")
+        user.name = payload.name.strip()
+    if payload.organization is not None:
+        user.organization = payload.organization.strip()
+    if payload.designation is not None:
+        user.designation = payload.designation.strip()
+    if payload.address is not None:
+        user.address = payload.address.strip()
+    db.commit()
+    return _user_out(user)
+
+
 def _user_out(user: User) -> dict:
     return {
         "account_id": user.account_id,

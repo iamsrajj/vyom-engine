@@ -2799,11 +2799,47 @@
                 style="width: 100%; height: 100%; object-fit: cover"
               />
             </div>
-            <div style="font-size: 12px; font-weight: 600">Beta Access</div>
+            <div style="font-size: 12px; font-weight: 600">AgriDoot App</div>
             <div
-              style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px"
+              style="
+                font-size: 10.5px;
+                color: var(--text-dim);
+                margin: 2px 0 10px;
+              "
             >
-              Invite-only &middot; all features unlocked
+              Take Vyom GIS with you everywhere, anytime.
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <a
+                class="btn"
+                style="
+                  font-size: 11px;
+                  padding: 7px;
+                  text-decoration: none;
+                  display: block;
+                  box-sizing: border-box;
+                "
+                href="https://play.google.com/store/apps/details?id=com.novosedge.agridoot"
+                target="_blank"
+                rel="noopener"
+              >
+                Get it on Google Play
+              </a>
+              <a
+                class="btn"
+                style="
+                  font-size: 11px;
+                  padding: 7px;
+                  text-decoration: none;
+                  display: block;
+                  box-sizing: border-box;
+                "
+                href="https://play.google.com/store/apps/details?id=com.novosedge.agridoot"
+                target="_blank"
+                rel="noopener"
+              >
+                Download on the App Store
+              </a>
             </div>
           </div>
         </div>
@@ -2938,6 +2974,58 @@
               </button>
             </div>
             <div class="field-grid" id="myfields-grid"></div>
+          </div>
+        </div>
+
+        <div
+          class="modal-overlay"
+          id="logout-confirm-modal"
+          style="display: none"
+        >
+          <div class="modal-card" style="max-width: 360px">
+            <div class="modal-header">
+              <h3>Sign out?</h3>
+              <button
+                class="icon-btn"
+                onclick="dismissLogoutConfirm()"
+                aria-label="Close"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p
+                style="
+                  margin: 0 0 18px;
+                  color: var(--text-dim);
+                  font-size: 14px;
+                "
+              >
+                You'll need to sign in again to access your dashboard.
+              </p>
+              <div style="display: flex; gap: 10px; justify-content: flex-end">
+                <button
+                  class="btn"
+                  style="width: auto"
+                  onclick="dismissLogoutConfirm()"
+                >
+                  Cancel
+                </button>
+                <button
+                  class="btn btn-primary"
+                  style="width: auto"
+                  onclick="handleLogout()"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3463,30 +3551,33 @@
         <!-- /#page-imagery -->
 
         <div class="page-view" id="page-comparisons" style="display: none">
-          <h2 style="margin: 0 0 4px">Comparisons</h2>
+          <h2 style="margin: 0 0 6px">Comparisons</h2>
           <p style="color: var(--text-dim); margin: 0 0 20px">
             Pick a field and two dates to see every index side by side, or
             filter down to just the indices you care about.
           </p>
-          <div class="card" style="padding: 18px; margin-bottom: 18px">
+          <div class="card" style="padding: 20px; margin-bottom: 20px">
             <div
               style="
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                gap: 12px;
+                grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                gap: 16px;
                 align-items: end;
               "
             >
-              <div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Field</label
                 >
                 <select
                   id="cmp-farm-select"
-                  onchange="loadCompareDates()"
+                  onchange="
+                    loadCompareDates();
+                    fitCompareMapToSelectedFarm();
+                  "
                 ></select>
               </div>
-              <div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Reference index (for date list)</label
                 >
@@ -3495,23 +3586,27 @@
                   onchange="loadCompareDates()"
                 ></select>
               </div>
-              <div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Date A</label
                 >
                 <select id="cmp-date-a"></select>
               </div>
-              <div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Date B</label
                 >
                 <select id="cmp-date-b"></select>
               </div>
-              <button class="btn btn-primary" onclick="runComparison()">
+              <button
+                class="btn btn-primary"
+                style="height: 38px"
+                onclick="runComparison()"
+              >
                 Compare
               </button>
             </div>
-            <div style="margin-top: 12px">
+            <div style="margin-top: 16px">
               <input
                 type="text"
                 id="cmp-filter"
@@ -3521,17 +3616,182 @@
               />
             </div>
           </div>
-          <div id="cmp-results"></div>
+
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 320px 1fr;
+              gap: 20px;
+              align-items: start;
+            "
+          >
+            <div class="card" style="padding: 0; overflow: hidden">
+              <div
+                style="
+                  padding: 14px 16px 0;
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--text-dim);
+                "
+              >
+                Field location
+              </div>
+              <div
+                id="cmp-map-slot"
+                style="height: 260px; margin-top: 10px"
+              ></div>
+            </div>
+            <div id="cmp-results"></div>
+          </div>
         </div>
 
         <div class="page-view" id="page-settings" style="display: none">
           <h2 style="margin: 0 0 4px">Settings</h2>
           <p style="color: var(--text-dim); margin: 0 0 20px">
             Preferences beyond your account info aren't built yet -- there's no
-            persisted user-settings concept in the backend besides the profile
-            fields below.
+            persisted user-settings concept in the backend yet.
           </p>
-          <div class="card" style="max-width: 560px; padding: 20px">
+          <div class="card" style="max-width: 620px; padding: 22px">
+            <h3 style="margin: 0 0 18px">Profile Information</h3>
+            <div style="display: flex; gap: 18px; margin-bottom: 4px">
+              <div style="position: relative; flex: none">
+                <img
+                  id="settings-avatar"
+                  src=""
+                  alt=""
+                  style="
+                    width: 72px;
+                    height: 72px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    border: 2px solid var(--border);
+                  "
+                />
+                <button
+                  class="icon-btn"
+                  style="
+                    position: absolute;
+                    bottom: -2px;
+                    right: -2px;
+                    width: 26px;
+                    height: 26px;
+                    background: var(--canopy);
+                    border-radius: 50%;
+                  "
+                  onclick="showHonestPlaceholder('Changing your profile photo')"
+                  aria-label="Change photo"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    stroke="#0f1b14"
+                    fill="none"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    width="14"
+                    height="14"
+                  >
+                    <path
+                      d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                    />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </button>
+              </div>
+              <div style="flex: 1; display: grid; gap: 12px">
+                <div>
+                  <label style="font-size: 12px; color: var(--text-dim)"
+                    >Full Name</label
+                  >
+                  <input type="text" id="settings-name" />
+                </div>
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                  "
+                >
+                  <div>
+                    <label style="font-size: 12px; color: var(--text-dim)"
+                      >Email</label
+                    >
+                    <input type="text" id="settings-email" disabled />
+                  </div>
+                  <div>
+                    <label style="font-size: 12px; color: var(--text-dim)"
+                      >Phone Number</label
+                    >
+                    <input type="text" id="settings-phone" disabled />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              id="settings-link-google-row"
+              style="display: none; margin: 4px 0 14px"
+            >
+              <button
+                class="btn"
+                style="width: auto; font-size: 12.5px"
+                onclick="promptLinkGoogle()"
+              >
+                + Link a Gmail address
+              </button>
+            </div>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                margin-top: 10px;
+              "
+            >
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Organization</label
+                >
+                <input type="text" id="settings-organization" />
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-dim)"
+                  >Designation</label
+                >
+                <input type="text" id="settings-designation" />
+              </div>
+            </div>
+            <div style="margin-top: 12px">
+              <label style="font-size: 12px; color: var(--text-dim)"
+                >Location</label
+              >
+              <input type="text" id="settings-address" />
+            </div>
+            <div
+              style="
+                margin-top: 18px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+              "
+            >
+              <button
+                class="btn btn-primary"
+                style="width: auto"
+                onclick="saveProfileSettings()"
+              >
+                Save Changes
+              </button>
+              <span
+                id="settings-save-status"
+                style="font-size: 12.5px; color: var(--text-dim)"
+              ></span>
+            </div>
+          </div>
+
+          <div
+            class="card"
+            style="max-width: 620px; padding: 20px; margin-top: 18px"
+          >
             <h3 style="margin: 0 0 14px">Account</h3>
             <div
               id="account-info-grid"
@@ -4150,9 +4410,11 @@
       function confirmLogout() {
         document.getElementById("user-menu").style.display = "none";
         document.getElementById("user-chip").classList.remove("open");
-        if (confirm("Are you sure you want to sign out?")) {
-          handleLogout();
-        }
+        document.getElementById("logout-confirm-modal").style.display = "flex";
+      }
+
+      function dismissLogoutConfirm() {
+        document.getElementById("logout-confirm-modal").style.display = "none";
       }
 
       // ================= API helper (auto-attaches session token) =================
@@ -4738,6 +5000,24 @@
           el.classList.toggle("active", el.dataset.page === pageName);
         });
         closeMobileNav();
+        // The single shared #map (see openDrawFieldModal's comment) also gets
+        // reparented into Comparisons for the field-location preview there --
+        // move it back to Imagery & Indices whenever leaving Comparisons so
+        // that page isn't left without its map.
+        const mapEl = document.getElementById("map");
+        if (pageName === "comparisons" && mapEl) {
+          document.getElementById("cmp-map-slot").appendChild(mapEl);
+          setTimeout(() => {
+            if (map) google.maps.event.trigger(map, "resize");
+            fitCompareMapToSelectedFarm();
+          }, 50);
+        } else if (
+          mapEl &&
+          mapEl.parentElement &&
+          mapEl.parentElement.id === "cmp-map-slot"
+        ) {
+          document.getElementById("page-imagery").appendChild(mapEl);
+        }
         // The map needs a resize nudge after being hidden/shown -- Google Maps
         // doesn't know its container's size changed while display:none.
         if (pageName === "imagery" && map) {
@@ -4892,6 +5172,14 @@
       // toggle needed, since neither request excludes the other.
       let compareLastResult = null; // { indices: [{name, a, b}] } from the most recent runComparison()
 
+      function fitCompareMapToSelectedFarm() {
+        if (!map) return;
+        const farmId = document.getElementById("cmp-farm-select").value;
+        const farm = farms.find((f) => f.id === farmId);
+        if (!farm) return;
+        map.fitBounds(geoJSONBounds(farm.geometry), 40);
+      }
+
       function renderComparisonsPage() {
         const farmSel = document.getElementById("cmp-farm-select");
         const previousFarm = farmSel.value;
@@ -5023,43 +5311,45 @@
           return;
         }
         container.innerHTML = `
-          <div class="card" style="overflow-x: auto; padding: 0">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
-              <thead>
-                <tr style="text-align: left; border-bottom: 1px solid var(--border)">
-                  <th style="padding: 10px 14px">Index</th>
-                  <th style="padding: 10px 14px">${new Date(compareLastResult.dateA).toLocaleDateString()}</th>
-                  <th style="padding: 10px 14px">${new Date(compareLastResult.dateB).toLocaleDateString()}</th>
-                  <th style="padding: 10px 14px">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows
-                  .map((row) => {
-                    const a = row.a.value;
-                    const b = row.b.value;
-                    let delta = "--";
-                    if (a != null && b != null) {
-                      const diff = b - a;
-                      const color =
-                        diff > 0
-                          ? "var(--canopy-bright)"
-                          : diff < 0
-                            ? "#d9534f"
-                            : "var(--text-dim)";
-                      delta = `<span style="color: ${color}">${diff >= 0 ? "+" : ""}${diff.toFixed(4)}</span>`;
-                    }
-                    return `
+          <div class="card" style="padding: 0; overflow: hidden">
+            <div style="max-height: 520px; overflow-y: auto; overflow-x: auto">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
+                <thead>
+                  <tr style="text-align: left; border-bottom: 1px solid var(--border)">
+                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">Index</th>
+                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">${new Date(compareLastResult.dateA).toLocaleDateString()}</th>
+                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">${new Date(compareLastResult.dateB).toLocaleDateString()}</th>
+                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows
+                    .map((row) => {
+                      const a = row.a.value;
+                      const b = row.b.value;
+                      let delta = "--";
+                      if (a != null && b != null) {
+                        const diff = b - a;
+                        const color =
+                          diff > 0
+                            ? "var(--canopy-bright)"
+                            : diff < 0
+                              ? "var(--danger)"
+                              : "var(--text-dim)";
+                        delta = `<span style="color: ${color}">${diff >= 0 ? "+" : ""}${diff.toFixed(4)}</span>`;
+                      }
+                      return `
                     <tr style="border-bottom: 1px solid var(--border)">
-                      <td style="padding: 9px 14px">${row.name.replace(/_/g, " ")}</td>
-                      <td style="padding: 9px 14px">${fmt(a)} ${sourceTag(row.a.source)}</td>
-                      <td style="padding: 9px 14px">${fmt(b)} ${sourceTag(row.b.source)}</td>
-                      <td style="padding: 9px 14px">${delta}</td>
+                      <td style="padding: 10px 16px">${row.name.replace(/_/g, " ")}</td>
+                      <td style="padding: 10px 16px">${fmt(a)} ${sourceTag(row.a.source)}</td>
+                      <td style="padding: 10px 16px">${fmt(b)} ${sourceTag(row.b.source)}</td>
+                      <td style="padding: 10px 16px">${delta}</td>
                     </tr>`;
-                  })
-                  .join("")}
-              </tbody>
-            </table>
+                    })
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
           </div>
         `;
       }
@@ -6062,6 +6352,52 @@
           row("Organization", info.organization) +
           row("Designation", info.designation) +
           row("Address", info.address);
+
+        document.getElementById("settings-avatar").src =
+          info.profile_img_url || DEFAULT_AVATAR_URL;
+        document.getElementById("settings-name").value = info.name || "";
+        document.getElementById("settings-email").value =
+          info.email || "Not linked";
+        document.getElementById("settings-phone").value = info.phone
+          ? `+${info.phone_cc || "91"} ${info.phone}`
+          : "Not set";
+        document.getElementById("settings-organization").value =
+          info.organization || "";
+        document.getElementById("settings-designation").value =
+          info.designation || "";
+        document.getElementById("settings-address").value = info.address || "";
+        document.getElementById("settings-link-google-row").style.display =
+          info.email ? "none" : "block";
+      }
+
+      async function saveProfileSettings() {
+        const statusEl = document.getElementById("settings-save-status");
+        statusEl.textContent = "Saving...";
+        try {
+          const updated = await api("/auth/me", {
+            method: "PATCH",
+            body: JSON.stringify({
+              name: document.getElementById("settings-name").value.trim(),
+              organization: document
+                .getElementById("settings-organization")
+                .value.trim(),
+              designation: document
+                .getElementById("settings-designation")
+                .value.trim(),
+              address: document.getElementById("settings-address").value.trim(),
+            }),
+          });
+          currentAccountInfo = updated;
+          renderAccountSettings(updated);
+          document.getElementById("user-name-label").textContent =
+            updated.name || updated.account_id || "";
+          statusEl.textContent = "Saved.";
+          setTimeout(() => {
+            if (statusEl.textContent === "Saved.") statusEl.textContent = "";
+          }, 2500);
+        } catch (e) {
+          statusEl.textContent = "Could not save -- try again.";
+        }
       }
 
       // Visible countdown to the fixed session expiry (not activity-based --
