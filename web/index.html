@@ -2809,36 +2809,35 @@
             >
               Take Vyom GIS with you everywhere, anytime.
             </div>
-            <div style="display: flex; flex-direction: column; gap: 6px">
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                align-items: center;
+              "
+            >
               <a
-                class="btn"
-                style="
-                  font-size: 11px;
-                  padding: 7px;
-                  text-decoration: none;
-                  display: block;
-                  box-sizing: border-box;
-                "
                 href="https://play.google.com/store/apps/details?id=com.novosedge.agridoot"
                 target="_blank"
                 rel="noopener"
               >
-                Get it on Google Play
+                <img
+                  src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+                  alt="Get it on Google Play"
+                  style="height: 40px"
+                />
               </a>
               <a
-                class="btn"
-                style="
-                  font-size: 11px;
-                  padding: 7px;
-                  text-decoration: none;
-                  display: block;
-                  box-sizing: border-box;
-                "
                 href="https://play.google.com/store/apps/details?id=com.novosedge.agridoot"
                 target="_blank"
                 rel="noopener"
               >
-                Download on the App Store
+                <img
+                  src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                  alt="Download on the App Store"
+                  style="height: 40px"
+                />
               </a>
             </div>
           </div>
@@ -3553,8 +3552,8 @@
         <div class="page-view" id="page-comparisons" style="display: none">
           <h2 style="margin: 0 0 6px">Comparisons</h2>
           <p style="color: var(--text-dim); margin: 0 0 20px">
-            Pick a field and two dates to see every index side by side, or
-            filter down to just the indices you care about.
+            Pick a field, an index, and two dates -- the map and the numbers for
+            both dates load side by side automatically.
           </p>
           <div class="card" style="padding: 20px; margin-bottom: 20px">
             <div
@@ -3579,7 +3578,7 @@
               </div>
               <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
-                  >Reference index (for date list)</label
+                  >Index</label
                 >
                 <select
                   id="cmp-index-select"
@@ -3590,59 +3589,58 @@
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Date A</label
                 >
-                <select id="cmp-date-a"></select>
+                <select id="cmp-date-a" onchange="runComparison()"></select>
               </div>
               <div style="display: flex; flex-direction: column; gap: 6px">
                 <label style="font-size: 12px; color: var(--text-dim)"
                   >Date B</label
                 >
-                <select id="cmp-date-b"></select>
+                <select id="cmp-date-b" onchange="runComparison()"></select>
               </div>
-              <button
-                class="btn btn-primary"
-                style="height: 38px"
-                onclick="runComparison()"
-              >
-                Compare
-              </button>
-            </div>
-            <div style="margin-top: 16px">
-              <input
-                type="text"
-                id="cmp-filter"
-                placeholder="Filter indices (e.g. NDVI, NDWI)..."
-                oninput="renderComparisonResults()"
-                style="max-width: 320px"
-              />
             </div>
           </div>
 
           <div
             style="
               display: grid;
-              grid-template-columns: 320px 1fr;
+              grid-template-columns: 1fr 1fr;
               gap: 20px;
-              align-items: start;
+              margin-bottom: 20px;
             "
           >
             <div class="card" style="padding: 0; overflow: hidden">
               <div
+                id="cmp-map-a-label"
                 style="
-                  padding: 14px 16px 0;
+                  padding: 12px 16px;
                   font-size: 13px;
                   font-weight: 600;
                   color: var(--text-dim);
+                  border-bottom: 1px solid var(--border);
                 "
               >
-                Field location
+                Date A
               </div>
-              <div
-                id="cmp-map-slot"
-                style="height: 260px; margin-top: 10px"
-              ></div>
+              <div id="cmp-map-a" style="height: 300px"></div>
             </div>
-            <div id="cmp-results"></div>
+            <div class="card" style="padding: 0; overflow: hidden">
+              <div
+                id="cmp-map-b-label"
+                style="
+                  padding: 12px 16px;
+                  font-size: 13px;
+                  font-weight: 600;
+                  color: var(--text-dim);
+                  border-bottom: 1px solid var(--border);
+                "
+              >
+                Date B
+              </div>
+              <div id="cmp-map-b" style="height: 300px"></div>
+            </div>
           </div>
+
+          <div id="cmp-results"></div>
         </div>
 
         <div class="page-view" id="page-settings" style="display: none">
@@ -3651,158 +3649,167 @@
             Preferences beyond your account info aren't built yet -- there's no
             persisted user-settings concept in the backend yet.
           </p>
-          <div class="card" style="max-width: 620px; padding: 22px">
-            <h3 style="margin: 0 0 18px">Profile Information</h3>
-            <div style="display: flex; gap: 18px; margin-bottom: 4px">
-              <div style="position: relative; flex: none">
-                <img
-                  id="settings-avatar"
-                  src=""
-                  alt=""
-                  style="
-                    width: 72px;
-                    height: 72px;
-                    border-radius: 50%;
-                    object-fit: cover;
-                    border: 2px solid var(--border);
-                  "
-                />
-                <button
-                  class="icon-btn"
-                  style="
-                    position: absolute;
-                    bottom: -2px;
-                    right: -2px;
-                    width: 26px;
-                    height: 26px;
-                    background: var(--canopy);
-                    border-radius: 50%;
-                  "
-                  onclick="showHonestPlaceholder('Changing your profile photo')"
-                  aria-label="Change photo"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    stroke="#0f1b14"
-                    fill="none"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    width="14"
-                    height="14"
+          <div
+            style="
+              display: grid;
+              grid-template-columns: 1fr 260px;
+              gap: 20px;
+              align-items: start;
+            "
+          >
+            <div class="card" style="padding: 22px">
+              <h3 style="margin: 0 0 18px">Profile Information</h3>
+              <div style="display: flex; gap: 18px; margin-bottom: 4px">
+                <div style="position: relative; flex: none">
+                  <img
+                    id="settings-avatar"
+                    src=""
+                    alt=""
+                    style="
+                      width: 72px;
+                      height: 72px;
+                      border-radius: 50%;
+                      object-fit: cover;
+                      border: 2px solid var(--border);
+                    "
+                  />
+                  <button
+                    class="icon-btn"
+                    style="
+                      position: absolute;
+                      bottom: -2px;
+                      right: -2px;
+                      width: 26px;
+                      height: 26px;
+                      background: var(--canopy);
+                      border-radius: 50%;
+                    "
+                    onclick="
+                      showHonestPlaceholder('Changing your profile photo')
+                    "
+                    aria-label="Change photo"
                   >
-                    <path
-                      d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                    />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke="#0f1b14"
+                      fill="none"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      width="14"
+                      height="14"
+                    >
+                      <path
+                        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+                      />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                  </button>
+                </div>
+                <div style="flex: 1; display: grid; gap: 12px">
+                  <div>
+                    <label style="font-size: 12px; color: var(--text-dim)"
+                      >Full Name</label
+                    >
+                    <input type="text" id="settings-name" />
+                  </div>
+                  <div
+                    style="
+                      display: grid;
+                      grid-template-columns: 1fr 1fr;
+                      gap: 12px;
+                    "
+                  >
+                    <div>
+                      <label style="font-size: 12px; color: var(--text-dim)"
+                        >Email</label
+                      >
+                      <input type="text" id="settings-email" disabled />
+                    </div>
+                    <div>
+                      <label style="font-size: 12px; color: var(--text-dim)"
+                        >Phone Number</label
+                      >
+                      <input type="text" id="settings-phone" disabled />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div
+                id="settings-link-google-row"
+                style="display: none; margin: 4px 0 14px"
+              >
+                <button
+                  class="btn"
+                  style="width: auto; font-size: 12.5px"
+                  onclick="promptLinkGoogle()"
+                >
+                  + Link a Gmail address
                 </button>
               </div>
-              <div style="flex: 1; display: grid; gap: 12px">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 12px;
+                  margin-top: 10px;
+                "
+              >
                 <div>
                   <label style="font-size: 12px; color: var(--text-dim)"
-                    >Full Name</label
+                    >Organization</label
                   >
-                  <input type="text" id="settings-name" />
+                  <input type="text" id="settings-organization" />
                 </div>
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 12px;
-                  "
-                >
-                  <div>
-                    <label style="font-size: 12px; color: var(--text-dim)"
-                      >Email</label
-                    >
-                    <input type="text" id="settings-email" disabled />
-                  </div>
-                  <div>
-                    <label style="font-size: 12px; color: var(--text-dim)"
-                      >Phone Number</label
-                    >
-                    <input type="text" id="settings-phone" disabled />
-                  </div>
+                <div>
+                  <label style="font-size: 12px; color: var(--text-dim)"
+                    >Designation</label
+                  >
+                  <input type="text" id="settings-designation" />
                 </div>
               </div>
-            </div>
-            <div
-              id="settings-link-google-row"
-              style="display: none; margin: 4px 0 14px"
-            >
-              <button
-                class="btn"
-                style="width: auto; font-size: 12.5px"
-                onclick="promptLinkGoogle()"
-              >
-                + Link a Gmail address
-              </button>
-            </div>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-                margin-top: 10px;
-              "
-            >
-              <div>
+              <div style="margin-top: 12px">
                 <label style="font-size: 12px; color: var(--text-dim)"
-                  >Organization</label
+                  >Location</label
                 >
-                <input type="text" id="settings-organization" />
+                <input type="text" id="settings-address" />
               </div>
-              <div>
-                <label style="font-size: 12px; color: var(--text-dim)"
-                  >Designation</label
+              <div
+                style="
+                  margin-top: 18px;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                "
+              >
+                <button
+                  class="btn btn-primary"
+                  style="width: auto"
+                  onclick="saveProfileSettings()"
                 >
-                <input type="text" id="settings-designation" />
+                  Save Changes
+                </button>
+                <span
+                  id="settings-save-status"
+                  style="font-size: 12.5px; color: var(--text-dim)"
+                ></span>
               </div>
             </div>
-            <div style="margin-top: 12px">
-              <label style="font-size: 12px; color: var(--text-dim)"
-                >Location</label
-              >
-              <input type="text" id="settings-address" />
-            </div>
-            <div
-              style="
-                margin-top: 18px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-              "
-            >
-              <button
-                class="btn btn-primary"
-                style="width: auto"
-                onclick="saveProfileSettings()"
-              >
-                Save Changes
-              </button>
-              <span
-                id="settings-save-status"
-                style="font-size: 12.5px; color: var(--text-dim)"
-              ></span>
-            </div>
-          </div>
 
-          <div
-            class="card"
-            style="max-width: 620px; padding: 20px; margin-top: 18px"
-          >
-            <h3 style="margin: 0 0 14px">Account</h3>
-            <div
-              id="account-info-grid"
-              style="
-                display: grid;
-                grid-template-columns: 140px 1fr;
-                row-gap: 12px;
-                font-size: 14px;
-              "
-            >
-              <!-- populated by renderAccountSettings() -->
+            <div class="card" style="padding: 20px">
+              <h3 style="margin: 0 0 14px">Account</h3>
+              <div
+                id="account-info-grid"
+                style="
+                  display: grid;
+                  grid-template-columns: auto 1fr;
+                  column-gap: 10px;
+                  row-gap: 12px;
+                  font-size: 14px;
+                "
+              >
+                <!-- populated by renderAccountSettings() -->
+              </div>
             </div>
           </div>
         </div>
@@ -5000,23 +5007,14 @@
           el.classList.toggle("active", el.dataset.page === pageName);
         });
         closeMobileNav();
-        // The single shared #map (see openDrawFieldModal's comment) also gets
-        // reparented into Comparisons for the field-location preview there --
-        // move it back to Imagery & Indices whenever leaving Comparisons so
-        // that page isn't left without its map.
-        const mapEl = document.getElementById("map");
-        if (pageName === "comparisons" && mapEl) {
-          document.getElementById("cmp-map-slot").appendChild(mapEl);
+        // Comparisons' own maps (cmpMapA/cmpMapB) need a resize nudge too,
+        // same reason as the main map below -- Google Maps doesn't know its
+        // container resized while display:none.
+        if (pageName === "comparisons") {
           setTimeout(() => {
-            if (map) google.maps.event.trigger(map, "resize");
-            fitCompareMapToSelectedFarm();
+            if (cmpMapA) google.maps.event.trigger(cmpMapA, "resize");
+            if (cmpMapB) google.maps.event.trigger(cmpMapB, "resize");
           }, 50);
-        } else if (
-          mapEl &&
-          mapEl.parentElement &&
-          mapEl.parentElement.id === "cmp-map-slot"
-        ) {
-          document.getElementById("page-imagery").appendChild(mapEl);
         }
         // The map needs a resize nudge after being hidden/shown -- Google Maps
         // doesn't know its container's size changed while display:none.
@@ -5164,20 +5162,53 @@
           : `<div class="empty-state">${farms.length ? "No fields match your search." : 'No fields yet -- click "+ Add New Field" to draw one.'}</div>`;
       }
 
-      // ================= Comparisons (item 10: index-vs-index / date-vs-date) =================
-      // One table does both jobs at once: the two columns ARE the date
-      // comparison, and every row is an index -- so filtering rows down to
-      // just the indices someone cares about is "compare indices", and
-      // picking two different dates is "compare dates". No separate mode
-      // toggle needed, since neither request excludes the other.
-      let compareLastResult = null; // { indices: [{name, a, b}] } from the most recent runComparison()
+      // ================= Comparisons =================
+      // Scoped to exactly one index at a time (whatever's picked in
+      // cmp-index-select) rather than showing all 30+ indices -- the two
+      // dates are the comparison; the index selector decides which one.
+      // Two independent Google Maps instances (not the single shared #map
+      // used elsewhere) so both dates' tile overlays can render at once,
+      // side by side.
+      let compareLastResult = null; // { dateA, dateB, index, platform, a, b } from the most recent runComparison()
+      let cmpMapA = null;
+      let cmpMapB = null;
+
+      function ensureCompareMaps() {
+        if (!window.google || !google.maps) return false;
+        if (!cmpMapA) {
+          cmpMapA = new google.maps.Map(document.getElementById("cmp-map-a"), {
+            mapTypeId: "satellite",
+            disableDefaultUI: true,
+            zoomControl: true,
+          });
+        }
+        if (!cmpMapB) {
+          cmpMapB = new google.maps.Map(document.getElementById("cmp-map-b"), {
+            mapTypeId: "satellite",
+            disableDefaultUI: true,
+            zoomControl: true,
+          });
+        }
+        return true;
+      }
 
       function fitCompareMapToSelectedFarm() {
-        if (!map) return;
+        if (!ensureCompareMaps()) return;
         const farmId = document.getElementById("cmp-farm-select").value;
         const farm = farms.find((f) => f.id === farmId);
         if (!farm) return;
-        map.fitBounds(geoJSONBounds(farm.geometry), 40);
+        const bounds = geoJSONBounds(farm.geometry);
+        const paths = geoJSONToPaths(farm.geometry);
+        [cmpMapA, cmpMapB].forEach((m) => {
+          m.fitBounds(bounds, 30);
+          new google.maps.Polygon({
+            paths,
+            strokeColor: "#8fce76",
+            strokeWeight: 2,
+            fillOpacity: 0,
+            map: m,
+          });
+        });
       }
 
       function renderComparisonsPage() {
@@ -5219,7 +5250,10 @@
 
         compareLastResult = null;
         document.getElementById("cmp-results").innerHTML = "";
-        if (farmSel.value) loadCompareDates();
+        setTimeout(() => {
+          fitCompareMapToSelectedFarm();
+          if (farmSel.value) loadCompareDates();
+        }, 60); // let the page-view actually become visible first, or Maps sizes itself to a 0x0 container
       }
 
       async function loadCompareDates() {
@@ -5245,9 +5279,10 @@
             .join("");
           dateASel.innerHTML = options;
           dateBSel.innerHTML = options;
-          // Default to the two most recent dates so a first click on
-          // "Compare" is immediately useful rather than comparing a date to itself.
+          // Default to the two most recent dates so this is immediately
+          // useful without the person having to manually pick both.
           if (dates.length > 1) dateBSel.selectedIndex = 1;
+          runComparison();
         } catch (e) {
           showToast("Could not load dates for this field/index");
         }
@@ -5257,10 +5292,18 @@
         const farmId = document.getElementById("cmp-farm-select").value;
         const dateA = document.getElementById("cmp-date-a").value;
         const dateB = document.getElementById("cmp-date-b").value;
-        if (!farmId || !dateA || !dateB) {
-          showToast("Pick a field and both dates first");
-          return;
-        }
+        const [platform, index] = (
+          document.getElementById("cmp-index-select").value || ""
+        ).split("|");
+        if (!farmId || !dateA || !dateB || !index) return;
+
+        document.getElementById("cmp-map-a-label").textContent =
+          `${new Date(dateA).toLocaleDateString()} -- ${index.replace(/_/g, " ")}`;
+        document.getElementById("cmp-map-b-label").textContent =
+          `${new Date(dateB).toLocaleDateString()} -- ${index.replace(/_/g, " ")}`;
+        loadCompareTileLayer(cmpMapA, farmId, dateA, index, platform);
+        loadCompareTileLayer(cmpMapB, farmId, dateB, index, platform);
+
         document.getElementById("cmp-results").innerHTML =
           '<div class="empty-state">Loading...</div>';
         try {
@@ -5272,17 +5315,12 @@
               `/farms/${farmId}/latest?date=${encodeURIComponent(dateB)}&include_interpolated=true`,
             ),
           ]);
-          const allIndexNames = [
-            ...new Set([...Object.keys(snapA), ...Object.keys(snapB)]),
-          ];
           compareLastResult = {
             dateA,
             dateB,
-            indices: allIndexNames.map((name) => ({
-              name,
-              a: snapA[name] || { value: null, source: null },
-              b: snapB[name] || { value: null, source: null },
-            })),
+            index,
+            a: snapA[index] || { value: null, source: null },
+            b: snapB[index] || { value: null, source: null },
           };
           renderComparisonResults();
         } catch (e) {
@@ -5291,65 +5329,77 @@
         }
       }
 
+      // One ImageMapType per comparison map -- tracked per-map so switching
+      // dates/index replaces just that map's overlay instead of stacking a
+      // new layer on top every time.
+      const _cmpTileLayers = new WeakMap();
+      function loadCompareTileLayer(
+        mapInstance,
+        farmId,
+        date,
+        index,
+        platform,
+      ) {
+        if (!mapInstance) return;
+        const existing = _cmpTileLayers.get(mapInstance);
+        if (existing) {
+          const idx = mapInstance.overlayMapTypes.getArray().indexOf(existing);
+          if (idx !== -1) mapInstance.overlayMapTypes.removeAt(idx);
+        }
+        const layer = new google.maps.ImageMapType({
+          getTileUrl: (coord, zoom) => {
+            const numTiles = 1 << zoom;
+            let x = coord.x % numTiles;
+            if (x < 0) x += numTiles;
+            if (coord.y < 0 || coord.y >= numTiles) return null;
+            return `${API_BASE}/tiles/${farmId}/${encodeURIComponent(date)}/${zoom}/${x}/${coord.y}.png?index=${index}&platform=${platform}&include_interpolated=true${tileTokenParam()}`;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          name: index,
+        });
+        mapInstance.overlayMapTypes.push(layer);
+        _cmpTileLayers.set(mapInstance, layer);
+      }
+
       function renderComparisonResults() {
         if (!compareLastResult) return;
-        const filter = (
-          document.getElementById("cmp-filter").value || ""
-        ).toLowerCase();
-        const rows = compareLastResult.indices.filter((row) =>
-          row.name.toLowerCase().includes(filter),
-        );
+        const { a, b, index, dateA, dateB } = compareLastResult;
         const fmt = (v) => (v == null ? "--" : Number(v).toFixed(4));
         const sourceTag = (s) =>
           s
             ? `<span style="font-size: 10px; color: var(--text-dim)">${s}</span>`
             : "";
-        const container = document.getElementById("cmp-results");
-        if (!rows.length) {
-          container.innerHTML =
-            '<div class="empty-state">No indices match that filter.</div>';
-          return;
+        let delta = "--";
+        if (a.value != null && b.value != null) {
+          const diff = b.value - a.value;
+          const color =
+            diff > 0
+              ? "var(--canopy-bright)"
+              : diff < 0
+                ? "var(--danger)"
+                : "var(--text-dim)";
+          delta = `<span style="color: ${color}">${diff >= 0 ? "+" : ""}${diff.toFixed(4)}</span>`;
         }
-        container.innerHTML = `
+        document.getElementById("cmp-results").innerHTML = `
           <div class="card" style="padding: 0; overflow: hidden">
-            <div style="max-height: 520px; overflow-y: auto; overflow-x: auto">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
-                <thead>
-                  <tr style="text-align: left; border-bottom: 1px solid var(--border)">
-                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">Index</th>
-                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">${new Date(compareLastResult.dateA).toLocaleDateString()}</th>
-                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">${new Date(compareLastResult.dateB).toLocaleDateString()}</th>
-                    <th style="padding: 12px 16px; position: sticky; top: 0; background: var(--bg-panel-2); z-index: 1">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows
-                    .map((row) => {
-                      const a = row.a.value;
-                      const b = row.b.value;
-                      let delta = "--";
-                      if (a != null && b != null) {
-                        const diff = b - a;
-                        const color =
-                          diff > 0
-                            ? "var(--canopy-bright)"
-                            : diff < 0
-                              ? "var(--danger)"
-                              : "var(--text-dim)";
-                        delta = `<span style="color: ${color}">${diff >= 0 ? "+" : ""}${diff.toFixed(4)}</span>`;
-                      }
-                      return `
-                    <tr style="border-bottom: 1px solid var(--border)">
-                      <td style="padding: 10px 16px">${row.name.replace(/_/g, " ")}</td>
-                      <td style="padding: 10px 16px">${fmt(a)} ${sourceTag(row.a.source)}</td>
-                      <td style="padding: 10px 16px">${fmt(b)} ${sourceTag(row.b.source)}</td>
-                      <td style="padding: 10px 16px">${delta}</td>
-                    </tr>`;
-                    })
-                    .join("")}
-                </tbody>
-              </table>
-            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px">
+              <thead>
+                <tr style="text-align: left; border-bottom: 1px solid var(--border)">
+                  <th style="padding: 12px 16px">Index</th>
+                  <th style="padding: 12px 16px">${new Date(dateA).toLocaleDateString()}</th>
+                  <th style="padding: 12px 16px">${new Date(dateB).toLocaleDateString()}</th>
+                  <th style="padding: 12px 16px">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 10px 16px">${index.replace(/_/g, " ")}</td>
+                  <td style="padding: 10px 16px">${fmt(a.value)} ${sourceTag(a.source)}</td>
+                  <td style="padding: 10px 16px">${fmt(b.value)} ${sourceTag(b.source)}</td>
+                  <td style="padding: 10px 16px">${delta}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         `;
       }
@@ -6341,17 +6391,7 @@
           <div style="color: var(--text-dim)">${label}</div>
           <div>${value != null && value !== "" ? value : '<span style="color:var(--text-dim)">Not set</span>'}</div>
         `;
-        grid.innerHTML =
-          row("Account ID", info.account_id) +
-          row("Name", info.name) +
-          row("Email", info.email) +
-          row(
-            "Phone",
-            info.phone ? `+${info.phone_cc || "91"} ${info.phone}` : null,
-          ) +
-          row("Organization", info.organization) +
-          row("Designation", info.designation) +
-          row("Address", info.address);
+        grid.innerHTML = row("Account ID", info.account_id);
 
         document.getElementById("settings-avatar").src =
           info.profile_img_url || DEFAULT_AVATAR_URL;
