@@ -27,6 +27,39 @@ logger = logging.getLogger("vyom.geometry_utils")
 _SNAP_GRID_DEG = 0.00001
 
 
+def has_defect(geometry: dict) -> bool:
+    """True if this raw GeoJSON polygon actually has the defect
+    sanitize_polygon_geojson exists to fix: a near-duplicate-but-not-exact
+    consecutive vertex pair within ~1m of each other (anywhere in the ring,
+    including the pair right before the ring's normal closing point), or
+    general topological invalidity.
+
+    Deliberately does NOT compare sanitize_polygon_geojson's output against
+    the original -- shapely.set_precision() can renumber which vertex a
+    ring starts at and reformat float precision even on an already-clean
+    polygon, which would make a plain equality check misfire as "changed"
+    on every single polygon, clean or not. This checks the raw input
+    directly instead, so maintenance tooling only touches farms that
+    actually need it."""
+    poly = shape(geometry)
+    if poly.geom_type != "Polygon":
+        return True
+    if not poly.is_valid:
+        return True
+
+    rings = [list(poly.exterior.coords)] + \
+        [list(ring.coords) for ring in poly.interiors]
+    for coords in rings:
+        for i in range(len(coords) - 1):
+            p1, p2 = coords[i], coords[i + 1]
+            if p1 == p2:
+                # exact duplicate (e.g. the ring's normal closing point) -- fine
+                continue
+            if abs(p1[0] - p2[0]) <= _SNAP_GRID_DEG and abs(p1[1] - p2[1]) <= _SNAP_GRID_DEG:
+                return True
+    return False
+
+
 def sanitize_polygon_geojson(geometry: dict) -> dict:
     """Cleans a GeoJSON Polygon dict for storage/CDSE use:
       1. snaps coordinates to a ~1m grid, collapsing near-duplicate vertices

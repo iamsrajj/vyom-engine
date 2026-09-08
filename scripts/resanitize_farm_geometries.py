@@ -23,7 +23,7 @@ from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import mapping, shape
 
 from vyom.db import SessionLocal
-from vyom.geometry_utils import sanitize_polygon_geojson
+from vyom.geometry_utils import has_defect, sanitize_polygon_geojson
 from vyom.models import Polygon
 from vyom.tasks import refresh_farm
 
@@ -40,6 +40,17 @@ def main(dry_run: bool = False):
 
         for farm in farms:
             original_geojson = mapping(to_shape(farm.geom))
+
+            # Check the raw geometry directly for the actual defect, rather
+            # than comparing sanitize_polygon_geojson's output against the
+            # original -- shapely.set_precision() renumbers/reformats every
+            # ring's coordinates (even an already-clean one), which made an
+            # earlier version of this script misreport every farm as
+            # "needing a fix" regardless of whether it actually did.
+            if not has_defect(original_geojson):
+                unchanged += 1
+                continue
+
             try:
                 clean_geojson = sanitize_polygon_geojson(original_geojson)
             except ValueError as exc:
@@ -49,10 +60,6 @@ def main(dry_run: bool = False):
                     "This one needs manual redraw, not just resanitizing.",
                     farm.id, farm.name, exc,
                 )
-                continue
-
-            if clean_geojson == original_geojson:
-                unchanged += 1
                 continue
 
             fixed += 1
