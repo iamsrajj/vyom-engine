@@ -45,6 +45,21 @@ class Settings(BaseSettings):
     # Discovery defaults — Sentinel-2 (optical)
     default_max_cloud_cover: float = 40.0
 
+    # First-fetch defaults: what a brand-new farm (or a draft's finalized
+    # real boundary) automatically requests the instant its geometry is
+    # known, with no frontend control over these two values anymore (see
+    # _backfill_and_dispatch_refresh in api/farms.py) -- a wide one-time
+    # historical backfill (1 year) at a generous cloud-cover ceiling (85%)
+    # so a new farm gets as much real history as CDSE has, rather than only
+    # whatever narrow slice the old 30-day/40%-cloud UI-driven defaults
+    # happened to catch. The standing background sweep (poll_all_farms,
+    # every 6h via celery beat) still uses the tighter 30-day/
+    # default_max_cloud_cover values for ongoing incremental refreshes --
+    # those don't need to be wide, since they're just catching up on
+    # whatever's new since the last sweep.
+    initial_fetch_days_back: int = 365
+    initial_fetch_max_cloud_cover: float = 85.0
+
     # How much to pad a product's processing window for a genuine cold-start
     # farm (reuse-check found zero existing coverage nearby -- see
     # reuse_check.py) instead of the normal 0.005 deg (~500m) buffer in

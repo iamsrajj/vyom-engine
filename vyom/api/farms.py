@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from vyom.config import settings
 from vyom.auth import require_auth, stable_owner_uuid
 from vyom.db import get_db
+from vyom.geometry_utils import sanitize_polygon_geojson
 from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat, InterpolatedTile
 from vyom.processing.index_scale import scales_for_api
 from vyom.reuse_check import backfill_from_existing_products
@@ -102,6 +103,7 @@ class FarmOut(BaseModel):
     crop_age_days: Optional[int]
     geometry: dict
     is_draft: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -153,6 +155,7 @@ def _to_farm_out(farm: Polygon) -> FarmOut:
         crop_age_days=crop_age_days,
         geometry=mapping(to_shape(farm.geom)),
         is_draft=farm.is_draft,
+        created_at=_to_utc(farm.created_at),
     )
 
 
@@ -196,7 +199,16 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = 
     real person is waiting on this right now. priority=False MUST be used
     for any non-urgent/bulk dispatch (prewarm seeds) -- background work must
     never compete with a real farmer's request for the priority queues'
-    dedicated capacity (see deploy/vyom-celery-worker-priority.service)."""
+    dedicated capacity (see deploy/vyom-celery-worker-priority.service).
+
+    Always dispatches with settings.initial_fetch_days_back /
+    initial_fetch_max_cloud_cover (1 year / 85% cloud cover by default) --
+    this is the one-time wide historical backfill a farm's real geometry
+    gets the moment it's known, no longer configurable from the frontend
+    (see the removed Look back / Max cloud cover sliders in web/index.html).
+    The standing background sweep (poll_all_farms) is unaffected -- it
+    always calls refresh_farm with its own tighter 30-day defaults for
+    ongoing incremental catch-up, not this wide backfill window."""
     try:
         backfilled = backfill_from_existing_products(db, farm)
         if any(backfilled.values()):
@@ -210,14 +222,24 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = 
     cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
         if backfilled else ["S2", "S1"]
 
-    refresh_farm.delay(str(farm.id), priority=priority,
-                       cold_start_platforms=cold_start_platforms)
+    refresh_farm.delay(
+        str(farm.id),
+        None,
+        settings.initial_fetch_days_back,
+        settings.initial_fetch_max_cloud_cover,
+        priority=priority,
+        cold_start_platforms=cold_start_platforms,
+    )
     return backfilled
 
 
 @router.post("", response_model=FarmOut)
 def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
-    geom_shape = shape(payload.geometry)
+    try:
+        clean_geometry = sanitize_polygon_geojson(payload.geometry)
+    except ValueError as exc:
+        raise HTTPException(422, f"Invalid farm boundary: {exc}")
+    geom_shape = shape(clean_geometry)
     area_ha = _geodesic_area_ha(geom_shape)
 
     farm = Polygon(
@@ -268,7 +290,11 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, current_user: str = Dep
         setattr(farm, field, value)
 
     if payload.geometry is not None:
-        geom_shape = shape(payload.geometry)
+        try:
+            clean_geometry = sanitize_polygon_geojson(payload.geometry)
+        except ValueError as exc:
+            raise HTTPException(422, f"Invalid farm boundary: {exc}")
+        geom_shape = shape(clean_geometry)
         farm.geom = from_shape(geom_shape, srid=4326)
         farm.area_ha = _geodesic_area_ha(geom_shape)
         farm.is_draft = False
@@ -428,6 +454,48 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(),
         "days_back": payload.days_back,
         "max_cloud_cover": payload.max_cloud_cover,
         "priority": payload.priority,
+    }
+
+
+@router.get("/{farm_id}/status")
+def farm_status(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Whether this farm has any real satellite reading yet -- backs the
+    dashboard's "we're fetching your field's data" overlay (see
+    web/index.html), shown from farm creation until the first real reading
+    lands, since discovery -> download -> process -> stats for a brand-new
+    area can take up to ~12-18 hours (see tasks.refresh_farm).
+
+    progress_pct is a simple elapsed-time estimate for the progress bar --
+    NOT a real pipeline-stage progress percentage, since there's no cheap
+    way to know from here how many products/stages actually remain. It
+    approaches but never reaches 100 until `ready` genuinely flips true, so
+    it never falsely claims completion."""
+    farm = _get_owned_farm(db, farm_id, current_user)
+
+    has_real_data = db.execute(
+        select(ZonalStat.id)
+        .where(ZonalStat.polygon_id == farm_id, ZonalStat.value.isnot(None))
+        .limit(1)
+    ).scalar_one_or_none() is not None
+
+    created_at = _to_utc(farm.created_at)
+    elapsed_hours = (datetime.now(timezone.utc) -
+                     created_at).total_seconds() / 3600
+
+    # 18h = the upper end of the "maximum 12-18hrs" estimate shown to the
+    # farmer -- the bar approaches (never reaches) 95% over that window,
+    # then holds there until `ready` actually flips true.
+    progress_pct = 100 if has_real_data else min(
+        95, round(elapsed_hours / 18 * 95))
+
+    return {
+        "farm_id": str(farm_id),
+        "ready": has_real_data,
+        "created_at": created_at,
+        "elapsed_hours": round(elapsed_hours, 2),
+        "eta_hours_min": 12,
+        "eta_hours_max": 18,
+        "progress_pct": progress_pct,
     }
 
 

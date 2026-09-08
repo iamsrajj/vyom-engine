@@ -1746,6 +1746,72 @@
         position: relative;
         min-width: 0;
       }
+      .processing-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 20, 0.55);
+        backdrop-filter: blur(1px);
+        border-radius: inherit;
+      }
+      .processing-overlay-card {
+        background: var(--bg-panel, #fff);
+        border-radius: var(--radius, 12px);
+        padding: 24px 28px;
+        max-width: 320px;
+        text-align: center;
+        box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.2));
+      }
+      .processing-overlay-icon {
+        width: 36px;
+        height: 36px;
+        margin: 0 auto 12px;
+        stroke: var(--canopy, #4c9a5b);
+        fill: none;
+        stroke-width: 1.8;
+        animation: processing-overlay-spin 2.2s linear infinite;
+      }
+      @keyframes processing-overlay-spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .processing-overlay-title {
+        font-weight: 600;
+        font-size: 14.5px;
+        margin-bottom: 6px;
+        color: var(--text-strong, #1a231d);
+      }
+      .processing-overlay-msg {
+        font-size: 12.5px;
+        color: var(--text-muted, #5b665e);
+        line-height: 1.5;
+        margin-bottom: 14px;
+      }
+      .processing-overlay-bar-track {
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--bg-raised, #eef1ef);
+        overflow: hidden;
+      }
+      .processing-overlay-bar-fill {
+        height: 100%;
+        background: var(--canopy, #4c9a5b);
+        border-radius: 999px;
+        transition: width 0.6s ease;
+      }
+      .processing-overlay-pct {
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--text-dim, #8b958e);
+      }
       .map-toolbar {
         position: absolute;
         top: 14px;
@@ -3447,6 +3513,42 @@
 
                 <main id="map"></main>
 
+                <div
+                  id="processing-overlay"
+                  class="processing-overlay"
+                  style="display: none"
+                >
+                  <div class="processing-overlay-card">
+                    <svg
+                      class="processing-overlay-icon"
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 7v5l3 3" />
+                    </svg>
+                    <div class="processing-overlay-title">
+                      Fetching your field's satellite data
+                    </div>
+                    <div class="processing-overlay-msg">
+                      We are trying to fetch your field info from satellite,
+                      please wait. It will take a maximum of 12&ndash;18 hours.
+                    </div>
+                    <div class="processing-overlay-bar-track">
+                      <div
+                        class="processing-overlay-bar-fill"
+                        id="processing-overlay-bar-fill"
+                        style="width: 0%"
+                      ></div>
+                    </div>
+                    <div
+                      class="processing-overlay-pct"
+                      id="processing-overlay-pct"
+                    ></div>
+                  </div>
+                </div>
+
                 <div class="index-btn-row" id="index-btn-row"></div>
               </div>
 
@@ -3492,42 +3594,6 @@
                     value="100"
                     oninput="onOpacityInput()"
                   />
-
-                  <label
-                    >Look back
-                    <span
-                      id="lookback-value"
-                      class="mono"
-                      style="color: var(--text-dim); font-weight: 400"
-                    ></span
-                  ></label>
-                  <input
-                    type="range"
-                    id="lookback-slider"
-                    min="1"
-                    max="180"
-                    value="30"
-                    oninput="onLookbackInput()"
-                  />
-
-                  <div id="cloud-cover-row">
-                    <label
-                      >Max cloud cover (S2 only)
-                      <span
-                        id="cloud-cover-value"
-                        class="mono"
-                        style="color: var(--text-dim); font-weight: 400"
-                      ></span
-                    ></label>
-                    <input
-                      type="range"
-                      id="cloud-cover-slider"
-                      min="0"
-                      max="100"
-                      value="40"
-                      oninput="onCloudCoverInput()"
-                    />
-                  </div>
 
                   <div class="btn-row" style="margin-top: 14px">
                     <button class="btn btn-primary" onclick="refreshFarm()">
@@ -4687,12 +4753,50 @@
           isDrawing ? "block" : "none";
       }
 
+      // ~1m in degrees -- two consecutive clicks this close together while
+      // tracing a boundary are almost always an accidental double-click,
+      // not an intentional vertex. Left in, a near-duplicate pair right
+      // before the ring closes creates a near-zero-length edge that CDSE's
+      // geometry validator rejects outright (a bare 400 Bad Request with no
+      // indication which vertex is at fault) -- every discovery call for
+      // that farm then fails the same way, forever, until the geometry is
+      // fixed. The backend also sanitizes every incoming geometry the same
+      // way (vyom/geometry_utils.py) as a backstop, but fixing it here too
+      // means the farmer's own preview/area calculation matches what
+      // actually gets stored.
+      const MIN_VERTEX_SPACING_DEG = 0.00001;
+
       function polygonToGeoJSON(polygon) {
         const path = polygon.getPath();
-        const coords = [];
+        const raw = [];
         for (let i = 0; i < path.getLength(); i++) {
           const pt = path.getAt(i);
-          coords.push([pt.lng(), pt.lat()]);
+          raw.push([pt.lng(), pt.lat()]);
+        }
+
+        const coords = [];
+        for (const pt of raw) {
+          const prev = coords[coords.length - 1];
+          if (
+            !prev ||
+            Math.abs(pt[0] - prev[0]) > MIN_VERTEX_SPACING_DEG ||
+            Math.abs(pt[1] - prev[1]) > MIN_VERTEX_SPACING_DEG
+          ) {
+            coords.push(pt);
+          }
+        }
+        // Re-check the closing edge too -- a near-duplicate between the
+        // last kept point and the first point is the same bug, just at the
+        // seam where the ring closes.
+        if (coords.length > 2) {
+          const first = coords[0];
+          const last = coords[coords.length - 1];
+          if (
+            Math.abs(last[0] - first[0]) <= MIN_VERTEX_SPACING_DEG &&
+            Math.abs(last[1] - first[1]) <= MIN_VERTEX_SPACING_DEG
+          ) {
+            coords.pop();
+          }
         }
         if (
           coords.length &&
@@ -5575,7 +5679,7 @@
           switchPage("imagery");
           selectFarm(farm.id);
           showToast(
-            `Saved "${farm.name}" \u2014 hit Load Data to pull the first scene.`,
+            `Saved "${farm.name}" \u2014 fetching its satellite history now, this can take up to 12\u201318 hours.`,
           );
         } catch (e) {
           if (e.message !== "Not authenticated")
@@ -5588,6 +5692,8 @@
         if (!confirm("Delete this field? This cannot be undone.")) return;
         await api(`/farms/${activeFarmId}`, { method: "DELETE" });
         activeFarmId = null;
+        stopFarmStatusPolling();
+        hideProcessingOverlay();
         document.getElementById("detail-panel").style.display = "none";
         await loadFarms();
       }
@@ -5760,6 +5866,70 @@
         await loadDates();
         await refreshLayerAndReadouts();
         renderFarmList();
+
+        startFarmStatusPolling(farmId);
+      }
+
+      // ================= "Fetching your field" overlay =================
+      // Shown from farm creation until the farm's first real satellite
+      // reading lands (GET /farms/{id}/status) -- CDSE discovery/download/
+      // processing for a brand-new area can take up to ~12-18 hours, so
+      // this replaces an otherwise-blank map/readouts with an honest wait
+      // message and a time-based progress bar.
+      let farmStatusPollTimer = null;
+      let farmStatusPollFarmId = null;
+
+      function startFarmStatusPolling(farmId) {
+        stopFarmStatusPolling();
+        farmStatusPollFarmId = farmId;
+        checkFarmStatus(farmId);
+        farmStatusPollTimer = setInterval(() => {
+          // Guard against a stale timer outliving a farm switch, in case
+          // stopFarmStatusPolling() was somehow missed.
+          if (farmId !== activeFarmId) {
+            stopFarmStatusPolling();
+            return;
+          }
+          checkFarmStatus(farmId);
+        }, 60000);
+      }
+
+      function stopFarmStatusPolling() {
+        if (farmStatusPollTimer) clearInterval(farmStatusPollTimer);
+        farmStatusPollTimer = null;
+        farmStatusPollFarmId = null;
+      }
+
+      async function checkFarmStatus(farmId) {
+        let status;
+        try {
+          status = await api(`/farms/${farmId}/status`);
+        } catch (e) {
+          return; // transient error -- next poll tick will retry
+        }
+        // The farmer may have switched to a different farm while this
+        // request was in flight -- don't let a late response for the old
+        // farm control the currently-shown overlay.
+        if (farmId !== activeFarmId) return;
+
+        if (status.ready) {
+          hideProcessingOverlay();
+          stopFarmStatusPolling();
+          return;
+        }
+        showProcessingOverlay(status.progress_pct);
+      }
+
+      function showProcessingOverlay(progressPct) {
+        document.getElementById("processing-overlay").style.display = "flex";
+        document.getElementById("processing-overlay-bar-fill").style.width =
+          `${progressPct}%`;
+        document.getElementById("processing-overlay-pct").textContent =
+          `${progressPct}%`;
+      }
+
+      function hideProcessingOverlay() {
+        document.getElementById("processing-overlay").style.display = "none";
       }
 
       function flashFarmOutline(farmId) {
@@ -6020,32 +6190,20 @@
         await loadTrend(index);
       }
 
-      // ================= Imagery sliders: opacity / look back / cloud cover =================
+      // ================= Imagery slider: opacity =================
+      // Look back / max cloud cover are no longer farmer-facing controls --
+      // every farm now auto-requests a wide 1-year/85%-cloud-cover backfill
+      // the instant its real boundary is known (see
+      // _backfill_and_dispatch_refresh in api/farms.py), so there's nothing
+      // left here for the farmer to tune. The API still accepts both params
+      // for other callers (e.g. admin tooling) -- see POST /farms/{id}/refresh.
       function onOpacityInput() {
         const val = document.getElementById("opacity-slider").value;
         document.getElementById("opacity-value").textContent = `${val}%`;
         if (indexTileLayer) indexTileLayer.setOpacity(parseInt(val, 10) / 100);
       }
-
-      function onLookbackInput() {
-        const val = parseInt(
-          document.getElementById("lookback-slider").value,
-          10,
-        );
-        const label = val >= 30 ? ` (~${Math.round(val / 30)} mo)` : "";
-        document.getElementById("lookback-value").textContent =
-          `${val} days${label}`;
-      }
-
-      function onCloudCoverInput() {
-        const val = document.getElementById("cloud-cover-slider").value;
-        document.getElementById("cloud-cover-value").textContent =
-          `up to ${val}%`;
-      }
-      // Initialize the labels on load (sliders start at their HTML default values).
+      // Initialize the label on load (slider starts at its HTML default value).
       onOpacityInput();
-      onLookbackInput();
-      onCloudCoverInput();
 
       // ================= Index color scale (legend + reading-card coloring) =================
       // Mirrors vyom/processing/index_scale.py's band_for_value(): first band whose
@@ -6321,23 +6479,17 @@
 
       async function refreshFarm() {
         if (!activeFarmId) return;
-        const daysBack = parseInt(
-          document.getElementById("lookback-slider").value,
-          10,
-        );
-        const maxCloudCover = parseFloat(
-          document.getElementById("cloud-cover-slider").value,
-        );
+        // No days_back/max_cloud_cover here anymore -- this is just an
+        // on-demand "check for anything new" nudge (backend defaults to a
+        // 30-day catch-up window), not the wide historical backfill, which
+        // already runs automatically once when the farm is created (see
+        // _backfill_and_dispatch_refresh in api/farms.py).
         showToast(
-          `Queued \u2014 searching the last ${daysBack} days, discovery/download/processing run in the background.`,
+          "Queued \u2014 checking for new imagery, this runs in the background.",
         );
         await api(`/farms/${activeFarmId}/refresh`, {
           method: "POST",
-          body: JSON.stringify({
-            platforms: [currentPlatform],
-            days_back: daysBack,
-            max_cloud_cover: maxCloudCover,
-          }),
+          body: JSON.stringify({ platforms: [currentPlatform] }),
         });
         showToast(
           "Refresh queued. This can take a few minutes for a new scene \u2014 check back shortly.",
