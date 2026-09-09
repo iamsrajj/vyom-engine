@@ -23,7 +23,7 @@ import logging
 import time
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from vyom.config import settings
 
@@ -69,10 +69,16 @@ def _fetch_novosedge_list(path: str, list_key: str) -> list:
 
 
 @router.get("/crops")
-def list_crops():
+def list_crops(response: Response):
+    # Cache-Control: paired with the frontend's own localStorage cache (see
+    # fetchCropList() in web/index.html) -- this lets the browser skip the
+    # round-trip to us entirely for a while, on top of us skipping the
+    # round-trip to NovosEdge (the in-process cache above).
+    response.headers["Cache-Control"] = "private, max-age=21600"
     return {"cropList": _fetch_novosedge_list("/ad/crop/list", "cropList")}
 
 
 @router.get("/soils")
-def list_soils():
+def list_soils(response: Response):
+    response.headers["Cache-Control"] = "private, max-age=21600"
     return {"soilList": _fetch_novosedge_list("/ad/crop/soil", "soilList")}

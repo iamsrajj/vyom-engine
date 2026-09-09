@@ -4228,6 +4228,51 @@
         applyTheme(localStorage.getItem("vyom-theme") || "light");
       })();
 
+      // ================= Perceived-perf cache (localStorage) =================
+      // NOT a correctness cache -- every read here is always paired with a
+      // real background network call that overwrites it and re-renders, so
+      // a stale entry only ever affects what's painted for the brief moment
+      // until that call resolves. Nothing is ever acted on or saved from a
+      // cached read alone. Used for: the farm list (scoped per-username, so
+      // a shared browser never flashes one account's farms while a
+      // different account is signing in) and genuinely static reference
+      // data (crop/soil lists, available indices, index color scales) that
+      // only ever changes on a redeploy or a rare NovosEdge list update.
+      const CACHE_PREFIX = "vyom-cache:";
+
+      function cacheSet(key, value) {
+        try {
+          localStorage.setItem(
+            CACHE_PREFIX + key,
+            JSON.stringify({ v: value, t: Date.now() }),
+          );
+        } catch (e) {
+          // Storage full or unavailable (private browsing, quota) --
+          // caching is a nice-to-have, never worth breaking the app over.
+        }
+      }
+
+      function cacheGet(key, maxAgeMs) {
+        try {
+          const raw = localStorage.getItem(CACHE_PREFIX + key);
+          if (!raw) return null;
+          const { v, t } = JSON.parse(raw);
+          if (Date.now() - t > maxAgeMs) return null;
+          return v;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      // Best-effort only -- getSession() can legitimately return null here
+      // (e.g. called before login), so this falls back to a shared "anon"
+      // slot rather than throwing. That's harmless: an anon-scoped cache
+      // entry only ever gets read back before any real session exists.
+      function cacheUserKey() {
+        const session = getSession();
+        return session ? session.username : "anon";
+      }
+
       // ================= Session / login =================
       function getSession() {
         try {
@@ -5063,15 +5108,42 @@
 
       async function fetchCropList() {
         if (cropListCache) return cropListCache;
+        const cached = cacheGet("crop-list", 24 * 3600 * 1000);
+        if (cached) {
+          cropListCache = cached;
+          // Refresh in the background so a day-old local copy doesn't
+          // linger indefinitely if NovosEdge adds a new crop -- doesn't
+          // block the picker, which already has data to show right now.
+          api("/reference/crops")
+            .then((data) => {
+              cropListCache = data.cropList || [];
+              cacheSet("crop-list", cropListCache);
+            })
+            .catch(() => {});
+          return cropListCache;
+        }
         const data = await api("/reference/crops");
         cropListCache = data.cropList || [];
+        cacheSet("crop-list", cropListCache);
         return cropListCache;
       }
 
       async function fetchSoilList() {
         if (soilListCache) return soilListCache;
+        const cached = cacheGet("soil-list", 24 * 3600 * 1000);
+        if (cached) {
+          soilListCache = cached;
+          api("/reference/soils")
+            .then((data) => {
+              soilListCache = data.soilList || [];
+              cacheSet("soil-list", soilListCache);
+            })
+            .catch(() => {});
+          return soilListCache;
+        }
         const data = await api("/reference/soils");
         soilListCache = data.soilList || [];
+        cacheSet("soil-list", soilListCache);
         return soilListCache;
       }
 
@@ -5413,6 +5485,17 @@
 
       // ================= Indices =================
       async function loadAvailableIndices() {
+        // These only ever change on a redeploy -- paint from cache
+        // immediately (synchronous, no network wait) if we have it, then
+        // still make the real calls below to correct/refresh it. The
+        // backend also sets Cache-Control on both endpoints (see farms.py),
+        // so even the "real" fetch below is often served from the browser's
+        // own HTTP cache rather than an actual round-trip.
+        const cached = cacheGet("available-indices", 24 * 3600 * 1000);
+        if (cached) {
+          availableIndices = cached.availableIndices;
+          indexScales = cached.indexScales;
+        }
         try {
           availableIndices = await api("/farms/available-indices");
         } catch (e) {
@@ -5423,6 +5506,7 @@
         } catch (e) {
           console.error("Could not load index color scales", e);
         }
+        cacheSet("available-indices", { availableIndices, indexScales });
       }
 
       function populateIndexSelect() {
@@ -5453,9 +5537,21 @@
         sel.appendChild(groupS1);
 
         // Keep whatever was selected before if it still exists (e.g. re-populating
-        // after available-indices reloads); otherwise default to the first S2 index.
+        // after available-indices reloads); otherwise fall back to the
+        // last index the farmer actually looked at (cached client-side,
+        // see onIndexChange()), and only default to the dropdown's natural
+        // first option (first S2 index) if neither is available -- e.g.
+        // truly the first visit ever on this browser.
         if (previous && [...sel.options].some((o) => o.value === previous)) {
           sel.value = previous;
+        } else {
+          const lastIndex = cacheGet("last-index", 90 * 24 * 3600 * 1000);
+          if (
+            lastIndex &&
+            [...sel.options].some((o) => o.value === lastIndex)
+          ) {
+            sel.value = lastIndex;
+          }
         }
         syncPlatformFromIndex();
         updateIndexNote();
@@ -5591,8 +5687,59 @@
         }
       }
 
+      // Fast synchronous paint from a cached farm list -- no live-status
+      // network call (that's what makes it fast), so this never blocks on
+      // anything. loadFarms() below always runs right after this with real
+      // data + real status styling and fully supersedes it; this exists
+      // purely so the map/sidebar aren't blank while that real fetch is
+      // still in flight on a fresh page load.
+      function renderFarmsQuick(cachedFarms) {
+        farms = cachedFarms;
+        const countEl = document.getElementById("farm-count");
+        if (countEl)
+          countEl.textContent = cachedFarms.length
+            ? `${cachedFarms.length}`
+            : "";
+
+        Object.values(farmOverlays).forEach((p) => p.setMap(null));
+        farmOverlays = {};
+
+        const bounds = new google.maps.LatLngBounds();
+        cachedFarms.forEach((farm) => {
+          const paths = geoJSONToPaths(farm.geometry);
+          const polygon = new google.maps.Polygon({
+            paths,
+            strokeColor: "#8fce76",
+            strokeWeight: 1.5,
+            fillColor: "#8fce76",
+            fillOpacity: 0.06,
+          });
+          polygon.setMap(map);
+          polygon.addListener("click", () => selectFarm(farm.id));
+          farmOverlays[farm.id] = polygon;
+          paths.forEach((p) => bounds.extend(p));
+        });
+
+        renderFarmList();
+        renderOverviewPage();
+        renderMyFieldsPage();
+        if (!activeFarmId && cachedFarms.length) map.fitBounds(bounds, 60);
+      }
+
       async function loadFarms() {
+        const farmsCacheKey = `farms:${cacheUserKey()}`;
+        // Only quick-paint from cache on the very first call in this page
+        // session (farms.length === 0 and nothing requested yet) -- a
+        // second loadFarms() call later (after creating/editing a farm)
+        // should never regress a fresher in-memory list back to a stale
+        // cached snapshot.
+        if (!farms.length) {
+          const cached = cacheGet(farmsCacheKey, 7 * 24 * 3600 * 1000);
+          if (cached && cached.length) renderFarmsQuick(cached);
+        }
+
         farms = await api("/farms");
+        cacheSet(farmsCacheKey, farms);
         const countEl = document.getElementById("farm-count");
         if (countEl)
           countEl.textContent = farms.length ? `${farms.length}` : "";
@@ -6482,6 +6629,11 @@
         syncPlatformFromIndex();
         updateIndexNote();
         renderIndexButtonRow();
+        // Remember the last-viewed index across page reloads/sessions (not
+        // per-farm -- it's a "what was I looking at" convenience, not
+        // correctness-critical data) so the dashboard opens on it instead
+        // of always defaulting back to the first S2 index.
+        cacheSet("last-index", document.getElementById("index-select").value);
         await loadDates();
         await refreshLayerAndReadouts();
       }

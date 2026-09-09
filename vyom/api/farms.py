@@ -1,10 +1,11 @@
 import logging
+import time
 import uuid
 from datetime import date as date_cls, datetime, timezone
 from math import isnan
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from geoalchemy2.shape import from_shape, to_shape
 from pydantic import BaseModel, Field
 from shapely.geometry import shape, mapping
@@ -23,6 +24,63 @@ from vyom.reuse_check import backfill_from_existing_products
 from vyom.tasks import refresh_farm
 
 logger = logging.getLogger("vyom.api.farms")
+
+# Short-TTL in-process cache for the read-heavy per-farm/per-user data
+# endpoints below (current-status, timeseries, latest, available-dates).
+# Never used to skip an ownership check -- every endpoint below calls
+# _get_owned_farm (or filters by owner directly) BEFORE touching this
+# cache, so a cache hit can only ever return data the caller already
+# proved they own.
+_READ_CACHE_TTL_SECONDS = 6 * 3600
+_read_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cached_read(key: str, compute):
+    now = time.time()
+    cached = _read_cache.get(key)
+    if cached and now - cached[0] < _READ_CACHE_TTL_SECONDS:
+        return cached[1]
+    value = compute()
+    _read_cache[key] = (now, value)
+    return value
+
+
+def _invalidate_farm_cache(farm_id, owner=None):
+    """Drops every cached read for this farm, so the NEXT request re-queries
+    Postgres instead of serving up to _READ_CACHE_TTL_SECONDS-old data.
+    current-status isn't farm-scoped (one call returns every farm the owner
+    has), so pass owner to also drop that owner's current-status entries.
+
+    Call sites and what each does/doesn't guarantee:
+      - farm_status(): fires the instant a farm's first real reading is
+        seen, so the "fetching your field" overlay disappearing and the
+        dashboard actually having data to show happen together, instead of
+        the overlay vanishing into up to _READ_CACHE_TTL_SECONDS of a
+        stale "no data" response.
+      - refresh(): fires when a manual refresh is DISPATCHED, not when it
+        completes (that happens later, async, in the Celery worker, which
+        has no channel back into this cache). This only resets the cached
+        snapshot to "accurate as of right now" -- it does NOT guarantee
+        that whatever new data the refresh eventually pulls in will be
+        visible before the next _READ_CACHE_TTL_SECONDS window elapses.
+        If a manual refresh's results consistently need to show up sooner
+        than that, this needs a real polling-based invalidation on the
+        refresh path too (like farm_status() already has for onboarding),
+        not just this dispatch-time clear."""
+    farm_id_str = str(farm_id)
+    stale_keys = [
+        k for k in _read_cache
+        if k.startswith(f"timeseries:{farm_id_str}:")
+        or k.startswith(f"latest:{farm_id_str}:")
+        or k.startswith(f"available-dates:{farm_id_str}:")
+    ]
+    if owner is not None:
+        owner_str = str(owner)
+        stale_keys += [k for k in _read_cache
+                       if k.startswith(f"current-status:{owner_str}:")]
+    for k in stale_keys:
+        _read_cache.pop(k, None)
+
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
@@ -175,19 +233,26 @@ def _get_owned_farm(db: Session, farm_id: uuid.UUID, current_user: str) -> Polyg
 
 
 @router.get("/available-indices")
-def available_indices():
+def available_indices(response: Response):
     """What indices this deployment computes, per platform -- drives the index
-    picker in the web UI instead of hardcoding options client-side."""
+    picker in the web UI instead of hardcoding options client-side.
+    Cache-Control: this only ever changes on a redeploy (settings.s2_indices/
+    s1_indices are config, not DB state), so it's safe for the browser to
+    skip the round-trip entirely for a while -- paired with the frontend's
+    own localStorage cache (see loadAvailableIndices() in web/index.html)."""
+    response.headers["Cache-Control"] = "private, max-age=21600"
     return {"S2": settings.s2_indices, "S1": settings.s1_indices}
 
 
 @router.get("/index-scales")
-def index_scales():
+def index_scales(response: Response):
     """Discrete color-band scale (Low/Med/High tiers, hex colors, thresholds)
     per index -- drives the map legend and lets the frontend color-code the
     Latest Readings cards to match the tile colors, instead of the two being
     styled independently. Indices with no entry here (currently VV_VH_RATIO)
-    have no defined scale; the frontend should render those uncolored."""
+    have no defined scale; the frontend should render those uncolored.
+    Same Cache-Control rationale as available_indices() above."""
+    response.headers["Cache-Control"] = "private, max-age=21600"
     return scales_for_api()
 
 
@@ -361,44 +426,52 @@ def current_status(metric: str = "NDVI_mean", current_user: str = Depends(requir
     NOT by checking whether an interpolated_stats row happens to exist --
     that would make the map's freshness indicator depend on whether a
     background job happened to have run yet, which is fragile. Age-based
-    staleness is always correct regardless of job timing."""
+    staleness is always correct regardless of job timing.
+
+    Cached in-process for _READ_CACHE_TTL_SECONDS (see top of file) keyed by
+    (owner, metric) -- a fresh satellite reading landing via the Celery
+    worker can take up to that long to show up here."""
     from vyom.interpolation import DEFAULT_GRID_DAYS
     from datetime import timezone as tz
 
     owner = stable_owner_uuid(current_user)
-    farms = db.execute(select(Polygon).where(
-        Polygon.user_id == owner)).scalars().all()
-    now = datetime.now(tz.utc)
-    out = []
-    for farm in farms:
-        stmt = (
-            select(ZonalStat)
-            .where(ZonalStat.polygon_id == farm.id, ZonalStat.metric == metric)
-            .order_by(ZonalStat.acquisition_date.desc())
-            .limit(1)
-        )
-        row = db.execute(stmt).scalar_one_or_none()
-        if row is None or row.value is None:
+
+    def _compute():
+        farms = db.execute(select(Polygon).where(
+            Polygon.user_id == owner)).scalars().all()
+        now = datetime.now(tz.utc)
+        out = []
+        for farm in farms:
+            stmt = (
+                select(ZonalStat)
+                .where(ZonalStat.polygon_id == farm.id, ZonalStat.metric == metric)
+                .order_by(ZonalStat.acquisition_date.desc())
+                .limit(1)
+            )
+            row = db.execute(stmt).scalar_one_or_none()
+            if row is None or row.value is None:
+                out.append({
+                    "farm_id": str(farm.id), "value": None,
+                    "real_acquisition_date": None, "days_since_reading": None,
+                    "source": "no_data",
+                })
+                continue
+
+            acq_date = row.acquisition_date
+            if acq_date.tzinfo is None:
+                acq_date = acq_date.replace(tzinfo=tz.utc)
+            days_since = (now - acq_date).days
+
             out.append({
-                "farm_id": str(farm.id), "value": None,
-                "real_acquisition_date": None, "days_since_reading": None,
-                "source": "no_data",
+                "farm_id": str(farm.id),
+                "value": _clean_float(float(row.value)),
+                "real_acquisition_date": row.acquisition_date,
+                "days_since_reading": days_since,
+                "source": "satellite" if days_since <= DEFAULT_GRID_DAYS else "provisional",
             })
-            continue
+        return out
 
-        acq_date = row.acquisition_date
-        if acq_date.tzinfo is None:
-            acq_date = acq_date.replace(tzinfo=tz.utc)
-        days_since = (now - acq_date).days
-
-        out.append({
-            "farm_id": str(farm.id),
-            "value": _clean_float(float(row.value)),
-            "real_acquisition_date": row.acquisition_date,
-            "days_since_reading": days_since,
-            "source": "satellite" if days_since <= DEFAULT_GRID_DAYS else "provisional",
-        })
-    return out
+    return _cached_read(f"current-status:{owner}:{metric}", _compute)
 
 
 @router.get("/{farm_id}", response_model=FarmOut)
@@ -451,6 +524,7 @@ def refresh(farm_id: uuid.UUID, payload: RefreshRequest = RefreshRequest(),
 
     task = refresh_farm.delay(
         str(farm_id), payload.platforms, payload.days_back, payload.max_cloud_cover, payload.priority)
+    _invalidate_farm_cache(farm_id, owner=farm.user_id)
     return {
         "farm_id": str(farm_id),
         "task_id": task.id,
@@ -474,7 +548,15 @@ def farm_status(farm_id: uuid.UUID, current_user: str = Depends(require_auth), d
     NOT a real pipeline-stage progress percentage, since there's no cheap
     way to know from here how many products/stages actually remain. It
     approaches but never reaches 100 until `ready` genuinely flips true, so
-    it never falsely claims completion."""
+    it never falsely claims completion.
+
+    Invalidates this farm's cached reads (see _invalidate_farm_cache) the
+    moment has_real_data is true -- with _READ_CACHE_TTL_SECONDS at 6h,
+    without this the "fetching your field" overlay could disappear (this
+    endpoint isn't itself cached) while /latest and /available-dates kept
+    serving a stale "no data" response for up to 6 more hours. Runs on
+    every poll once ready (the frontend stops polling right after seeing
+    ready=true, so in practice this fires once, not repeatedly)."""
     farm = _get_owned_farm(db, farm_id, current_user)
 
     has_real_data = db.execute(
@@ -482,6 +564,9 @@ def farm_status(farm_id: uuid.UUID, current_user: str = Depends(require_auth), d
         .where(ZonalStat.polygon_id == farm_id, ZonalStat.value.isnot(None))
         .limit(1)
     ).scalar_one_or_none() is not None
+
+    if has_real_data:
+        _invalidate_farm_cache(farm_id, owner=farm.user_id)
 
     created_at = _to_utc(farm.created_at)
     elapsed_hours = (datetime.now(timezone.utc) -
@@ -522,67 +607,75 @@ def timeseries(
         far (flat carry-forward of it) -- gets superseded by a real
         "interpolated" value the moment a new real reading arrives.
     Real, interpolated, and provisional points are never returned
-    indistinguishably; every point states which one it is."""
+    indistinguishably; every point states which one it is.
+
+    Cached in-process for _READ_CACHE_TTL_SECONDS keyed by (farm_id, metric,
+    include_interpolated) -- computed AFTER the ownership check below, so a
+    cache hit can never leak another user's farm data."""
     farm = _get_owned_farm(db, farm_id, current_user)
 
-    stmt = (
-        select(ZonalStat)
-        .where(ZonalStat.polygon_id == farm_id, ZonalStat.metric == metric)
-        .order_by(ZonalStat.acquisition_date)
-    )
-    rows = db.execute(stmt).scalars().all()
-
-    interp_by_date = {}
-    if include_interpolated:
-        interp_stmt = (
-            select(InterpolatedStat)
-            .where(InterpolatedStat.polygon_id == farm_id, InterpolatedStat.metric == metric)
-            .order_by(InterpolatedStat.date)
+    def _compute():
+        stmt = (
+            select(ZonalStat)
+            .where(ZonalStat.polygon_id == farm_id, ZonalStat.metric == metric)
+            .order_by(ZonalStat.acquisition_date)
         )
-        interp_by_date = {
-            _to_utc(r.date): r for r in db.execute(interp_stmt).scalars().all()
-        }
+        rows = db.execute(stmt).scalars().all()
 
-    out = []
-    for r in rows:
-        # A cloud-masked real acquisition (row exists, value is None) gets
-        # its exact-date fill from interp_by_date if one exists (see
-        # interpolation.py's _fill_exact_cloudy_dates) instead of surfacing
-        # as a dead null -- a pass that happened but was unreadable is filled
-        # in exactly like a gap between passes is.
-        fill = interp_by_date.pop(_to_utc(
-            r.acquisition_date), None) if r.value is None else None
-        out.append(ZonalStatOut(
-            acquisition_date=r.acquisition_date,
-            metric=r.metric,
-            value=_clean_float(float(r.value)) if r.value is not None else (
-                _clean_float(
-                    float(fill.value)) if fill is not None and fill.value is not None else None
-            ),
-            cloud_pct=_clean_float(
-                float(r.cloud_pct)) if r.cloud_pct is not None else None,
-            source="satellite" if r.value is not None else (
-                fill.source if fill is not None else "satellite"),
-        ))
-
-    if include_interpolated:
-        # Remaining interpolated/provisional points are the fixed-cadence
-        # grid fills that don't correspond to any real acquisition date at
-        # all -- those still get appended as their own points, same as before.
-        out.extend(
-            ZonalStatOut(
-                acquisition_date=r.date,
-                metric=r.metric,
-                value=_clean_float(
-                    float(r.value)) if r.value is not None else None,
-                cloud_pct=None,  # interpolated/provisional points have no real cloud reading
-                source=r.source,  # "interpolated" or "provisional" -- read from the row, never hardcoded
+        interp_by_date = {}
+        if include_interpolated:
+            interp_stmt = (
+                select(InterpolatedStat)
+                .where(InterpolatedStat.polygon_id == farm_id, InterpolatedStat.metric == metric)
+                .order_by(InterpolatedStat.date)
             )
-            for r in interp_by_date.values()
-        )
-        out.sort(key=lambda x: x.acquisition_date)
+            interp_by_date = {
+                _to_utc(r.date): r for r in db.execute(interp_stmt).scalars().all()
+            }
 
-    return out
+        out = []
+        for r in rows:
+            # A cloud-masked real acquisition (row exists, value is None) gets
+            # its exact-date fill from interp_by_date if one exists (see
+            # interpolation.py's _fill_exact_cloudy_dates) instead of surfacing
+            # as a dead null -- a pass that happened but was unreadable is filled
+            # in exactly like a gap between passes is.
+            fill = interp_by_date.pop(_to_utc(
+                r.acquisition_date), None) if r.value is None else None
+            out.append(ZonalStatOut(
+                acquisition_date=r.acquisition_date,
+                metric=r.metric,
+                value=_clean_float(float(r.value)) if r.value is not None else (
+                    _clean_float(
+                        float(fill.value)) if fill is not None and fill.value is not None else None
+                ),
+                cloud_pct=_clean_float(
+                    float(r.cloud_pct)) if r.cloud_pct is not None else None,
+                source="satellite" if r.value is not None else (
+                    fill.source if fill is not None else "satellite"),
+            ))
+
+        if include_interpolated:
+            # Remaining interpolated/provisional points are the fixed-cadence
+            # grid fills that don't correspond to any real acquisition date at
+            # all -- those still get appended as their own points, same as before.
+            out.extend(
+                ZonalStatOut(
+                    acquisition_date=r.date,
+                    metric=r.metric,
+                    value=_clean_float(
+                        float(r.value)) if r.value is not None else None,
+                    cloud_pct=None,  # interpolated/provisional points have no real cloud reading
+                    source=r.source,  # "interpolated" or "provisional" -- read from the row, never hardcoded
+                )
+                for r in interp_by_date.values()
+            )
+            out.sort(key=lambda x: x.acquisition_date)
+
+        return out
+
+    return _cached_read(
+        f"timeseries:{farm_id}:{metric}:{include_interpolated}", _compute)
 
 
 @router.get("/{farm_id}/latest")
@@ -607,7 +700,10 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
     every index (the old, pre-interpolation behavior) -- 'latest' is never
     affected either way, since 'latest' always means the most recent REAL
     reading (see tiles.py's _resolve_raster docstring for the same rule
-    applied to map tiles)."""
+    applied to map tiles).
+
+    Cached in-process for _READ_CACHE_TTL_SECONDS keyed by (farm_id, date,
+    include_interpolated) -- computed AFTER the ownership check below."""
     farm = _get_owned_farm(db, farm_id, current_user)
 
     target_date = None
@@ -618,48 +714,52 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
             raise HTTPException(
                 422, "date must be an ISO timestamp or 'latest'")
 
-    all_indices = settings.s2_indices + settings.s1_indices
-    out = {}
-    for index_name in all_indices:
-        metric = f"{index_name}_mean"
-        stmt = select(ZonalStat).where(ZonalStat.polygon_id ==
-                                       farm_id, ZonalStat.metric == metric)
-        if target_date is not None:
-            stmt = stmt.where(ZonalStat.acquisition_date == target_date)
-        else:
-            # "latest" means the most recent REAL reading -- skip cloud-masked
-            # rows (value IS NULL) rather than returning whichever row simply
-            # has the newest date even if that specific pass was unusable.
-            stmt = stmt.where(ZonalStat.value.isnot(None))
-        stmt = stmt.order_by(ZonalStat.acquisition_date.desc()).limit(1)
-        row = db.execute(stmt).scalar_one_or_none()
+    def _compute():
+        all_indices = settings.s2_indices + settings.s1_indices
+        out = {}
+        for index_name in all_indices:
+            metric = f"{index_name}_mean"
+            stmt = select(ZonalStat).where(ZonalStat.polygon_id ==
+                                           farm_id, ZonalStat.metric == metric)
+            if target_date is not None:
+                stmt = stmt.where(ZonalStat.acquisition_date == target_date)
+            else:
+                # "latest" means the most recent REAL reading -- skip cloud-masked
+                # rows (value IS NULL) rather than returning whichever row simply
+                # has the newest date even if that specific pass was unusable.
+                stmt = stmt.where(ZonalStat.value.isnot(None))
+            stmt = stmt.order_by(ZonalStat.acquisition_date.desc()).limit(1)
+            row = db.execute(stmt).scalar_one_or_none()
 
-        if row is not None and row.value is not None:
-            out[index_name] = {
-                "value": _clean_float(float(row.value)),
-                "acquisition_date": row.acquisition_date,
-                "source": "satellite",
-            }
-        elif include_interpolated and target_date is not None:
-            interp_stmt = select(InterpolatedStat).where(
-                InterpolatedStat.polygon_id == farm_id,
-                InterpolatedStat.metric == metric,
-                InterpolatedStat.date == target_date,
-            )
-            interp_row = db.execute(interp_stmt).scalar_one_or_none()
-            if interp_row is not None:
+            if row is not None and row.value is not None:
                 out[index_name] = {
-                    "value": _clean_float(float(interp_row.value)) if interp_row.value is not None else None,
-                    "acquisition_date": interp_row.date,
-                    "source": interp_row.source,  # "interpolated" or "provisional"
+                    "value": _clean_float(float(row.value)),
+                    "acquisition_date": row.acquisition_date,
+                    "source": "satellite",
                 }
+            elif include_interpolated and target_date is not None:
+                interp_stmt = select(InterpolatedStat).where(
+                    InterpolatedStat.polygon_id == farm_id,
+                    InterpolatedStat.metric == metric,
+                    InterpolatedStat.date == target_date,
+                )
+                interp_row = db.execute(interp_stmt).scalar_one_or_none()
+                if interp_row is not None:
+                    out[index_name] = {
+                        "value": _clean_float(float(interp_row.value)) if interp_row.value is not None else None,
+                        "acquisition_date": interp_row.date,
+                        "source": interp_row.source,  # "interpolated" or "provisional"
+                    }
+                else:
+                    out[index_name] = {"value": None,
+                                       "acquisition_date": None, "source": None}
             else:
                 out[index_name] = {"value": None,
                                    "acquisition_date": None, "source": None}
-        else:
-            out[index_name] = {"value": None,
-                               "acquisition_date": None, "source": None}
-    return out
+        return out
+
+    return _cached_read(
+        f"latest:{farm_id}:{date}:{include_interpolated}", _compute)
 
 
 @router.get("/{farm_id}/available-dates")
@@ -685,42 +785,50 @@ def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[st
     X-Vyom-Data-Source header carries the same info, but most map libraries
     (including Google Maps' getTileUrl pattern) load tiles as <img> elements,
     which JS cannot read response headers from. Use this endpoint, not the
-    header, to drive any UI labeling."""
+    header, to drive any UI labeling.
+
+    Cached in-process for _READ_CACHE_TTL_SECONDS keyed by (farm_id,
+    platform, index, include_interpolated) -- computed AFTER the ownership
+    check below."""
     farm = _get_owned_farm(db, farm_id, current_user)
 
-    from vyom.models import PolygonTileMap
-    stmt = (
-        select(CatalogProduct.acquisition_date)
-        .join(PolygonTileMap, PolygonTileMap.product_id == CatalogProduct.id)
-        .where(
-            PolygonTileMap.polygon_id == farm_id,
-            CatalogProduct.status == "processed",
-            CatalogProduct.platform == platform,
-        )
-    )
-    if index:
-        stmt = stmt.join(
-            ZonalStat,
-            (ZonalStat.product_id == CatalogProduct.id)
-            & (ZonalStat.polygon_id == farm_id)
-            & (ZonalStat.metric == f"{index}_mean"),
-        ).where(ZonalStat.value.isnot(None))
-    stmt = stmt.order_by(CatalogProduct.acquisition_date.desc())
-    rows = db.execute(stmt).scalars().all()
-    result = [{"date": d.isoformat(), "source": "satellite"} for d in rows]
-
-    if include_interpolated and index:
-        interp_stmt = (
-            select(InterpolatedTile.date, InterpolatedTile.source)
+    def _compute():
+        from vyom.models import PolygonTileMap
+        stmt = (
+            select(CatalogProduct.acquisition_date)
+            .join(PolygonTileMap, PolygonTileMap.product_id == CatalogProduct.id)
             .where(
-                InterpolatedTile.polygon_id == farm_id,
-                InterpolatedTile.platform == platform,
-                InterpolatedTile.index_name == index,
+                PolygonTileMap.polygon_id == farm_id,
+                CatalogProduct.status == "processed",
+                CatalogProduct.platform == platform,
             )
-            .order_by(InterpolatedTile.date.desc())
         )
-        for d, src in db.execute(interp_stmt).all():
-            result.append({"date": d.isoformat(), "source": src})
-        result.sort(key=lambda r: r["date"], reverse=True)
+        if index:
+            stmt = stmt.join(
+                ZonalStat,
+                (ZonalStat.product_id == CatalogProduct.id)
+                & (ZonalStat.polygon_id == farm_id)
+                & (ZonalStat.metric == f"{index}_mean"),
+            ).where(ZonalStat.value.isnot(None))
+        stmt = stmt.order_by(CatalogProduct.acquisition_date.desc())
+        rows = db.execute(stmt).scalars().all()
+        result = [{"date": d.isoformat(), "source": "satellite"} for d in rows]
 
-    return result
+        if include_interpolated and index:
+            interp_stmt = (
+                select(InterpolatedTile.date, InterpolatedTile.source)
+                .where(
+                    InterpolatedTile.polygon_id == farm_id,
+                    InterpolatedTile.platform == platform,
+                    InterpolatedTile.index_name == index,
+                )
+                .order_by(InterpolatedTile.date.desc())
+            )
+            for d, src in db.execute(interp_stmt).all():
+                result.append({"date": d.isoformat(), "source": src})
+            result.sort(key=lambda r: r["date"], reverse=True)
+
+        return result
+
+    return _cached_read(
+        f"available-dates:{farm_id}:{platform}:{index}:{include_interpolated}", _compute)
