@@ -18,7 +18,7 @@
     <!-- config.js is gitignored (real API keys live there) -- copy from
          config.js.example and fill in real values. This must load before
          the main script below so window.GOOGLE_MAPS_API_KEY / GOOGLE_CLIENT_ID
-         are set in time. -->
+         / NOVOSEDGE_API_KEY are set in time. -->
     <script src="config.js"></script>
     <style>
       :root {
@@ -2194,10 +2194,119 @@
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid var(--line);
+        position: relative;
       }
       .draw-map-slot #map {
         width: 100%;
         height: 100%;
+      }
+      .drawing-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 5;
+        background: rgba(20, 26, 20, 0.78);
+        color: #fff;
+        padding: 6px 10px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        pointer-events: none;
+      }
+      .drawing-badge svg {
+        width: 14px;
+        height: 14px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2;
+      }
+      .area-banner {
+        background: var(--bg-raised, #eef6ef);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 12px;
+        font-size: 13.5px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .location-display {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13.5px;
+        margin-bottom: 4px;
+      }
+      .location-display.empty {
+        color: var(--text-dim);
+        font-style: italic;
+      }
+      .picker-field {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        margin-bottom: 4px;
+      }
+      .picker-field:hover {
+        border-color: var(--canopy, #4c9a5b);
+      }
+      .picker-field img {
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        object-fit: cover;
+        vertical-align: middle;
+        margin-right: 6px;
+      }
+      .picker-placeholder {
+        color: var(--text-dim);
+      }
+      .picker-group-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        margin: 14px 0 6px;
+      }
+      .picker-group-label:first-child {
+        margin-top: 0;
+      }
+      .picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+        gap: 8px;
+      }
+      .picker-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 4px;
+        border-radius: 8px;
+        cursor: pointer;
+        text-align: center;
+        font-size: 11.5px;
+        border: 1px solid transparent;
+      }
+      .picker-item:hover {
+        background: var(--bg-raised, #f3f5f3);
+        border-color: var(--line);
+      }
+      .picker-item img {
+        width: 40px;
+        height: 40px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: var(--bg-raised, #f3f5f3);
       }
       @media (max-width: 600px) {
         .draw-map-slot {
@@ -3196,7 +3305,23 @@
                   </button>
                 </div>
               </div>
-              <div id="draw-map-slot" class="draw-map-slot"></div>
+              <div id="draw-map-slot" class="draw-map-slot">
+                <div
+                  id="drawing-badge"
+                  class="drawing-badge"
+                  style="display: none"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                  Drawing
+                </div>
+              </div>
 
               <div class="card" style="margin-top: 12px">
                 <button
@@ -3207,7 +3332,33 @@
                   Start drawing
                 </button>
                 <div id="draw-active-controls" style="display: none">
-                  <div class="empty-state" style="padding-top: 0">
+                  <div
+                    class="empty-state"
+                    style="
+                      padding-top: 0;
+                      display: flex;
+                      align-items: center;
+                      gap: 6px;
+                    "
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      style="
+                        width: 15px;
+                        height: 15px;
+                        flex-shrink: 0;
+                        stroke: currentColor;
+                        fill: none;
+                        stroke-width: 2;
+                      "
+                    >
+                      <path d="M12 20h9" />
+                      <path
+                        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"
+                      />
+                    </svg>
                     Click points on the map to trace the field boundary, then
                     Finish.
                   </div>
@@ -3228,26 +3379,63 @@
                 style="display: none; margin-top: 12px"
               >
                 <div class="panel-label">Field details</div>
+
+                <div
+                  id="new-farm-area-banner"
+                  class="area-banner"
+                  style="display: none"
+                ></div>
+
                 <label>Name</label>
                 <input
                   type="text"
                   id="new-farm-name"
                   placeholder="e.g. North block, Rampur"
                 />
+
+                <label>Location</label>
+                <div
+                  id="new-farm-location"
+                  class="location-display empty"
+                ></div>
+
                 <label>Crop (optional)</label>
-                <input
-                  type="text"
-                  id="new-farm-crop"
-                  placeholder="e.g. Wheat"
-                />
+                <div
+                  class="picker-field"
+                  id="new-farm-crop-field"
+                  onclick="openCropPicker()"
+                >
+                  <span id="new-farm-crop-label" class="picker-placeholder"
+                    >Select crop</span
+                  >
+                </div>
+
+                <label>Soil (optional)</label>
+                <div
+                  class="picker-field"
+                  id="new-farm-soil-field"
+                  onclick="openSoilPicker()"
+                >
+                  <span id="new-farm-soil-label" class="picker-placeholder"
+                    >Select soil</span
+                  >
+                </div>
+
                 <label>Sowing date (optional)</label>
-                <input type="date" id="new-farm-sowing-date" />
-                <label>Country (optional)</label>
-                <input
-                  type="text"
-                  id="new-farm-country"
-                  placeholder="e.g. India"
-                />
+                <div style="display: flex; align-items: center; gap: 10px">
+                  <input
+                    type="date"
+                    id="new-farm-sowing-date"
+                    oninput="onNewFarmSowingDateInput()"
+                    style="flex: 1"
+                  />
+                  <span
+                    id="new-farm-crop-age"
+                    class="mono"
+                    style="color: var(--text-dim); font-size: 12.5px"
+                  ></span>
+                </div>
+
                 <div class="btn-row" style="margin-top: 12px">
                   <button class="btn" onclick="cancelDraft()">Discard</button>
                   <button class="btn btn-primary" onclick="saveDraft()">
@@ -3255,6 +3443,45 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="item-picker-modal" style="display: none">
+          <div class="modal-card" style="max-width: 480px">
+            <div class="modal-header">
+              <h3 id="item-picker-title">Select</h3>
+              <button
+                class="icon-btn"
+                onclick="closeItemPicker()"
+                aria-label="Close"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div
+                class="header-search"
+                style="width: 100%; margin-bottom: 10px; position: relative"
+              >
+                <input
+                  id="item-picker-search"
+                  type="text"
+                  placeholder="Search..."
+                  oninput="renderItemPickerList()"
+                  style="width: 100%"
+                />
+              </div>
+              <div
+                id="item-picker-body"
+                style="max-height: 60vh; overflow-y: auto"
+              ></div>
             </div>
           </div>
         </div>
@@ -4556,7 +4783,11 @@
         // library in Maps JS API v3.65. Polygon drawing below is implemented
         // manually (click to add a vertex, Finish to close the shape) instead.
         // "places" is loaded for the address autocomplete on the header search box.
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=__vyomGoogleMapsReady`;
+        // "geometry" is loaded for spherical.computeArea() -- the create-form's
+        // instant acre preview shown right after finishDrawing(), before the
+        // farmer even saves (the authoritative area_acre still comes from the
+        // backend's geodesic calc on save; this is just a same-ballpark preview).
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&callback=__vyomGoogleMapsReady`;
         script.async = true;
         document.head.appendChild(script);
       }
@@ -4713,11 +4944,282 @@
           editable: true,
           map,
         });
+        // The polygon stays editable after finishing (vertices can be
+        // dragged) -- keep the area preview and location lookup in sync
+        // with those edits, not just the initial trace.
+        const path = draftPolygon.getPath();
+        ["set_at", "insert_at", "remove_at"].forEach((evt) => {
+          path.addListener(evt, () => {
+            draftGeoJSON = polygonToGeoJSON(draftPolygon);
+            showDraftAreaPreview();
+            populateDraftLocation();
+          });
+        });
         draftGeoJSON = polygonToGeoJSON(draftPolygon);
         isDrawing = false;
         updateDrawUI();
         document.getElementById("create-form").style.display = "block";
         document.getElementById("new-farm-name").focus();
+        showDraftAreaPreview();
+        populateDraftLocation();
+      }
+
+      // ~1 acre = 4046.8564224 m^2. This is a client-side preview only, using
+      // the Google Maps geometry library's spherical area -- the authoritative
+      // area_acre the farm is actually saved/listed with comes from the
+      // backend's own geodesic calc (see _geodesic_area_ha in api/farms.py),
+      // which runs on the sanitized/final geometry. The two will usually
+      // match to within rounding, but this one exists purely so the farmer
+      // sees roughly how big their field is BEFORE hitting Save, not after.
+      const _SQM_PER_ACRE = 4046.8564224;
+
+      function showDraftAreaPreview() {
+        const banner = document.getElementById("new-farm-area-banner");
+        if (!draftPolygon || !google.maps.geometry) {
+          banner.style.display = "none";
+          return;
+        }
+        const sqm = google.maps.geometry.spherical.computeArea(
+          draftPolygon.getPath(),
+        );
+        const acres = sqm / _SQM_PER_ACRE;
+        banner.textContent = `Field area: ${acres >= 100 ? acres.toFixed(1) : acres.toFixed(2)} acre`;
+        banner.style.display = "flex";
+      }
+
+      // ================= Auto-fetched location (replaces the old manual
+      // "Country" text field) =================
+      // Debounced + request-ID-guarded: dragging a vertex on the still-
+      // editable draftPolygon fires this repeatedly, but each keystroke-speed
+      // call shouldn't hit the Geocoding API -- and a slow response for an
+      // earlier shape must never clobber a newer one that resolved first.
+      let _draftLocationDebounceTimer = null;
+      let _draftLocationRequestId = 0;
+      let draftCountry = null;
+
+      function populateDraftLocation() {
+        clearTimeout(_draftLocationDebounceTimer);
+        _draftLocationDebounceTimer = setTimeout(() => {
+          if (!draftGeoJSON) return;
+          const locEl = document.getElementById("new-farm-location");
+          if (!geocoder) {
+            locEl.textContent = "Location lookup unavailable";
+            locEl.classList.add("empty");
+            return;
+          }
+          const centroid = geoJSONCentroid(draftGeoJSON);
+          locEl.textContent = "Detecting location\u2026";
+          locEl.classList.add("empty");
+          const requestId = ++_draftLocationRequestId;
+          geocoder.geocode({ location: centroid }, (results, status) => {
+            if (requestId !== _draftLocationRequestId) return; // superseded by a newer edit
+            if (status === "OK" && results[0]) {
+              locEl.textContent = results[0].formatted_address;
+              locEl.classList.remove("empty");
+              const countryComponent = (
+                results[0].address_components || []
+              ).find((c) => c.types.includes("country"));
+              draftCountry = countryComponent
+                ? countryComponent.long_name
+                : null;
+            } else {
+              locEl.textContent = "Location not found";
+              locEl.classList.add("empty");
+              draftCountry = null;
+            }
+          });
+        }, 400);
+      }
+
+      // ================= Crop / Soil reference data (NovosEdge) =================
+      const NOVOSEDGE_API_BASE = "https://api.novosedge.xyz:4433";
+      // Loaded from config.js (gitignored, see web/config.js.example), same
+      // as GOOGLE_MAPS_API_KEY above -- never hardcode real keys directly in
+      // this file, since it IS committed to git.
+      const NOVOSEDGE_API_KEY = window.NOVOSEDGE_API_KEY || "";
+
+      let cropListCache = null;
+      let soilListCache = null;
+      let selectedCrop = null; // { category, crop_name_en, image_url, ... }
+      let selectedSoil = null;
+
+      async function fetchNovosEdgeList(path) {
+        if (!NOVOSEDGE_API_KEY) {
+          throw new Error(
+            "NOVOSEDGE_API_KEY is not set -- add it to web/config.js (see config.js.example).",
+          );
+        }
+        const res = await fetch(`${NOVOSEDGE_API_BASE}${path}`, {
+          headers: { "x-api-key": NOVOSEDGE_API_KEY },
+        });
+        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+        return res.json();
+      }
+
+      async function fetchCropList() {
+        if (cropListCache) return cropListCache;
+        const data = await fetchNovosEdgeList("/ad/crop/list");
+        cropListCache = data.cropList || [];
+        return cropListCache;
+      }
+
+      async function fetchSoilList() {
+        if (soilListCache) return soilListCache;
+        const data = await fetchNovosEdgeList("/ad/crop/soil");
+        soilListCache = data.soilList || [];
+        return soilListCache;
+      }
+
+      // ================= Crop / Soil picker modal (shared) =================
+      let itemPickerGroups = {};
+      let itemPickerOnSelect = null;
+
+      function openItemPicker(title, items, onSelect) {
+        document.getElementById("item-picker-title").textContent = title;
+        document.getElementById("item-picker-search").value = "";
+        itemPickerOnSelect = onSelect;
+        renderItemPickerList(items);
+        document.getElementById("item-picker-modal").style.display = "flex";
+      }
+
+      function closeItemPicker() {
+        document.getElementById("item-picker-modal").style.display = "none";
+        itemPickerOnSelect = null;
+      }
+
+      // Called both on open (with the full list) and on every search
+      // keystroke (with undefined, meaning "re-filter the last full list").
+      let _itemPickerAllItems = [];
+
+      function renderItemPickerList(items) {
+        if (items) _itemPickerAllItems = items;
+        const query = (
+          document.getElementById("item-picker-search").value || ""
+        )
+          .trim()
+          .toLowerCase();
+        const body = document.getElementById("item-picker-body");
+        const filtered = _itemPickerAllItems.filter((item) =>
+          (item.crop_name_en || "").toLowerCase().includes(query),
+        );
+        if (!filtered.length) {
+          body.innerHTML = '<div class="empty-state">No matches.</div>';
+          itemPickerGroups = {};
+          return;
+        }
+        itemPickerGroups = {};
+        filtered.forEach((item) => {
+          const cat = item.category || "Other";
+          (itemPickerGroups[cat] = itemPickerGroups[cat] || []).push(item);
+        });
+        const catNames = Object.keys(itemPickerGroups).sort();
+        body.innerHTML = catNames
+          .map(
+            (cat) => `
+          <div class="picker-group-label">${escapeHtml(cat)}</div>
+          <div class="picker-grid">
+            ${itemPickerGroups[cat]
+              .map(
+                (item, i) => `
+              <div class="picker-item" data-cat="${escapeHtml(cat)}" data-idx="${i}">
+                <img src="${NOVOSEDGE_API_BASE}${item.image_url}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
+                <span>${escapeHtml(item.crop_name_en)}</span>
+              </div>`,
+              )
+              .join("")}
+          </div>`,
+          )
+          .join("");
+        body.querySelectorAll(".picker-item").forEach((el) => {
+          const cat = el.getAttribute("data-cat");
+          const idx = parseInt(el.getAttribute("data-idx"), 10);
+          el.onclick = () => {
+            const item = itemPickerGroups[cat][idx];
+            if (itemPickerOnSelect) itemPickerOnSelect(item);
+            closeItemPicker();
+          };
+        });
+      }
+
+      async function openCropPicker() {
+        let items;
+        try {
+          items = await fetchCropList();
+        } catch (e) {
+          return showToast("Could not load crop list: " + e.message);
+        }
+        openItemPicker("Select crop", items, (item) => {
+          selectedCrop = item;
+          renderCropField();
+        });
+      }
+
+      async function openSoilPicker() {
+        let items;
+        try {
+          items = await fetchSoilList();
+        } catch (e) {
+          return showToast("Could not load soil list: " + e.message);
+        }
+        openItemPicker("Select soil", items, (item) => {
+          selectedSoil = item;
+          renderSoilField();
+        });
+      }
+
+      function renderCropField() {
+        const label = document.getElementById("new-farm-crop-label");
+        if (selectedCrop) {
+          label.innerHTML = `<img src="${NOVOSEDGE_API_BASE}${selectedCrop.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedCrop.crop_name_en)}`;
+          label.classList.remove("picker-placeholder");
+        } else {
+          label.textContent = "Select crop";
+          label.classList.add("picker-placeholder");
+        }
+      }
+
+      function renderSoilField() {
+        const label = document.getElementById("new-farm-soil-label");
+        if (selectedSoil) {
+          label.innerHTML = `<img src="${NOVOSEDGE_API_BASE}${selectedSoil.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedSoil.crop_name_en)}`;
+          label.classList.remove("picker-placeholder");
+        } else {
+          label.textContent = "Select soil";
+          label.classList.add("picker-placeholder");
+        }
+      }
+
+      // ================= Sowing date -> live crop age (create form) =================
+      function onNewFarmSowingDateInput() {
+        const val = document.getElementById("new-farm-sowing-date").value;
+        const ageEl = document.getElementById("new-farm-crop-age");
+        if (!val) {
+          ageEl.textContent = "";
+          return;
+        }
+        // Match the backend's own crop_age_days calc exactly (see
+        // _to_farm_out in api/farms.py: (today - sowing_date).days) so this
+        // preview always agrees with what the farm card shows after saving.
+        const sowing = new Date(val + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((today - sowing) / 86400000);
+        ageEl.textContent = fmtCropAge(days) || "";
+      }
+
+      function resetCreateForm() {
+        document.getElementById("new-farm-name").value = "";
+        document.getElementById("new-farm-sowing-date").value = "";
+        document.getElementById("new-farm-crop-age").textContent = "";
+        document.getElementById("new-farm-area-banner").style.display = "none";
+        const locEl = document.getElementById("new-farm-location");
+        locEl.textContent = "";
+        locEl.classList.add("empty");
+        selectedCrop = null;
+        selectedSoil = null;
+        draftCountry = null;
+        renderCropField();
+        renderSoilField();
       }
 
       function cancelDrawing() {
@@ -4751,6 +5253,9 @@
           : "block";
         document.getElementById("draw-active-controls").style.display =
           isDrawing ? "block" : "none";
+        document.getElementById("drawing-badge").style.display = isDrawing
+          ? "flex"
+          : "none";
       }
 
       // ~1m in degrees -- two consecutive clicks this close together while
@@ -5174,6 +5679,7 @@
       // logic (startDrawing/finishDrawing/etc, which reference the one global
       // `map` variable) unchanged, instead of duplicating it for a second map.
       function openDrawFieldModal() {
+        resetCreateForm();
         document.getElementById("draw-field-modal").style.display = "flex";
         document
           .getElementById("draw-map-slot")
@@ -5617,10 +6123,7 @@
         draftPolygon = null;
         draftGeoJSON = null;
         document.getElementById("create-form").style.display = "none";
-        document.getElementById("new-farm-name").value = "";
-        document.getElementById("new-farm-crop").value = "";
-        document.getElementById("new-farm-sowing-date").value = "";
-        document.getElementById("new-farm-country").value = "";
+        resetCreateForm();
         closeDrawFieldModal();
       }
 
@@ -5634,12 +6137,14 @@
 
         const farmFields = {
           name,
-          crop_type:
-            document.getElementById("new-farm-crop").value.trim() || null,
+          crop_type: selectedCrop ? selectedCrop.crop_name_en : null,
+          soil_type: selectedSoil ? selectedSoil.crop_name_en : null,
           sowing_date:
             document.getElementById("new-farm-sowing-date").value || null,
-          country:
-            document.getElementById("new-farm-country").value.trim() || null,
+          // No manual "Country" input anymore -- this is whatever the
+          // reverse geocode in populateDraftLocation() resolved for the
+          // field's centroid, silently, same as the Location display above it.
+          country: draftCountry,
         };
 
         try {
@@ -5670,10 +6175,7 @@
           draftGeoJSON = null;
           draftFarmId = null;
           document.getElementById("create-form").style.display = "none";
-          document.getElementById("new-farm-name").value = "";
-          document.getElementById("new-farm-crop").value = "";
-          document.getElementById("new-farm-sowing-date").value = "";
-          document.getElementById("new-farm-country").value = "";
+          resetCreateForm();
           closeDrawFieldModal(/* skipConfirm */ true);
           await loadFarms();
           switchPage("imagery");

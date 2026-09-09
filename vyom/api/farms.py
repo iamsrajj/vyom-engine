@@ -63,6 +63,7 @@ class FarmCreate(BaseModel):
     geometry: dict = Field(...,
                            description="GeoJSON Polygon, any location worldwide")
     crop_type: Optional[str] = None
+    soil_type: Optional[str] = None
     country: Optional[str] = None
     sowing_date: Optional[date_cls] = None
     # True when `geometry` is a rough placeholder (e.g. a small square around
@@ -85,6 +86,7 @@ class FarmUpdate(BaseModel):
     did, or fall in different coverage entirely."""
     name: Optional[str] = None
     crop_type: Optional[str] = None
+    soil_type: Optional[str] = None
     country: Optional[str] = None
     geometry: Optional[dict] = Field(
         None, description="GeoJSON Polygon -- the farmer's final traced boundary, replacing a draft's rough placeholder")
@@ -96,6 +98,7 @@ class FarmOut(BaseModel):
     name: Optional[str]
     user_id: uuid.UUID
     crop_type: Optional[str]
+    soil_type: Optional[str]
     country: Optional[str]
     area_ha: Optional[float]
     area_acre: Optional[float]
@@ -147,6 +150,7 @@ def _to_farm_out(farm: Polygon) -> FarmOut:
         name=farm.name,
         user_id=farm.user_id,
         crop_type=farm.crop_type,
+        soil_type=farm.soil_type,
         country=farm.country,
         area_ha=area_ha,
         area_acre=round(area_ha * _HA_TO_ACRE,
@@ -247,6 +251,7 @@ def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), 
         user_id=stable_owner_uuid(current_user),
         geom=from_shape(geom_shape, srid=4326),
         crop_type=payload.crop_type,
+        soil_type=payload.soil_type,
         country=payload.country,
         sowing_date=payload.sowing_date,
         area_ha=area_ha,

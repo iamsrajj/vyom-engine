@@ -69,6 +69,7 @@ class Polygon(Base):
     geom = Column(Geometry(geometry_type="POLYGON", srid=4326), nullable=False)
     area_ha = Column(Numeric)
     crop_type = Column(String)
+    soil_type = Column(String)
     # populated at creation from reverse geocoding or client-supplied
     country = Column(String)
     # crop age is always derived as (today - sowing_date), never stored
