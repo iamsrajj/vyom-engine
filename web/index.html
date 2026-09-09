@@ -3438,7 +3438,11 @@
 
                 <div class="btn-row" style="margin-top: 12px">
                   <button class="btn" onclick="cancelDraft()">Discard</button>
-                  <button class="btn btn-primary" onclick="saveDraft()">
+                  <button
+                    class="btn btn-primary"
+                    id="save-draft-btn"
+                    onclick="saveDraft()"
+                  >
                     Save field
                   </button>
                 </div>
@@ -4855,6 +4859,12 @@
       let draftClickListener = null;
 
       function startDrawing() {
+        // Guards against a rapid double-click/double-tap on "Start drawing"
+        // registering a second map-click listener before updateDrawUI()
+        // hides the button -- two listeners firing on the same click would
+        // push duplicate vertices into draftPath and corrupt the traced
+        // boundary, same root cause as the Save-button duplicate-farm issue.
+        if (isDrawing) return;
         if (draftPolygon) {
           draftPolygon.setMap(null);
           draftPolygon = null;
@@ -5215,6 +5225,13 @@
         draftCountry = null;
         renderCropField();
         renderSoilField();
+        // Defensive reset in case a previous save's finally{} somehow
+        // didn't run (e.g. a hard navigation mid-request) -- next time this
+        // form is opened, the Save button should never come up pre-disabled.
+        isSavingDraft = false;
+        const saveBtn = document.getElementById("save-draft-btn");
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save field";
       }
 
       function cancelDrawing() {
@@ -6122,13 +6139,27 @@
         closeDrawFieldModal();
       }
 
+      // Guards against rapid double-clicks/double-taps creating duplicate
+      // farms: setting the button's disabled attribute happens synchronously
+      // on the first click, before any `await` yields control back to the
+      // browser, so a second click can't even dispatch while a save is in
+      // flight. isSavingDraft is a belt-and-suspenders check in case
+      // something else ever calls saveDraft() directly (not via the button).
+      let isSavingDraft = false;
+
       async function saveDraft() {
+        if (isSavingDraft) return;
         const name = document.getElementById("new-farm-name").value.trim();
         if (!name) return showToast("Give the field a name first.");
         // Re-read from the polygon in case the user dragged a vertex after finishing the shape.
         if (draftPolygon) draftGeoJSON = polygonToGeoJSON(draftPolygon);
         if (!draftGeoJSON)
           return showToast("Draw a boundary on the map first.");
+
+        isSavingDraft = true;
+        const saveBtn = document.getElementById("save-draft-btn");
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving\u2026";
 
         const farmFields = {
           name,
@@ -6181,6 +6212,10 @@
         } catch (e) {
           if (e.message !== "Not authenticated")
             showToast("Could not save field: " + e.message);
+        } finally {
+          isSavingDraft = false;
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save field";
         }
       }
 
