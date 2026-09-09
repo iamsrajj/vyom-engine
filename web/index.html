@@ -6594,6 +6594,13 @@
         if (status.ready) {
           hideProcessingOverlay();
           stopFarmStatusPolling();
+          // The overlay disappearing and the dashboard actually having
+          // something to show need to happen together -- without this,
+          // the map/readouts/chart were still showing whatever they showed
+          // when the farm had zero data (empty/placeholder state) until the
+          // farmer manually reselected the farm or reloaded the page.
+          await loadDates();
+          await refreshLayerAndReadouts();
           return;
         }
         showProcessingOverlay(status.progress_pct);
