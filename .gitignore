@@ -19,3 +19,6 @@ data/processed/
 *.swp
 .vscode/
 .idea/
+
+# Celery
+celerybeat-schedule
