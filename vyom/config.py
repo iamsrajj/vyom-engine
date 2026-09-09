@@ -142,5 +142,13 @@ class Settings(BaseSettings):
     agridoot_otp_url: str = "https://apiv2.agridoot.co.in:12443/ad/v2/user/genotp"
     agridoot_otp_api_key: str = ""
 
+    # NovosEdge's crop/soil reference lists (see vyom/api/reference.py) --
+    # proxied server-side rather than called directly from the browser,
+    # since api.novosedge.xyz doesn't set Access-Control-Allow-Origin for
+    # browser JS (it's built for server-to-server use, hence the custom
+    # port + API key), and this also keeps the key off the client entirely.
+    novosedge_api_base: str = "https://api.novosedge.xyz:4433"
+    novosedge_api_key: str = ""
+
 
 settings = Settings()

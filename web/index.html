@@ -18,7 +18,7 @@
     <!-- config.js is gitignored (real API keys live there) -- copy from
          config.js.example and fill in real values. This must load before
          the main script below so window.GOOGLE_MAPS_API_KEY / GOOGLE_CLIENT_ID
-         / NOVOSEDGE_API_KEY are set in time. -->
+         are set in time. -->
     <script src="config.js"></script>
     <style>
       :root {
@@ -4787,7 +4787,7 @@
         // instant acre preview shown right after finishDrawing(), before the
         // farmer even saves (the authoritative area_acre still comes from the
         // backend's geodesic calc on save; this is just a same-ballpark preview).
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&callback=__vyomGoogleMapsReady`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&loading=async&callback=__vyomGoogleMapsReady`;
         script.async = true;
         document.head.appendChild(script);
       }
@@ -5032,40 +5032,35 @@
       }
 
       // ================= Crop / Soil reference data (NovosEdge) =================
-      const NOVOSEDGE_API_BASE = "https://api.novosedge.xyz:4433";
-      // Loaded from config.js (gitignored, see web/config.js.example), same
-      // as GOOGLE_MAPS_API_KEY above -- never hardcode real keys directly in
-      // this file, since it IS committed to git.
-      const NOVOSEDGE_API_KEY = window.NOVOSEDGE_API_KEY || "";
+      // Fetched via our own backend (GET /reference/crops, /reference/soils
+      // -- see vyom/api/reference.py) rather than calling api.novosedge.xyz
+      // directly from the browser: that API doesn't set
+      // Access-Control-Allow-Origin for browser JS (it's built for
+      // server-to-server use), so a direct fetch() fails with a CORS error
+      // regardless of whether the key is correct. The backend proxy also
+      // means NOVOSEDGE_API_KEY never needs to exist in browser-visible
+      // code at all -- it lives in the server's .env only.
+      // Images are still loaded directly from NovosEdge's origin via plain
+      // <img> tags -- CORS only restricts fetch()/XHR reading a response
+      // body cross-origin, not <img> resource loads, so those don't need
+      // proxying.
+      const NOVOSEDGE_IMAGE_BASE = "https://api.novosedge.xyz:4433";
 
       let cropListCache = null;
       let soilListCache = null;
       let selectedCrop = null; // { category, crop_name_en, image_url, ... }
       let selectedSoil = null;
 
-      async function fetchNovosEdgeList(path) {
-        if (!NOVOSEDGE_API_KEY) {
-          throw new Error(
-            "NOVOSEDGE_API_KEY is not set -- add it to web/config.js (see config.js.example).",
-          );
-        }
-        const res = await fetch(`${NOVOSEDGE_API_BASE}${path}`, {
-          headers: { "x-api-key": NOVOSEDGE_API_KEY },
-        });
-        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-        return res.json();
-      }
-
       async function fetchCropList() {
         if (cropListCache) return cropListCache;
-        const data = await fetchNovosEdgeList("/ad/crop/list");
+        const data = await api("/reference/crops");
         cropListCache = data.cropList || [];
         return cropListCache;
       }
 
       async function fetchSoilList() {
         if (soilListCache) return soilListCache;
-        const data = await fetchNovosEdgeList("/ad/crop/soil");
+        const data = await api("/reference/soils");
         soilListCache = data.soilList || [];
         return soilListCache;
       }
@@ -5122,7 +5117,7 @@
               .map(
                 (item, i) => `
               <div class="picker-item" data-cat="${escapeHtml(cat)}" data-idx="${i}">
-                <img src="${NOVOSEDGE_API_BASE}${item.image_url}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
+                <img src="${NOVOSEDGE_IMAGE_BASE}${item.image_url}" alt="" loading="lazy" onerror="this.style.visibility='hidden'" />
                 <span>${escapeHtml(item.crop_name_en)}</span>
               </div>`,
               )
@@ -5170,7 +5165,7 @@
       function renderCropField() {
         const label = document.getElementById("new-farm-crop-label");
         if (selectedCrop) {
-          label.innerHTML = `<img src="${NOVOSEDGE_API_BASE}${selectedCrop.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedCrop.crop_name_en)}`;
+          label.innerHTML = `<img src="${NOVOSEDGE_IMAGE_BASE}${selectedCrop.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedCrop.crop_name_en)}`;
           label.classList.remove("picker-placeholder");
         } else {
           label.textContent = "Select crop";
@@ -5181,7 +5176,7 @@
       function renderSoilField() {
         const label = document.getElementById("new-farm-soil-label");
         if (selectedSoil) {
-          label.innerHTML = `<img src="${NOVOSEDGE_API_BASE}${selectedSoil.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedSoil.crop_name_en)}`;
+          label.innerHTML = `<img src="${NOVOSEDGE_IMAGE_BASE}${selectedSoil.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(selectedSoil.crop_name_en)}`;
           label.classList.remove("picker-placeholder");
         } else {
           label.textContent = "Select soil";

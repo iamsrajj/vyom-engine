@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api
+from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
 from vyom.error_log import log_error
@@ -50,6 +50,10 @@ app.include_router(auth_api.router)
 # require a ?token= query param instead, since map libraries load tiles as
 # plain image requests with no custom headers available.
 app.include_router(farms.router, dependencies=[Depends(require_auth)])
+# reference.router proxies NovosEdge's crop/soil lists (see that file for
+# why this is a server-side proxy, not a direct browser call) -- gated the
+# same as farms, since it's only ever called from the logged-in dashboard.
+app.include_router(reference_api.router, dependencies=[Depends(require_auth)])
 app.include_router(tiles.router, dependencies=[Depends(require_auth_query)])
 # errors.router is protected inside errors.py itself (admin-only), not here,
 # since it needs a different check than plain require_auth -- see that file.
