@@ -36,12 +36,25 @@ _read_cache: dict[str, tuple[float, object]] = {}
 
 
 def _cached_read(key: str, compute):
+    """Returns (value, was_cache_hit) -- callers set an X-Cache: HIT/MISS
+    response header from the second element so cache behavior is directly
+    observable (curl the same endpoint twice within _READ_CACHE_TTL_SECONDS
+    and watch the header flip) instead of having to infer it from latency,
+    which is noisy and easy to misread on a small dataset."""
     now = time.time()
     cached = _read_cache.get(key)
     if cached and now - cached[0] < _READ_CACHE_TTL_SECONDS:
-        return cached[1]
+        return cached[1], True
     value = compute()
     _read_cache[key] = (now, value)
+    return value, False
+
+
+def _set_cache_header(response: Response, result: tuple):
+    """Unpacks a _cached_read() (value, was_hit) result, sets X-Cache on the
+    given response, and returns just the value for the endpoint to return."""
+    value, was_hit = result
+    response.headers["X-Cache"] = "HIT" if was_hit else "MISS"
     return value
 
 
@@ -397,7 +410,7 @@ def list_farms(include_drafts: bool = False, current_user: str = Depends(require
 
 
 @router.get("/current-status")
-def current_status(metric: str = "NDVI_mean", current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+def current_status(response: Response, metric: str = "NDVI_mean", current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Bulk 'what should the map show right now' endpoint -- one call for
     every farm instead of N calls, since a map render needs all of them at
     once. Registered BEFORE the /{farm_id} route below -- FastAPI matches
@@ -471,7 +484,7 @@ def current_status(metric: str = "NDVI_mean", current_user: str = Depends(requir
             })
         return out
 
-    return _cached_read(f"current-status:{owner}:{metric}", _compute)
+    return _set_cache_header(response, _cached_read(f"current-status:{owner}:{metric}", _compute))
 
 
 @router.get("/{farm_id}", response_model=FarmOut)
@@ -591,6 +604,7 @@ def farm_status(farm_id: uuid.UUID, current_user: str = Depends(require_auth), d
 
 @router.get("/{farm_id}/timeseries", response_model=list[ZonalStatOut])
 def timeseries(
+    response: Response,
     farm_id: uuid.UUID, metric: str = "NDVI_mean",
     include_interpolated: bool = False,
     current_user: str = Depends(require_auth),
@@ -674,12 +688,12 @@ def timeseries(
 
         return out
 
-    return _cached_read(
-        f"timeseries:{farm_id}:{metric}:{include_interpolated}", _compute)
+    return _set_cache_header(response, _cached_read(
+        f"timeseries:{farm_id}:{metric}:{include_interpolated}", _compute))
 
 
 @router.get("/{farm_id}/latest")
-def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
+def latest_snapshot(response: Response, farm_id: uuid.UUID, date: str = "latest",
                     include_interpolated: bool = False,
                     current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Reading for every index this deployment computes, for one specific
@@ -758,12 +772,12 @@ def latest_snapshot(farm_id: uuid.UUID, date: str = "latest",
                                    "acquisition_date": None, "source": None}
         return out
 
-    return _cached_read(
-        f"latest:{farm_id}:{date}:{include_interpolated}", _compute)
+    return _set_cache_header(response, _cached_read(
+        f"latest:{farm_id}:{date}:{include_interpolated}", _compute))
 
 
 @router.get("/{farm_id}/available-dates")
-def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[str] = None,
+def available_dates(response: Response, farm_id: uuid.UUID, platform: str = "S2", index: Optional[str] = None,
                     include_interpolated: bool = False,
                     current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Dates with processed imagery for this farm -- populates a date picker in
@@ -830,5 +844,5 @@ def available_dates(farm_id: uuid.UUID, platform: str = "S2", index: Optional[st
 
         return result
 
-    return _cached_read(
-        f"available-dates:{farm_id}:{platform}:{index}:{include_interpolated}", _compute)
+    return _set_cache_header(response, _cached_read(
+        f"available-dates:{farm_id}:{platform}:{index}:{include_interpolated}", _compute))

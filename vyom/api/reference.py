@@ -35,11 +35,14 @@ _CACHE_TTL_SECONDS = 6 * 3600
 _cache: dict[str, tuple[float, list]] = {}
 
 
-def _fetch_novosedge_list(path: str, list_key: str) -> list:
+def _fetch_novosedge_list(path: str, list_key: str) -> tuple[list, bool]:
+    """Returns (data, was_cache_hit) -- callers set X-Cache from the second
+    element (same convention as farms.py's _cached_read) so this is directly
+    observable rather than inferred from latency."""
     now = time.time()
     cached = _cache.get(path)
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
+        return cached[1], True
 
     if not settings.novosedge_api_key:
         raise HTTPException(
@@ -59,13 +62,13 @@ def _fetch_novosedge_list(path: str, list_key: str) -> list:
             # serve -- stale reference data beats a broken picker.
             logger.warning(
                 "NovosEdge %s fetch failed (%s), serving stale cache", path, exc)
-            return cached[1]
+            return cached[1], True
         logger.error("NovosEdge %s fetch failed: %s", path, exc)
         raise HTTPException(
             502, f"Could not reach the crop/soil reference service: {exc}")
 
     _cache[path] = (now, data)
-    return data
+    return data, False
 
 
 @router.get("/crops")
@@ -75,10 +78,14 @@ def list_crops(response: Response):
     # round-trip to us entirely for a while, on top of us skipping the
     # round-trip to NovosEdge (the in-process cache above).
     response.headers["Cache-Control"] = "private, max-age=21600"
-    return {"cropList": _fetch_novosedge_list("/ad/crop/list", "cropList")}
+    data, was_hit = _fetch_novosedge_list("/ad/crop/list", "cropList")
+    response.headers["X-Cache"] = "HIT" if was_hit else "MISS"
+    return {"cropList": data}
 
 
 @router.get("/soils")
 def list_soils(response: Response):
     response.headers["Cache-Control"] = "private, max-age=21600"
-    return {"soilList": _fetch_novosedge_list("/ad/crop/soil", "soilList")}
+    data, was_hit = _fetch_novosedge_list("/ad/crop/soil", "soilList")
+    response.headers["X-Cache"] = "HIT" if was_hit else "MISS"
+    return {"soilList": data}
