@@ -407,6 +407,41 @@
         display: flex;
         align-items: center;
       }
+      .header-search-results {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        max-height: 320px;
+        overflow-y: auto;
+        box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.15));
+        z-index: 50;
+      }
+      .header-search-result-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .header-search-result-item:hover {
+        background: var(--bg-raised, #f3f5f3);
+      }
+      .header-search-result-item .hsr-crop {
+        color: var(--text-dim);
+        font-size: 11.5px;
+      }
+      .header-search-empty {
+        padding: 14px;
+        font-size: 13px;
+        color: var(--text-dim);
+        text-align: center;
+      }
       .header-search input {
         background: var(--bg-deep);
         border: 1px solid var(--line);
@@ -2188,6 +2223,69 @@
         padding: 16px 18px 20px;
         overflow-y: auto;
       }
+      .help-tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 14px;
+      }
+      .help-tab {
+        border: none;
+        background: none;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-dim);
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .help-tab.active {
+        color: var(--canopy, #4c9a5b);
+        border-bottom-color: var(--canopy, #4c9a5b);
+      }
+      .faq-section-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        margin: 16px 0 6px;
+      }
+      .faq-section-label:first-child {
+        margin-top: 0;
+      }
+      .faq-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 6px;
+        overflow: hidden;
+      }
+      .faq-item summary {
+        padding: 10px 12px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        list-style: none;
+      }
+      .faq-item summary::-webkit-details-marker {
+        display: none;
+      }
+      .faq-item summary::before {
+        content: "+";
+        display: inline-block;
+        width: 14px;
+        color: var(--canopy, #4c9a5b);
+        font-weight: 700;
+      }
+      .faq-item[open] summary::before {
+        content: "\2212";
+      }
+      .faq-item .faq-answer {
+        padding: 0 12px 12px 26px;
+        font-size: 12.5px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
       .draw-map-slot {
         width: 100%;
         height: 320px;
@@ -2410,9 +2508,7 @@
         <div class="login-panel">
           <div class="login-topbar">
             <span>&#127760; English</span>
-            <span onclick="showHonestPlaceholder('Help center')"
-              >? Need help?</span
-            >
+            <span onclick="openHelpModal()">? Need help?</span>
           </div>
           <div class="login-card" id="login-card-main">
             <div class="login-logo-row">
@@ -2749,6 +2845,7 @@
               type="text"
               placeholder="Search your fields..."
               oninput="onGlobalFieldSearch()"
+              onfocus="onGlobalFieldSearch()"
             />
             <div class="search-inline-btns">
               <button
@@ -2760,6 +2857,11 @@
                 &times;
               </button>
             </div>
+            <div
+              id="header-search-results"
+              class="header-search-results"
+              style="display: none"
+            ></div>
           </div>
 
           <button
@@ -2779,7 +2881,7 @@
           </button>
           <button
             class="icon-btn"
-            onclick="showHonestPlaceholder('Help center')"
+            onclick="openHelpModal()"
             title="Need help?"
             aria-label="Help"
           >
@@ -3486,6 +3588,105 @@
           </div>
         </div>
 
+        <div class="modal-overlay" id="help-modal" style="display: none">
+          <div class="modal-card" style="max-width: 640px">
+            <div class="modal-header">
+              <h3>Help &amp; Support</h3>
+              <button
+                class="icon-btn"
+                onclick="closeHelpModal()"
+                aria-label="Close"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="help-tabs">
+                <button
+                  class="help-tab active"
+                  id="help-tab-faq"
+                  onclick="switchHelpTab('faq')"
+                >
+                  FAQ
+                </button>
+                <button
+                  class="help-tab"
+                  id="help-tab-contact"
+                  onclick="switchHelpTab('contact')"
+                >
+                  Contact Us
+                </button>
+              </div>
+
+              <div id="help-panel-faq">
+                <input
+                  id="help-faq-search"
+                  type="text"
+                  placeholder="Search FAQs..."
+                  oninput="renderFaq()"
+                  style="width: 100%; margin-bottom: 12px"
+                />
+                <div
+                  id="help-faq-body"
+                  style="max-height: 55vh; overflow-y: auto"
+                ></div>
+              </div>
+
+              <div id="help-panel-contact" style="display: none">
+                <p
+                  style="color: var(--text-dim); font-size: 13px; margin-top: 0"
+                >
+                  Can't find your answer in the FAQ? Send us a message and we'll
+                  get back to you.
+                </p>
+                <label>Name</label>
+                <input id="contact-name" type="text" placeholder="Your name" />
+                <label>Email or phone</label>
+                <input
+                  id="contact-contact"
+                  type="text"
+                  placeholder="you@example.com or your phone number"
+                />
+                <label>Message</label>
+                <textarea
+                  id="contact-message"
+                  rows="5"
+                  placeholder="How can we help?"
+                  style="
+                    width: 100%;
+                    resize: vertical;
+                    font-family: inherit;
+                    font-size: 13.5px;
+                    padding: 9px 12px;
+                    border-radius: 8px;
+                    border: 1px solid var(--line);
+                    background: var(--bg-input, #fff);
+                  "
+                ></textarea>
+                <div
+                  id="contact-form-error"
+                  class="login-error"
+                  style="display: none"
+                ></div>
+                <button
+                  class="btn btn-primary"
+                  style="margin-top: 12px"
+                  id="contact-submit-btn"
+                  onclick="submitContactForm()"
+                >
+                  Send Message
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="page-view" id="page-imagery" style="display: none">
           <div class="imagery-shell">
             <div
@@ -3543,6 +3744,10 @@
                     <div class="fo-slabel">Crop</div>
                   </div>
                   <div class="fo-stat">
+                    <div class="fo-sval" id="detail-soil">&ndash;</div>
+                    <div class="fo-slabel">Soil</div>
+                  </div>
+                  <div class="fo-stat">
                     <div class="fo-sval" id="detail-crop-age">&ndash;</div>
                     <div class="fo-slabel">Crop age</div>
                   </div>
@@ -3585,21 +3790,55 @@
                   "
                 >
                   <div>
-                    <label style="margin: 0">Crop</label
+                    <label style="margin: 0">Name</label
                     ><input
                       type="text"
-                      id="edit-crop"
-                      placeholder="e.g. Wheat"
-                      style="width: 160px"
+                      id="edit-name"
+                      placeholder="e.g. North block, Rampur"
+                      style="width: 180px"
                     />
                   </div>
                   <div>
-                    <label style="margin: 0">Sowing date</label
-                    ><input
-                      type="date"
-                      id="edit-sowing-date"
+                    <label style="margin: 0">Crop</label>
+                    <div
+                      class="picker-field"
+                      id="edit-crop-field"
+                      onclick="openEditCropPicker()"
                       style="width: 160px"
-                    />
+                    >
+                      <span id="edit-crop-label" class="picker-placeholder"
+                        >Select crop</span
+                      >
+                    </div>
+                  </div>
+                  <div>
+                    <label style="margin: 0">Soil</label>
+                    <div
+                      class="picker-field"
+                      id="edit-soil-field"
+                      onclick="openEditSoilPicker()"
+                      style="width: 160px"
+                    >
+                      <span id="edit-soil-label" class="picker-placeholder"
+                        >Select soil</span
+                      >
+                    </div>
+                  </div>
+                  <div>
+                    <label style="margin: 0">Sowing date</label>
+                    <div style="display: flex; align-items: center; gap: 8px">
+                      <input
+                        type="date"
+                        id="edit-sowing-date"
+                        oninput="onEditSowingDateInput()"
+                        style="width: 160px"
+                      />
+                      <span
+                        id="edit-crop-age"
+                        class="mono"
+                        style="color: var(--text-dim); font-size: 12px"
+                      ></span>
+                    </div>
                   </div>
                   <button
                     class="btn"
@@ -4135,7 +4374,10 @@
       <footer>
         <div class="footer-links">
           <span class="mono"
-            >Vyom Engine v0.4 &middot; &copy; 2026 AgriDoot</span
+            >Vyom Engine v0.4 &middot; &copy; 2026
+            <a href="https://agridoot.com" target="_blank" rel="noopener"
+              >AgriDoot</a
+            ></span
           >
           <a href="#" onclick="return false;">Docs</a>
           <a href="#" onclick="return false;">Support</a>
@@ -5160,6 +5402,494 @@
         itemPickerOnSelect = null;
       }
 
+      // ================= Help & Support modal =================
+      const FAQ_DATA = [
+        {
+          section: "Getting Started",
+          qas: [
+            [
+              "How do I sign in?",
+              "Use Google Sign-In or your phone number with an OTP code sent via SMS.",
+            ],
+            [
+              "I don't have a Google account, can I still sign up?",
+              "Yes -- sign up with just your phone number and OTP, no Google account required.",
+            ],
+            [
+              "Can I link my Google account later if I signed up with my phone?",
+              "Yes, go to Settings and choose to link your Google account.",
+            ],
+            [
+              "How long does my session stay signed in?",
+              'Sessions auto sign-out after a period of inactivity, shown in the top-right corner (e.g. "Auto sign-out in Xh Ym").',
+            ],
+            [
+              "I didn't receive my OTP, what do I do?",
+              'Wait a minute and tap "Resend code"; double-check your phone number and country code.',
+            ],
+            [
+              "Is there a mobile app?",
+              "Yes -- the AgriDoot app is available on Google Play and the App Store, alongside this web dashboard.",
+            ],
+            [
+              "Can multiple people share one account?",
+              "Each account is tied to one phone number/Google identity; for a team, each member should sign in separately.",
+            ],
+            [
+              "What browsers are supported?",
+              "Any modern browser -- Chrome, Edge, Safari, or Firefox -- on desktop or mobile.",
+            ],
+            [
+              "Do I need to pay to use Vyom Engine?",
+              "Contact AgriDoot support for current pricing and plan details.",
+            ],
+            [
+              "Can I use the dashboard without internet?",
+              "No, an internet connection is needed to load satellite imagery and farm data.",
+            ],
+            [
+              "How do I change my name or profile photo?",
+              "Go to Settings to update your profile details.",
+            ],
+            [
+              "What data does AgriDoot store about me?",
+              "Your account details (name, phone/email), your farm boundaries, and the satellite readings computed for your fields.",
+            ],
+            [
+              "How do I delete my account?",
+              "Contact support to request account deletion.",
+            ],
+            [
+              "Why does the app ask for my location once?",
+              "Only to help center the map when adding a new field near you -- it isn't tracked continuously.",
+            ],
+            [
+              "Can I use this on a tablet?",
+              "Yes, the dashboard is responsive and works on tablets, phones, and desktops.",
+            ],
+          ],
+        },
+        {
+          section: "Fields & Farms",
+          qas: [
+            [
+              "How do I add a new field?",
+              'Click "+ Add New Field," search for your area, then trace the boundary by clicking points on the map.',
+            ],
+            [
+              "What happens after I save a new field?",
+              "The system automatically starts fetching up to a year of satellite history, which can take up to 12\u201318 hours to fully populate.",
+            ],
+            [
+              'Why is my new field showing "fetching your field\'s data"?',
+              "That's normal -- discovering, downloading, and processing the first satellite passes for a brand-new area takes time.",
+            ],
+            [
+              "Can I edit a field's boundary after saving it?",
+              "Currently you can edit its name, crop, soil, and sowing date directly; contact support if you need the boundary itself redrawn.",
+            ],
+            [
+              "How do I rename a field?",
+              'Open the field, click "Edit," update the Name field, then Save.',
+            ],
+            [
+              "How do I delete a field?",
+              'Open the field and click "Delete" -- this permanently removes it and its history.',
+            ],
+            [
+              "Can I undo a field deletion?",
+              "No, deletion is permanent, so double-check before confirming.",
+            ],
+            [
+              "Why does my field's area look slightly different from what I expected?",
+              "The area shown is calculated geodesically from your drawn boundary and may differ slightly from a rough visual estimate.",
+            ],
+            [
+              "Can I have fields in different countries?",
+              "Yes, you can draw a field boundary anywhere in the world.",
+            ],
+            [
+              "What's the smallest field size supported?",
+              "A boundary needs clearly separated corners -- an extremely tiny or nearly-collapsed shape may not form a valid field.",
+            ],
+            [
+              "How many fields can I add?",
+              "There's no fixed limit in the dashboard itself; contact support for large-scale use cases.",
+            ],
+            [
+              "Can I search for a specific field?",
+              "Yes, use the search box at the top of the dashboard -- it filters by field name or crop as you type.",
+            ],
+            [
+              'What does the "Active" badge mean on a field?',
+              "It shows the field is currently being tracked and refreshed for new satellite data.",
+            ],
+            [
+              "Can I export my field's data?",
+              "Not directly from the dashboard yet -- contact support for a data export.",
+            ],
+            [
+              "Why did my field briefly disappear from the list after creating it?",
+              'A newly drawn field is briefly a "draft" while being finalized; it appears properly once the save step completes.',
+            ],
+          ],
+        },
+        {
+          section: "Crops & Soil",
+          qas: [
+            [
+              "Why do I need to select a crop?",
+              "It's shown on your field's summary card for your own reference; it doesn't affect the satellite calculations themselves.",
+            ],
+            [
+              "What if my crop isn't in the list?",
+              "Pick the closest match, or contact support to request it be added to the reference list.",
+            ],
+            [
+              "Can I change the crop later?",
+              'Yes -- open the field, click "Edit," and pick a new crop from the picker.',
+            ],
+            [
+              'What is "crop age" and how is it calculated?',
+              "The number of days since your entered sowing date, shown automatically once that date is set.",
+            ],
+            [
+              "Do I have to enter a sowing date?",
+              "No, it's optional -- but entering it unlocks the crop-age display.",
+            ],
+            [
+              "Why does soil type matter?",
+              "It's contextual information for your own records; it doesn't change how satellite indices are computed.",
+            ],
+            [
+              "How many soil types are available?",
+              "The picker lists every soil category from AgriDoot's reference list, grouped by type (e.g. Sandy, Loam, Clay).",
+            ],
+            [
+              "Can I select more than one crop for the same field?",
+              "No, each field has one crop and one soil type at a time.",
+            ],
+            [
+              "What happens if I don't select a soil type?",
+              'Nothing breaks -- it\'s optional, and the field just shows "Not set."',
+            ],
+            [
+              "Are the crop and soil pictures accurate to my exact variety?",
+              "They're representative icons for the general category, not photos of your specific variety.",
+            ],
+            [
+              "Can I search within the crop/soil picker?",
+              "Yes -- there's a search box at the top of the picker to filter the list as you type.",
+            ],
+            [
+              "Why are crops grouped by category in the picker?",
+              "To make a long list (vegetables, fruits, pulses, cereals, etc.) easier to scan.",
+            ],
+            [
+              "Does changing my crop reset my satellite history?",
+              "No -- changing crop, soil, name, or sowing date never affects your existing satellite readings.",
+            ],
+            [
+              "Is medicinal/herb farming supported?",
+              "Yes -- the crop list includes a Medicinal category (e.g. Aloe Vera, Ashwagandha).",
+            ],
+            [
+              "Who maintains the crop and soil reference lists?",
+              "They're maintained by AgriDoot/NovosEdge and updated periodically.",
+            ],
+          ],
+        },
+        {
+          section: "Satellite Data & Indices",
+          qas: [
+            [
+              "What satellites does Vyom Engine use?",
+              "Copernicus Sentinel-1 (radar) and Sentinel-2 (optical) -- free, publicly available ESA satellites.",
+            ],
+            [
+              "What is NDVI?",
+              "Normalized Difference Vegetation Index -- a standard measure of plant health/greenness from optical imagery.",
+            ],
+            [
+              "Why are there so many indices?",
+              "Different indices highlight different things -- vegetation health, water content, soil, chlorophyll -- so you can pick what's relevant to you.",
+            ],
+            [
+              "What does the color scale under each index mean?",
+              "It buckets values into ranges (e.g. Low/Medium/High) so you can read the field's condition at a glance.",
+            ],
+            [
+              "Why is part of my field showing no data/gray?",
+              "Usually cloud cover blocked the optical sensor for that pass, or that spot hasn't been read yet.",
+            ],
+            [
+              "What's the difference between S1 and S2 indices?",
+              "S1 (radar) can see through clouds but measures different properties; S2 (optical) gives the familiar vegetation indices but is blocked by clouds.",
+            ],
+            [
+              "How often does new satellite data arrive?",
+              "Sentinel satellites revisit roughly every 5 days (S2) to 6\u201312 days (S1), weather and orbit permitting.",
+            ],
+            [
+              "Why does an index show a value even on a cloudy date?",
+              'That\'s a gap-filled ("interpolated" or "provisional") estimate, clearly labeled as such -- not a real reading for that day.',
+            ],
+            [
+              'What\'s the difference between "interpolated" and "provisional"?',
+              "Interpolated values sit between two real readings; provisional values carry forward the last real reading until a new one arrives.",
+            ],
+            [
+              "Can I trust interpolated values for real decisions?",
+              'Treat them as estimates, not certainties -- a real ("satellite") reading is always preferable when one exists.',
+            ],
+            [
+              'What does "Cloud X%" near the map mean?',
+              "The percentage of that satellite pass's image affected by clouds.",
+            ],
+            [
+              "Can I compare two dates side by side?",
+              "Yes -- use the Comparisons page to view two dates for the same index next to each other.",
+            ],
+            [
+              "Why does my radar (S1) data look noisier than optical?",
+              "Radar (SAR) imagery is inherently speckled/textured -- this is normal, not a data error.",
+            ],
+            [
+              "Is soil moisture available?",
+              "Not currently -- true radar-based soil moisture needs a dedicated retrieval algorithm not yet implemented.",
+            ],
+            [
+              "Can I download the raw satellite imagery?",
+              "Not directly from the dashboard; the underlying imagery comes from ESA's public Copernicus program if you need the raw source.",
+            ],
+          ],
+        },
+        {
+          section: "Data Refresh & Timing",
+          qas: [
+            [
+              "How long does a brand-new field take to show data?",
+              "Up to 12\u201318 hours for the first full historical backfill; a progress overlay shows until it's ready.",
+            ],
+            [
+              "Does the app check for new data automatically?",
+              "Yes -- every field is automatically refreshed roughly every 6 hours in the background.",
+            ],
+            [
+              'What does the "Load Data" button do?',
+              "It manually triggers an on-demand check for any new imagery since the last automatic refresh.",
+            ],
+            [
+              'Why don\'t I see new imagery right after clicking "Load Data"?',
+              "The check runs in the background and can take a few minutes for a new scene to finish processing.",
+            ],
+            [
+              "Why does my data sometimes take a while to reflect after Load Data?",
+              "Recently refreshed results are cached briefly for performance; a short wait or reload usually shows the update.",
+            ],
+            [
+              "How far back does the historical data go?",
+              "New fields fetch up to one year of history automatically.",
+            ],
+            [
+              "Can I request a longer history?",
+              "Contact support for custom historical backfill needs beyond the standard one year.",
+            ],
+            [
+              "Why does the date picker sometimes skip days?",
+              "Only dates with an actual (or gap-filled) reading are shown -- satellites don't pass over every single day.",
+            ],
+            [
+              "What happens if I edit my field's boundary later?",
+              "Contact support -- boundary edits may need to re-trigger data collection for the corrected shape.",
+            ],
+            [
+              "Why did my farm's data stop looking fresh?",
+              'If a satellite hasn\'t passed recently or was cloud-blocked, the dashboard may show the last known ("provisional") reading until a new one arrives.',
+            ],
+            [
+              'Is there a limit to how often I can click "Load Data"?',
+              "No hard limit, but repeated clicks won't speed up satellite passes that haven't happened yet.",
+            ],
+            [
+              "Does deleting and re-adding a field re-download everything?",
+              "If the same area was already processed before, it can reuse existing coverage and populate almost instantly.",
+            ],
+            [
+              "Why do neighboring fields sometimes get data faster?",
+              "If a nearby field already triggered a fetch covering the same area, a new field there can reuse that coverage immediately.",
+            ],
+            [
+              "What's the maximum cloud cover allowed for new imagery?",
+              "New fields fetch data up to 85% cloud cover, to capture as much real history as possible.",
+            ],
+            [
+              "Can I turn off automatic refreshing for a field?",
+              "Not currently -- all active fields are refreshed on the same automatic schedule.",
+            ],
+          ],
+        },
+        {
+          section: "Account, Settings & Security",
+          qas: [
+            [
+              "How do I change my phone number?",
+              "Go to Settings and update your phone number -- you'll need to verify it with a new OTP.",
+            ],
+            [
+              "Is my farm data private?",
+              "Yes, only your account can see your own fields and data.",
+            ],
+            [
+              "Can AgriDoot staff see my farm data?",
+              "Authorized admin accounts can access limited operational data (like error logs) for support purposes.",
+            ],
+            [
+              "How do I switch between light and dark mode?",
+              "Use the moon/sun icon in the top-right of the header.",
+            ],
+            [
+              'What does "Auto sign-out in Xh Ym" mean?',
+              "Your session will automatically log out after that much inactivity, for security.",
+            ],
+            [
+              "Can I stay signed in longer?",
+              "Just keep using the app -- activity resets the auto sign-out timer.",
+            ],
+            [
+              "I'm signed in on multiple devices, is that okay?",
+              "Yes, you can be signed in on your phone and computer at the same time.",
+            ],
+            [
+              "How do I report a bug or map error?",
+              'Use the "Report a map error" link under the map, or contact support directly.',
+            ],
+            [
+              "What should I do if I suspect unauthorized access to my account?",
+              "Contact support immediately to secure your account.",
+            ],
+            [
+              "Can I have separate logins for different farms/team members?",
+              "Each person should have their own account -- fields aren't currently shared between accounts.",
+            ],
+            [
+              "Where can I see my total area across all fields?",
+              "The Overview page shows your total field count and total area at a glance.",
+            ],
+            [
+              "How do I get the mobile app?",
+              'Search "AgriDoot" on Google Play or the App Store, or use the links on the My Fields page.',
+            ],
+            [
+              "Does the app work offline once loaded?",
+              "No, an internet connection is needed to load fresh map tiles and data.",
+            ],
+            [
+              "How do I contact support?",
+              'Use the "Need help?" button and the Contact Us tab, or email support directly.',
+            ],
+            [
+              "Will I be notified of major outages or maintenance?",
+              "Check AgriDoot's official channels for maintenance announcements.",
+            ],
+          ],
+        },
+      ];
+
+      function openHelpModal() {
+        switchHelpTab("faq");
+        document.getElementById("help-faq-search").value = "";
+        renderFaq();
+        document.getElementById("help-modal").style.display = "flex";
+      }
+
+      function closeHelpModal() {
+        document.getElementById("help-modal").style.display = "none";
+      }
+
+      function switchHelpTab(tab) {
+        document
+          .getElementById("help-tab-faq")
+          .classList.toggle("active", tab === "faq");
+        document
+          .getElementById("help-tab-contact")
+          .classList.toggle("active", tab === "contact");
+        document.getElementById("help-panel-faq").style.display =
+          tab === "faq" ? "block" : "none";
+        document.getElementById("help-panel-contact").style.display =
+          tab === "contact" ? "block" : "none";
+      }
+
+      function renderFaq() {
+        const query = (document.getElementById("help-faq-search").value || "")
+          .trim()
+          .toLowerCase();
+        const body = document.getElementById("help-faq-body");
+        let html = "";
+        FAQ_DATA.forEach(({ section, qas }) => {
+          const filtered = query
+            ? qas.filter(
+                ([q, a]) =>
+                  q.toLowerCase().includes(query) ||
+                  a.toLowerCase().includes(query),
+              )
+            : qas;
+          if (!filtered.length) return;
+          html += `<div class="faq-section-label">${escapeHtml(section)}</div>`;
+          html += filtered
+            .map(
+              ([q, a]) => `
+              <details class="faq-item">
+                <summary>${escapeHtml(q)}</summary>
+                <div class="faq-answer">${escapeHtml(a)}</div>
+              </details>`,
+            )
+            .join("");
+        });
+        body.innerHTML =
+          html ||
+          `<div class="header-search-empty">No FAQ matches "${escapeHtml(document.getElementById("help-faq-search").value.trim())}". Try the Contact Us tab instead.</div>`;
+      }
+
+      async function submitContactForm() {
+        const errEl = document.getElementById("contact-form-error");
+        errEl.style.display = "none";
+        const name = document.getElementById("contact-name").value.trim();
+        const contact = document.getElementById("contact-contact").value.trim();
+        const message = document.getElementById("contact-message").value.trim();
+        if (!name || !contact || !message) {
+          return setFieldError(
+            "contact-form-error",
+            "Please fill in your name, a way to reach you, and a message.",
+          );
+        }
+        const btn = document.getElementById("contact-submit-btn");
+        btn.disabled = true;
+        btn.textContent = "Sending\u2026";
+        try {
+          const res = await fetch(`${API_BASE}/support/contact`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, contact, message }),
+          });
+          if (!res.ok)
+            throw new Error((await res.json()).detail || `${res.status}`);
+          document.getElementById("contact-name").value = "";
+          document.getElementById("contact-contact").value = "";
+          document.getElementById("contact-message").value = "";
+          showToast("Message sent \u2014 we'll get back to you soon.");
+          closeHelpModal();
+        } catch (e) {
+          setFieldError(
+            "contact-form-error",
+            e.message || "Could not send your message.",
+          );
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Send Message";
+        }
+      }
+
       // Called both on open (with the full list) and on every search
       // keystroke (with undefined, meaning "re-filter the last full list").
       let _itemPickerAllItems = [];
@@ -5273,6 +6003,92 @@
         // Match the backend's own crop_age_days calc exactly (see
         // _to_farm_out in api/farms.py: (today - sowing_date).days) so this
         // preview always agrees with what the farm card shows after saving.
+        const sowing = new Date(val + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const days = Math.round((today - sowing) / 86400000);
+        ageEl.textContent = fmtCropAge(days) || "";
+      }
+
+      // ================= Crop / Soil pickers + sowing date (edit-details form) =================
+      // Mirrors the create-form pickers above, but scoped to the "Edit"
+      // form on an already-saved farm -- separate state (editSelectedCrop/
+      // editCropName etc.) so opening one form never clobbers the other's
+      // in-progress selection. editCropName/editSoilName hold the plain
+      // string that actually gets saved; editSelectedCrop/editSelectedSoil
+      // (when set) additionally carry the matched NovosEdge list item, used
+      // only to show its image -- a farm's saved crop_type/soil_type is
+      // just a string, so an existing value that no longer matches any
+      // current list entry (e.g. a legacy/custom value) still displays and
+      // saves correctly as plain text, just without an image.
+      let editSelectedCrop = null;
+      let editSelectedSoil = null;
+      let editCropName = null;
+      let editSoilName = null;
+
+      async function openEditCropPicker() {
+        let items;
+        try {
+          items = await fetchCropList();
+        } catch (e) {
+          return showToast("Could not load crop list: " + e.message);
+        }
+        openItemPicker("Select crop", items, (item) => {
+          editSelectedCrop = item;
+          editCropName = item.crop_name_en;
+          renderEditCropField();
+        });
+      }
+
+      async function openEditSoilPicker() {
+        let items;
+        try {
+          items = await fetchSoilList();
+        } catch (e) {
+          return showToast("Could not load soil list: " + e.message);
+        }
+        openItemPicker("Select soil", items, (item) => {
+          editSelectedSoil = item;
+          editSoilName = item.crop_name_en;
+          renderEditSoilField();
+        });
+      }
+
+      function renderEditCropField() {
+        const label = document.getElementById("edit-crop-label");
+        if (editSelectedCrop) {
+          label.innerHTML = `<img src="${NOVOSEDGE_IMAGE_BASE}${editSelectedCrop.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(editSelectedCrop.crop_name_en)}`;
+          label.classList.remove("picker-placeholder");
+        } else if (editCropName) {
+          label.textContent = editCropName;
+          label.classList.remove("picker-placeholder");
+        } else {
+          label.textContent = "Select crop";
+          label.classList.add("picker-placeholder");
+        }
+      }
+
+      function renderEditSoilField() {
+        const label = document.getElementById("edit-soil-label");
+        if (editSelectedSoil) {
+          label.innerHTML = `<img src="${NOVOSEDGE_IMAGE_BASE}${editSelectedSoil.image_url}" alt="" onerror="this.style.visibility='hidden'" />${escapeHtml(editSelectedSoil.crop_name_en)}`;
+          label.classList.remove("picker-placeholder");
+        } else if (editSoilName) {
+          label.textContent = editSoilName;
+          label.classList.remove("picker-placeholder");
+        } else {
+          label.textContent = "Select soil";
+          label.classList.add("picker-placeholder");
+        }
+      }
+
+      function onEditSowingDateInput() {
+        const val = document.getElementById("edit-sowing-date").value;
+        const ageEl = document.getElementById("edit-crop-age");
+        if (!val) {
+          ageEl.textContent = "";
+          return;
+        }
         const sowing = new Date(val + "T00:00:00");
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -5906,11 +6722,61 @@
           .classList.toggle("has-text", !!globalFieldQuery);
         renderOverviewPage();
         renderMyFieldsPage();
+        renderHeaderSearchResults();
       }
       function clearGlobalFieldSearch() {
         document.getElementById("global-field-search").value = "";
         onGlobalFieldSearch();
       }
+
+      // Live dropdown under the search box itself -- lets the farmer jump
+      // straight to a match (or see "not found") from anywhere in the app,
+      // not just when already on Overview/My Fields (those grids already
+      // filter via matchingFarms(), but that's invisible if you're currently
+      // looking at a specific farm's imagery page instead).
+      function renderHeaderSearchResults() {
+        const box = document.getElementById("header-search-results");
+        if (!globalFieldQuery) {
+          box.style.display = "none";
+          box.innerHTML = "";
+          return;
+        }
+        const shown = matchingFarms();
+        if (!shown.length) {
+          box.innerHTML = `<div class="header-search-empty">No fields found matching "${escapeHtml(document.getElementById("global-field-search").value.trim())}"</div>`;
+        } else {
+          box.innerHTML = shown
+            .map(
+              (f) => `
+              <div class="header-search-result-item" onclick="selectSearchResult('${f.id}')">
+                <span>${escapeHtml(f.name || "Unnamed field")}</span>
+                <span class="hsr-crop">${escapeHtml(f.crop_type || "")}</span>
+              </div>`,
+            )
+            .join("");
+        }
+        box.style.display = "block";
+      }
+
+      function selectSearchResult(farmId) {
+        clearGlobalFieldSearch();
+        document.getElementById("header-search-results").style.display = "none";
+        switchPage("imagery");
+        selectFarm(farmId);
+      }
+
+      // Close the dropdown on an outside click, but not on a click inside
+      // the search box itself (that would close it before selectSearchResult
+      // even fires, since mousedown/click ordering runs before the onclick
+      // handler above on the result item).
+      document.addEventListener("click", (e) => {
+        const box = document.getElementById("header-search-results");
+        const wrap = document.getElementById("header-search");
+        if (box && wrap && !wrap.contains(e.target)) {
+          box.style.display = "none";
+        }
+      });
+
       function matchingFarms() {
         if (!globalFieldQuery) return farms;
         return farms.filter(
@@ -6402,6 +7268,10 @@
         cropEl.textContent = farm.crop_type || "Not set";
         cropEl.classList.toggle("empty", !farm.crop_type);
 
+        const soilEl = document.getElementById("detail-soil");
+        soilEl.textContent = farm.soil_type || "Not set";
+        soilEl.classList.toggle("empty", !farm.soil_type);
+
         document.getElementById("detail-polygon-id").textContent = farm.id;
 
         const areaEl = document.getElementById("detail-area");
@@ -6458,7 +7328,7 @@
       }
 
       // ================= Edit farm details (crop / country / sowing date) =================
-      function toggleEditDetails() {
+      async function toggleEditDetails() {
         const view = document.getElementById("detail-grid-view");
         const edit = document.getElementById("detail-grid-edit");
         const editing = edit.style.display !== "none";
@@ -6466,29 +7336,80 @@
           edit.style.display = "none";
           view.style.display = "flex";
           document.getElementById("edit-details-btn").textContent = "Edit";
-        } else {
-          const farm = farms.find((f) => f.id === activeFarmId);
-          if (!farm) return;
-          document.getElementById("edit-crop").value = farm.crop_type || "";
-          document.getElementById("edit-sowing-date").value =
-            farm.sowing_date || "";
-          view.style.display = "none";
-          edit.style.display = "block";
-          document.getElementById("edit-details-btn").textContent = "Cancel";
+          return;
+        }
+        const farm = farms.find((f) => f.id === activeFarmId);
+        if (!farm) return;
+
+        document.getElementById("edit-name").value = farm.name || "";
+        document.getElementById("edit-sowing-date").value =
+          farm.sowing_date || "";
+        onEditSowingDateInput();
+
+        editSelectedCrop = null;
+        editSelectedSoil = null;
+        editCropName = farm.crop_type || null;
+        editSoilName = farm.soil_type || null;
+        renderEditCropField();
+        renderEditSoilField();
+
+        view.style.display = "none";
+        edit.style.display = "block";
+        document.getElementById("edit-details-btn").textContent = "Cancel";
+
+        // Best-effort upgrade to the rich picker-style display (with image)
+        // once the crop/soil lists resolve, if the farm's current value
+        // matches a known list entry. The plain-text fallback set above
+        // already displays and saves correctly either way -- this only
+        // adds the thumbnail when possible.
+        if (farm.crop_type) {
+          try {
+            const crops = await fetchCropList();
+            const match = crops.find((c) => c.crop_name_en === farm.crop_type);
+            // Only apply if nothing changed while this was loading (still
+            // editing the same farm, still the same not-yet-repicked value).
+            if (match && editCropName === farm.crop_type && !editSelectedCrop) {
+              editSelectedCrop = match;
+              renderEditCropField();
+            }
+          } catch (e) {
+            // Non-fatal -- plain text fallback already shown.
+          }
+        }
+        if (farm.soil_type) {
+          try {
+            const soils = await fetchSoilList();
+            const match = soils.find((s) => s.crop_name_en === farm.soil_type);
+            if (match && editSoilName === farm.soil_type && !editSelectedSoil) {
+              editSelectedSoil = match;
+              renderEditSoilField();
+            }
+          } catch (e) {
+            // Non-fatal -- plain text fallback already shown.
+          }
         }
       }
 
       async function saveDetails() {
         if (!activeFarmId) return;
         try {
+          const payload = {
+            crop_type: editCropName,
+            soil_type: editSoilName,
+            sowing_date:
+              document.getElementById("edit-sowing-date").value || null,
+          };
+          // Name is NOT NULL on the backend -- only include it when the
+          // farmer actually typed something, so leaving the field blank
+          // never wipes the farm's existing name (omitted keys are left
+          // untouched server-side; an explicit null would violate the
+          // column's NOT NULL constraint).
+          const nameVal = document.getElementById("edit-name").value.trim();
+          if (nameVal) payload.name = nameVal;
+
           const updated = await api(`/farms/${activeFarmId}`, {
             method: "PATCH",
-            body: JSON.stringify({
-              crop_type:
-                document.getElementById("edit-crop").value.trim() || null,
-              sowing_date:
-                document.getElementById("edit-sowing-date").value || null,
-            }),
+            body: JSON.stringify(payload),
           });
           const idx = farms.findIndex((f) => f.id === activeFarmId);
           if (idx !== -1) farms[idx] = updated;

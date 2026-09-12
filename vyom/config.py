@@ -150,5 +150,17 @@ class Settings(BaseSettings):
     novosedge_api_base: str = "https://api.novosedge.xyz:4433"
     novosedge_api_key: str = ""
 
+    # "Contact Us" form on the dashboard's Help modal (see
+    # vyom/api/contact.py) -- sent via Gmail SMTP using an App Password
+    # (16 characters, generated at myaccount.google.com/apppasswords under
+    # the sending account), NOT that account's real login password --
+    # Google no longer accepts a real password for SMTP login at all.
+    # Comma-separated recipients, same pattern as cors_allowed_origins above.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_app_password: str = ""
+    support_email_recipients: str = "sraj.agridoot@gmail.com,support@agridoot.com"
+
 
 settings = Settings()
