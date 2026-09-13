@@ -2199,6 +2199,16 @@
         justify-content: center;
         padding: 20px;
       }
+      #help-modal {
+        /* Must render above #login-overlay (z-index: 5000) -- this is the
+           one modal that can be opened while still on the login screen
+           (openHelpModal(), called from the login page's "Need help?"
+           link). Every other .modal-overlay only ever opens after login,
+           once #login-overlay is already hidden, so this override is
+           scoped to just this modal rather than raising every modal's
+           z-index globally. */
+        z-index: 5001;
+      }
       .modal-card {
         width: 850px;
         max-width: 100%;
