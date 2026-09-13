@@ -32,9 +32,9 @@ router = APIRouter(prefix="/support", tags=["support"])
 
 class ContactRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    # Deliberately a plain string, not EmailStr -- the form also accepts a
-    # phone number as a contact method, not just email.
-    contact: str = Field(..., min_length=3, max_length=200)
+    email: str = Field(..., min_length=3, max_length=200)
+    # Optional -- only Name and Email are required on the form.
+    phone: str | None = Field(None, max_length=50)
     message: str = Field(..., min_length=1, max_length=5000)
 
 
@@ -53,7 +53,8 @@ def submit_contact(payload: ContactRequest):
     body = (
         f"New Vyom Engine support request\n\n"
         f"Name: {payload.name}\n"
-        f"Contact: {payload.contact}\n\n"
+        f"Email: {payload.email}\n"
+        f"Phone: {payload.phone or '(not provided)'}\n\n"
         f"Message:\n{payload.message}\n"
     )
     msg = MIMEText(body, "plain", "utf-8")

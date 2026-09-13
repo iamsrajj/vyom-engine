@@ -408,17 +408,21 @@
         align-items: center;
       }
       .header-search-results {
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        right: 0;
+        /* position: fixed, not absolute -- the header itself has
+           overflow: hidden (for its scanning-gradient decoration), which
+           would otherwise clip any absolutely-positioned dropdown that
+           extends below the header's own box. Position is computed in JS
+           (renderHeaderSearchResults()) from #header-search's actual
+           bounding rect, since "fixed" no longer positions relative to
+           any ancestor. */
+        position: fixed;
         background: var(--bg-panel);
         border: 1px solid var(--line);
         border-radius: 10px;
         max-height: 320px;
         overflow-y: auto;
         box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.15));
-        z-index: 50;
+        z-index: 2000;
       }
       .header-search-result-item {
         display: flex;
@@ -2223,68 +2227,195 @@
         padding: 16px 18px 20px;
         overflow-y: auto;
       }
+      .help-modal-card {
+        max-width: 860px;
+        width: 92vw;
+      }
       .help-tabs {
         display: flex;
         gap: 4px;
         border-bottom: 1px solid var(--line);
-        margin-bottom: 14px;
+        margin-bottom: 16px;
       }
       .help-tab {
         border: none;
         background: none;
-        padding: 8px 14px;
-        font-size: 13px;
+        padding: 10px 18px;
+        font-size: 13.5px;
         font-weight: 600;
         color: var(--text-dim);
         cursor: pointer;
         border-bottom: 2px solid transparent;
         margin-bottom: -1px;
+        transition: color 0.15s ease;
+      }
+      .help-tab:hover {
+        color: var(--text-strong, #1a231d);
       }
       .help-tab.active {
         color: var(--canopy, #4c9a5b);
         border-bottom-color: var(--canopy, #4c9a5b);
       }
-      .faq-section-label {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+      .faq-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .faq-pill {
+        border: 1px solid var(--line);
+        background: var(--bg-raised, #f3f5f3);
+        border-radius: 999px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 500;
         color: var(--text-dim);
-        margin: 16px 0 6px;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease,
+          border-color 0.15s ease;
+      }
+      .faq-pill:hover {
+        border-color: var(--canopy, #4c9a5b);
+      }
+      .faq-pill.active {
+        background: var(--canopy, #4c9a5b);
+        border-color: var(--canopy, #4c9a5b);
+        color: #fff;
+      }
+      .faq-grid {
+        max-height: 52vh;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .faq-section-label {
+        font-size: 11.5px;
+        text-transform: uppercase;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: var(--canopy, #4c9a5b);
+        margin: 20px 0 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .faq-section-label::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--line);
       }
       .faq-section-label:first-child {
         margin-top: 0;
       }
       .faq-item {
         border: 1px solid var(--line);
-        border-radius: 8px;
-        margin-bottom: 6px;
+        border-radius: 10px;
+        margin-bottom: 8px;
         overflow: hidden;
+        background: var(--bg-panel, #fff);
+        transition:
+          border-color 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+      .faq-item:hover {
+        border-color: var(--canopy, #4c9a5b);
+      }
+      .faq-item[open] {
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
       }
       .faq-item summary {
-        padding: 10px 12px;
+        padding: 12px 14px;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
+        font-size: 13.5px;
+        font-weight: 600;
         list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
       .faq-item summary::-webkit-details-marker {
         display: none;
       }
       .faq-item summary::before {
         content: "+";
-        display: inline-block;
-        width: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--bg-raised, #eef6ef);
         color: var(--canopy, #4c9a5b);
         font-weight: 700;
+        font-size: 13px;
       }
       .faq-item[open] summary::before {
         content: "\2212";
       }
       .faq-item .faq-answer {
-        padding: 0 12px 12px 26px;
-        font-size: 12.5px;
+        padding: 0 14px 14px 44px;
+        font-size: 13px;
         color: var(--text-dim);
-        line-height: 1.5;
+        line-height: 1.6;
+      }
+      .help-contact-intro {
+        color: var(--text-dim);
+        font-size: 13.5px;
+        margin: 0 0 16px;
+      }
+      .help-contact-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .help-form-row {
+        display: flex;
+        gap: 14px;
+      }
+      .help-form-row-2 .help-form-field {
+        flex: 1;
+        min-width: 0;
+      }
+      .help-form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+      }
+      .help-form-field label {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .help-form-field .req {
+        color: var(--danger, #dc2626);
+        font-weight: 400;
+      }
+      .help-form-field .opt {
+        color: var(--text-dim);
+        font-weight: 400;
+        font-size: 11.5px;
+      }
+      .help-form-field input,
+      .help-form-field textarea {
+        width: 100%;
+        font-family: inherit;
+        font-size: 13.5px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--bg-input, #fff);
+      }
+      .help-form-field textarea {
+        resize: vertical;
+      }
+      @media (max-width: 560px) {
+        .help-form-row-2 {
+          flex-direction: column;
+        }
       }
       .draw-map-slot {
         width: 100%;
@@ -3588,105 +3719,6 @@
           </div>
         </div>
 
-        <div class="modal-overlay" id="help-modal" style="display: none">
-          <div class="modal-card" style="max-width: 640px">
-            <div class="modal-header">
-              <h3>Help &amp; Support</h3>
-              <button
-                class="icon-btn"
-                onclick="closeHelpModal()"
-                aria-label="Close"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div class="modal-body">
-              <div class="help-tabs">
-                <button
-                  class="help-tab active"
-                  id="help-tab-faq"
-                  onclick="switchHelpTab('faq')"
-                >
-                  FAQ
-                </button>
-                <button
-                  class="help-tab"
-                  id="help-tab-contact"
-                  onclick="switchHelpTab('contact')"
-                >
-                  Contact Us
-                </button>
-              </div>
-
-              <div id="help-panel-faq">
-                <input
-                  id="help-faq-search"
-                  type="text"
-                  placeholder="Search FAQs..."
-                  oninput="renderFaq()"
-                  style="width: 100%; margin-bottom: 12px"
-                />
-                <div
-                  id="help-faq-body"
-                  style="max-height: 55vh; overflow-y: auto"
-                ></div>
-              </div>
-
-              <div id="help-panel-contact" style="display: none">
-                <p
-                  style="color: var(--text-dim); font-size: 13px; margin-top: 0"
-                >
-                  Can't find your answer in the FAQ? Send us a message and we'll
-                  get back to you.
-                </p>
-                <label>Name</label>
-                <input id="contact-name" type="text" placeholder="Your name" />
-                <label>Email or phone</label>
-                <input
-                  id="contact-contact"
-                  type="text"
-                  placeholder="you@example.com or your phone number"
-                />
-                <label>Message</label>
-                <textarea
-                  id="contact-message"
-                  rows="5"
-                  placeholder="How can we help?"
-                  style="
-                    width: 100%;
-                    resize: vertical;
-                    font-family: inherit;
-                    font-size: 13.5px;
-                    padding: 9px 12px;
-                    border-radius: 8px;
-                    border: 1px solid var(--line);
-                    background: var(--bg-input, #fff);
-                  "
-                ></textarea>
-                <div
-                  id="contact-form-error"
-                  class="login-error"
-                  style="display: none"
-                ></div>
-                <button
-                  class="btn btn-primary"
-                  style="margin-top: 12px"
-                  id="contact-submit-btn"
-                  onclick="submitContactForm()"
-                >
-                  Send Message
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="page-view" id="page-imagery" style="display: none">
           <div class="imagery-shell">
             <div
@@ -4380,10 +4412,132 @@
             ></span
           >
           <a href="#" onclick="return false;">Docs</a>
-          <a href="#" onclick="return false;">Support</a>
+          <a
+            href="#"
+            onclick="
+              openHelpModal('contact');
+              return false;
+            "
+            >Support</a
+          >
           <span>Imagery: Copernicus Sentinel-1/2</span>
         </div>
       </footer>
+    </div>
+
+    <!-- Help & Support modal lives OUTSIDE #app (a sibling, not a
+    descendant) so it can be opened from the login screen too, before
+    #app's display:none is ever lifted -- the FAQ and Contact Us form are
+    both meant to be reachable by someone who isn't signed in yet. -->
+    <div class="modal-overlay" id="help-modal" style="display: none">
+      <div class="modal-card help-modal-card">
+        <div class="modal-header">
+          <h3>Help &amp; Support</h3>
+          <button
+            class="icon-btn"
+            onclick="closeHelpModal()"
+            aria-label="Close"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="help-tabs">
+            <button
+              class="help-tab active"
+              id="help-tab-faq"
+              onclick="switchHelpTab('faq')"
+            >
+              FAQ
+            </button>
+            <button
+              class="help-tab"
+              id="help-tab-contact"
+              onclick="switchHelpTab('contact')"
+            >
+              Contact Us
+            </button>
+          </div>
+
+          <div id="help-panel-faq">
+            <input
+              id="help-faq-search"
+              type="text"
+              placeholder="Search FAQs..."
+              oninput="renderFaq()"
+              style="width: 100%; margin-bottom: 14px"
+            />
+            <div class="faq-pills" id="faq-pills"></div>
+            <div id="help-faq-body" class="faq-grid"></div>
+          </div>
+
+          <div id="help-panel-contact" style="display: none">
+            <p class="help-contact-intro">
+              Can't find your answer in the FAQ? Send us a message and we'll get
+              back to you &mdash; no account needed.
+            </p>
+            <div class="help-contact-form">
+              <div class="help-form-row">
+                <div class="help-form-field">
+                  <label>Name <span class="req">*</span></label>
+                  <input
+                    id="contact-name"
+                    type="text"
+                    placeholder="Your name"
+                  />
+                </div>
+              </div>
+              <div class="help-form-row help-form-row-2">
+                <div class="help-form-field">
+                  <label>Email <span class="req">*</span></label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div class="help-form-field">
+                  <label>Phone <span class="opt">(optional)</span></label>
+                  <input
+                    id="contact-phone"
+                    type="tel"
+                    placeholder="e.g. 98765 43210"
+                  />
+                </div>
+              </div>
+              <div class="help-form-row">
+                <div class="help-form-field">
+                  <label>Message <span class="req">*</span></label>
+                  <textarea
+                    id="contact-message"
+                    rows="5"
+                    placeholder="How can we help?"
+                  ></textarea>
+                </div>
+              </div>
+              <div
+                id="contact-form-error"
+                class="login-error"
+                style="display: none"
+              ></div>
+              <button
+                class="btn btn-primary"
+                style="margin-top: 4px"
+                id="contact-submit-btn"
+                onclick="submitContactForm()"
+              >
+                Send Message
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="toast" class="toast"></div>
@@ -5796,9 +5950,10 @@
         },
       ];
 
-      function openHelpModal() {
-        switchHelpTab("faq");
+      function openHelpModal(tab) {
+        switchHelpTab(tab || "faq");
         document.getElementById("help-faq-search").value = "";
+        activeFaqCategory = null;
         renderFaq();
         document.getElementById("help-modal").style.display = "flex";
       }
@@ -5820,13 +5975,35 @@
           tab === "contact" ? "block" : "none";
       }
 
+      // null = "All" -- no category filter applied, only the text search (if any).
+      let activeFaqCategory = null;
+
+      function renderFaqPills() {
+        const pillsEl = document.getElementById("faq-pills");
+        const sections = ["All", ...FAQ_DATA.map((s) => s.section)];
+        pillsEl.innerHTML = sections
+          .map((s) => {
+            const isActive =
+              (s === "All" && !activeFaqCategory) || s === activeFaqCategory;
+            return `<button type="button" class="faq-pill${isActive ? " active" : ""}" onclick="setFaqCategory(${s === "All" ? "null" : `'${escapeHtml(s).replace(/'/g, "\\'")}'`})">${escapeHtml(s)}</button>`;
+          })
+          .join("");
+      }
+
+      function setFaqCategory(section) {
+        activeFaqCategory = section;
+        renderFaq();
+      }
+
       function renderFaq() {
+        renderFaqPills();
         const query = (document.getElementById("help-faq-search").value || "")
           .trim()
           .toLowerCase();
         const body = document.getElementById("help-faq-body");
         let html = "";
         FAQ_DATA.forEach(({ section, qas }) => {
+          if (activeFaqCategory && section !== activeFaqCategory) return;
           const filtered = query
             ? qas.filter(
                 ([q, a]) =>
@@ -5855,12 +6032,13 @@
         const errEl = document.getElementById("contact-form-error");
         errEl.style.display = "none";
         const name = document.getElementById("contact-name").value.trim();
-        const contact = document.getElementById("contact-contact").value.trim();
+        const email = document.getElementById("contact-email").value.trim();
+        const phone = document.getElementById("contact-phone").value.trim();
         const message = document.getElementById("contact-message").value.trim();
-        if (!name || !contact || !message) {
+        if (!name || !email || !message) {
           return setFieldError(
             "contact-form-error",
-            "Please fill in your name, a way to reach you, and a message.",
+            "Please fill in your name, email, and a message (phone is optional).",
           );
         }
         const btn = document.getElementById("contact-submit-btn");
@@ -5870,12 +6048,29 @@
           const res = await fetch(`${API_BASE}/support/contact`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, contact, message }),
+            body: JSON.stringify({
+              name,
+              email,
+              phone: phone || null,
+              message,
+            }),
           });
-          if (!res.ok)
-            throw new Error((await res.json()).detail || `${res.status}`);
+          let payload = null;
+          try {
+            payload = await res.json();
+          } catch (parseErr) {
+            // A non-JSON response (e.g. an HTML error page from a proxy
+            // misrouting this request) means the request never reached the
+            // API at all -- surface a clear message instead of a raw
+            // "Unexpected token '<'" JSON-parse error.
+            throw new Error(
+              "The server didn't return a valid response. Please try again shortly, or email support directly.",
+            );
+          }
+          if (!res.ok) throw new Error(payload.detail || `${res.status}`);
           document.getElementById("contact-name").value = "";
-          document.getElementById("contact-contact").value = "";
+          document.getElementById("contact-email").value = "";
+          document.getElementById("contact-phone").value = "";
           document.getElementById("contact-message").value = "";
           showToast("Message sent \u2014 we'll get back to you soon.");
           closeHelpModal();
@@ -6755,6 +6950,16 @@
             )
             .join("");
         }
+        // Positioned via fixed + JS-computed coordinates (not CSS
+        // absolute/relative) because <header> has overflow: hidden for its
+        // decorative scanning-gradient effect, which would otherwise clip
+        // an absolutely-positioned dropdown extending below it.
+        const rect = document
+          .getElementById("header-search")
+          .getBoundingClientRect();
+        box.style.top = `${rect.bottom + 6}px`;
+        box.style.left = `${rect.left}px`;
+        box.style.width = `${rect.width}px`;
         box.style.display = "block";
       }
 
