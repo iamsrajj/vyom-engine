@@ -121,6 +121,22 @@ def require_auth(authorization: Optional[str] = Header(None)) -> str:
     return _decode(authorization[len("Bearer "):])
 
 
+def optional_auth(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """Like require_auth, but returns None instead of raising when there's
+    no token or it's invalid/expired -- for endpoints that work for anyone
+    (e.g. the Contact Us form, reachable pre-login) but want to know WHO
+    the caller is when they happen to already be signed in, without making
+    login a requirement. Never use this where a route actually needs to
+    trust the caller's identity for anything sensitive -- an invalid token
+    here silently becomes "anonymous," not an error."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        return _decode(authorization[len("Bearer "):])
+    except HTTPException:
+        return None
+
+
 def require_auth_query(token: Optional[str] = Query(None)) -> str:
     if not token:
         raise HTTPException(401, "Missing token")

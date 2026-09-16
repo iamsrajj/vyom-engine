@@ -162,5 +162,18 @@ class Settings(BaseSettings):
     smtp_app_password: str = ""
     support_email_recipients: str = "sraj.agridoot@gmail.com,support@agridoot.com"
 
+    # Notifications (see vyom/notifications.py) -- thresholds/addresses for
+    # the automated notification types, distinct from the Contact Us form
+    # above even though both send email via the same SMTP settings.
+    admin_alert_email: str = "sraj.agridoot@gmail.com"
+    # Don't re-alert on the same error source more than once per this many
+    # minutes -- a burst of the same recurring error (e.g. a CDSE retry
+    # loop) would otherwise send one email per occurrence.
+    admin_alert_throttle_minutes: int = 60
+    # A farm's most recent REAL (non-interpolated) reading older than this
+    # triggers a stale-data notification, checked during poll_all_farms.
+    stale_data_threshold_days: int = 20
+    dashboard_base_url: str = "https://vyom.agridoot.in"
+
 
 settings = Settings()

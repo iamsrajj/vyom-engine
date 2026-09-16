@@ -20,6 +20,12 @@ log_error opens its own short-lived DB session so it works from anywhere
 (Celery task, pipeline module, FastAPI route) without needing the caller's
 session threaded through -- and it never raises, so a logging failure can
 never mask or replace the real exception that triggered it.
+
+level="error" entries also trigger an admin_alert notification (in-app for
+every role='admin' user, emailed to settings.admin_alert_email) -- see
+vyom/notifications.py:notify_admin_alert for the per-source throttling that
+keeps a burst of the same recurring error from sending one alert per
+occurrence. level="warning" (or anything else) never alerts, only logs.
 """
 import logging
 import traceback as tb_module
@@ -48,6 +54,16 @@ def log_error(source: str, message: str, *, platform: str | None = None,
             )
             db.add(row)
             db.commit()
+
+            if level == "error":
+                try:
+                    from vyom.notifications import notify_admin_alert
+                    notify_admin_alert(db, source, message, context)
+                except Exception:  # noqa: BLE001 -- an alert failing must never
+                    # affect error logging itself, which is the primary
+                    # purpose of this function.
+                    logger.exception(
+                        "notify_admin_alert failed for source %s", source)
         finally:
             db.close()
     except Exception:  # noqa: BLE001 -- logging must never itself raise

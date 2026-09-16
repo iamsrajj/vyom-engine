@@ -26,15 +26,17 @@ stale by the time it actually runs on a different worker.
 """
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from celery import chain, chord, group
 from shapely.geometry import mapping
 from geoalchemy2.shape import to_shape
+from sqlalchemy import select, func
 
 from vyom.celery_app import celery_app, priority_queue_name
 from vyom.config import settings
 from vyom.db import SessionLocal
-from vyom.models import Polygon, CatalogProduct
+from vyom.models import Polygon, CatalogProduct, ZonalStat, Notification
 from vyom.discovery import discover_products_for_geometry
 from vyom.download_manager import download_product
 from vyom.processing.pipeline import process_product
@@ -43,6 +45,7 @@ from vyom.interpolation import fill_gaps_for_polygon
 from vyom.raster_interpolation import fill_raster_gaps_for_polygon
 from vyom.tile_grid import link_farm_to_products
 from vyom.error_log import log_error
+from vyom.notifications import notify_farm_data_update, notify_refresh_complete, notify_stale_data
 
 logger = logging.getLogger("vyom.tasks")
 
@@ -136,7 +139,7 @@ def compute_stats_task(product_id: str) -> dict:
 
 
 @celery_app.task(name="vyom.stats.fill_gaps_callback")
-def fill_gaps_callback(results: list, farm_id: str, platform: str) -> dict:
+def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual: bool = False) -> dict:
     """Chord callback -- fires once every per-product chain dispatched for
     this farm+platform refresh has finished (success or handled failure --
     every stage task above returns a status dict rather than raising past
@@ -144,7 +147,14 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str) -> dict:
     the per-product status list Celery collects automatically; used here
     only for logging, since the gap-fill functions re-derive everything
     from the DB's current real state regardless of exactly which products
-    succeeded this particular round."""
+    succeeded this particular round.
+
+    notify_manual mirrors refresh_farm's own `priority` flag (see there) --
+    "a real person is waiting on this right now" -- and controls ONLY
+    whether a no-new-data round notifies (see the succeeded==0 branch
+    below). A round that DID find new data always notifies regardless of
+    this flag: farmers want to know about new real readings whether they
+    came from a manual click or the background sweep."""
     succeeded = sum(1 for r in results if isinstance(
         r, dict) and r.get("status") == "stats_done")
     logger.info("Farm %s (%s): %d/%d product(s) completed this round, running gap-fill",
@@ -167,6 +177,28 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str) -> dict:
                     "Raster gap-fill failed for farm %s (%s)", farm_id, platform)
                 log_error("tasks.fill_gaps_callback", "Raster gap-fill failed",
                           platform=platform, context={"farm_id": farm_id})
+
+            try:
+                farm = db.get(Polygon, uuid.UUID(farm_id))
+                if farm is not None:
+                    notify_farm_data_update(db, farm, platform)
+            except Exception:  # noqa: BLE001 -- a notification failure must never
+                # affect the pipeline's own success/failure state.
+                logger.exception(
+                    "notify_farm_data_update failed for farm %s (%s)", farm_id, platform)
+        elif notify_manual:
+            # Nothing new this round, but a real person explicitly asked for
+            # this check -- tell them so the button doesn't feel like it did
+            # nothing. The background sweep (notify_manual=False) never
+            # notifies on a no-op round -- that would mean a notification
+            # roughly every 6h for every farm with nothing new to report.
+            try:
+                farm = db.get(Polygon, uuid.UUID(farm_id))
+                if farm is not None:
+                    notify_refresh_complete(db, farm)
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "notify_refresh_complete failed for farm %s", farm_id)
     finally:
         db.close()
 
@@ -290,7 +322,7 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
                 )
                 for pid in product_ids
             ]
-            callback_sig = fill_gaps_callback.s(farm_id, platform)
+            callback_sig = fill_gaps_callback.s(farm_id, platform, priority)
             if priority:
                 callback_sig = callback_sig.set(
                     queue=priority_queue_name("stats"))
@@ -311,10 +343,49 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
 
 @celery_app.task(name="vyom.discovery.poll_all_farms")
 def poll_all_farms():
-    """Background sweep: enqueue a refresh for every registered farm."""
+    """Background sweep: enqueue a refresh for every registered farm, and
+    check each for stale data while the farm list is already loaded (see
+    notify_stale_data). De-duping which farms actually get notified here
+    (so a stale farm doesn't get re-alerted every ~6h forever) works by
+    checking for an existing stale_data notification created AFTER that
+    farm's last real reading -- once a NEW real reading lands, that check
+    naturally finds nothing (the old notification predates the new
+    reading), so a future staleness episode alerts again on its own,
+    without a separate "episode" flag to track and reset."""
     db = SessionLocal()
     try:
-        farm_ids = [str(f.id) for f in db.query(Polygon.id).all()]
+        farms = db.query(Polygon).all()
+        farm_ids = [str(f.id) for f in farms]
+
+        now = datetime.now(timezone.utc)
+        for farm in farms:
+            last_real = db.execute(
+                select(func.max(ZonalStat.acquisition_date)).where(
+                    ZonalStat.polygon_id == farm.id, ZonalStat.value.isnot(None))
+            ).scalar_one_or_none()
+            if last_real is None:
+                continue  # never had any real reading yet -- the onboarding overlay covers this, not staleness
+            if last_real.tzinfo is None:
+                last_real = last_real.replace(tzinfo=timezone.utc)
+            days_since = (now - last_real).days
+            if days_since < settings.stale_data_threshold_days:
+                continue
+
+            already_notified = db.execute(
+                select(Notification.id).where(
+                    Notification.farm_id == farm.id,
+                    Notification.type == "stale_data",
+                    Notification.created_at >= last_real,
+                ).limit(1)
+            ).scalar_one_or_none()
+            if already_notified:
+                continue  # already alerted for this same staleness episode
+
+            try:
+                notify_stale_data(db, farm, days_since)
+            except Exception:  # noqa: BLE001 -- must never block the refresh sweep below
+                logger.exception(
+                    "notify_stale_data failed for farm %s", farm.id)
     finally:
         db.close()
 

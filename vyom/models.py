@@ -241,6 +241,33 @@ class ErrorLog(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class Notification(Base):
+    """In-app + emailed notifications -- field_ready, new_reading,
+    refresh_complete, stale_data, contact_status, admin_alert. See
+    vyom/notifications.py for creation logic (including per-type email
+    behavior) and vyom/api/notifications.py for the list/read API this backs.
+
+    Column named `context`, not `metadata` -- `metadata` is reserved on every
+    SQLAlchemy declarative Base subclass (the table-registry attribute), so a
+    real column with that name would collide with it. Same reason
+    ErrorLog.context is named the way it is."""
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    farm_id = Column(UUID(as_uuid=True), ForeignKey(
+        "polygons.id", ondelete="CASCADE"))
+    # field_ready | new_reading | refresh_complete | stale_data | contact_status | admin_alert
+    type = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(Text)
+    context = Column(JSONB, nullable=False, server_default="{}")
+    email_sent = Column(Boolean, nullable=False, server_default="false")
+    read_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
 class User(Base):
     """A real account -- replaces the flat AUTH_USERS env-var list. Every
     account starts with Google sign-in (name/email/picture come from Google's

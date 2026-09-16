@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api
+from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
 from vyom.error_log import log_error
@@ -64,6 +64,8 @@ app.include_router(prewarm_api.router)
 # contact.router is deliberately public (no require_auth) -- see that
 # file's module docstring for why, and the known spam-risk tradeoff.
 app.include_router(contact_api.router)
+app.include_router(notifications_api.router,
+                   dependencies=[Depends(require_auth)])
 
 
 @app.exception_handler(Exception)

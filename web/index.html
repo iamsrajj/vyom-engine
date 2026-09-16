@@ -446,6 +446,114 @@
         color: var(--text-dim);
         text-align: center;
       }
+      .header-notif-wrap {
+        position: relative;
+      }
+      .notif-badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--danger, #dc2626);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+      }
+      .notif-panel {
+        /* position: fixed + JS-computed coordinates, same reason as
+           .header-search-results above -- <header> has overflow: hidden. */
+        position: fixed;
+        width: 360px;
+        max-width: 92vw;
+        max-height: 440px;
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.15));
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .notif-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 13.5px;
+        font-weight: 700;
+      }
+      .notif-markall {
+        border: none;
+        background: none;
+        color: var(--canopy, #4c9a5b);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .notif-list {
+        overflow-y: auto;
+      }
+      .notif-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .notif-item:last-child {
+        border-bottom: none;
+      }
+      .notif-item:hover {
+        background: var(--bg-raised, #f3f5f3);
+      }
+      .notif-item.unread {
+        background: rgba(76, 154, 91, 0.06);
+      }
+      .notif-item-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-top: 5px;
+        flex-shrink: 0;
+        background: var(--canopy, #4c9a5b);
+      }
+      .notif-item.read .notif-item-dot {
+        background: transparent;
+      }
+      .notif-item-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .notif-item-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      .notif-item-text {
+        font-size: 12px;
+        color: var(--text-dim);
+        line-height: 1.4;
+      }
+      .notif-item-time {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        margin-top: 4px;
+      }
+      .notif-empty {
+        padding: 30px 14px;
+        text-align: center;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
       .header-search input {
         background: var(--bg-deep);
         border: 1px solid var(--line);
@@ -3005,21 +3113,42 @@
             ></div>
           </div>
 
-          <button
-            class="icon-btn"
-            onclick="showHonestPlaceholder('Notifications')"
-            title="Notifications"
-            aria-label="Notifications"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <div class="header-notif-wrap" id="header-notif-wrap">
+            <button
+              class="icon-btn"
+              onclick="toggleNotifPanel()"
+              title="Notifications"
+              aria-label="Notifications"
+              style="position: relative"
             >
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span
+                id="notif-badge"
+                class="notif-badge"
+                style="display: none"
+              ></span>
+            </button>
+            <div id="notif-panel" class="notif-panel" style="display: none">
+              <div class="notif-panel-header">
+                <span>Notifications</span>
+                <button
+                  type="button"
+                  class="notif-markall"
+                  onclick="markAllNotificationsRead()"
+                >
+                  Mark all read
+                </button>
+              </div>
+              <div id="notif-list" class="notif-list"></div>
+            </div>
+          </div>
           <button
             class="icon-btn"
             onclick="openHelpModal()"
@@ -4726,6 +4855,10 @@
 
       function showLogin(message) {
         clearSession();
+        if (notifPollTimer) {
+          clearInterval(notifPollTimer);
+          notifPollTimer = null;
+        }
         document.getElementById("app").style.display = "none";
         document.getElementById("login-overlay").style.display = "flex";
         showLoginStep("main");
@@ -6992,6 +7125,129 @@
         }
       });
 
+      // ================= Notifications =================
+      let notifPollTimer = null;
+      let notifCache = [];
+
+      function startNotifPolling() {
+        checkNotifUnreadCount();
+        if (notifPollTimer) clearInterval(notifPollTimer);
+        // Polled, not pushed -- there's no websocket/SSE layer in this app.
+        // 60s keeps the badge reasonably fresh without hammering the API.
+        notifPollTimer = setInterval(checkNotifUnreadCount, 60000);
+      }
+
+      async function checkNotifUnreadCount() {
+        try {
+          const { count } = await api("/notifications/unread-count");
+          const badge = document.getElementById("notif-badge");
+          if (count > 0) {
+            badge.textContent = count > 99 ? "99+" : String(count);
+            badge.style.display = "block";
+          } else {
+            badge.style.display = "none";
+          }
+        } catch (e) {
+          // Silent -- a missed badge update isn't worth surfacing to the user.
+        }
+      }
+
+      async function toggleNotifPanel() {
+        const panel = document.getElementById("notif-panel");
+        const isOpen = panel.style.display !== "none";
+        if (isOpen) {
+          panel.style.display = "none";
+          return;
+        }
+        // Positioned via fixed + JS-computed coordinates, same reason as
+        // the search results dropdown -- <header> has overflow: hidden.
+        const rect = document
+          .getElementById("header-notif-wrap")
+          .getBoundingClientRect();
+        panel.style.top = `${rect.bottom + 8}px`;
+        panel.style.right = `${window.innerWidth - rect.right}px`;
+        panel.style.display = "flex";
+        await loadNotifications();
+      }
+
+      async function loadNotifications() {
+        const list = document.getElementById("notif-list");
+        try {
+          notifCache = await api("/notifications?limit=50");
+        } catch (e) {
+          list.innerHTML =
+            '<div class="notif-empty">Could not load notifications.</div>';
+          return;
+        }
+        if (!notifCache.length) {
+          list.innerHTML =
+            '<div class="notif-empty">You\'re all caught up.</div>';
+          return;
+        }
+        list.innerHTML = notifCache
+          .map(
+            (n) => `
+            <div class="notif-item ${n.read ? "read" : "unread"}" onclick="onNotifClick('${n.id}', ${n.farm_id ? `'${n.farm_id}'` : "null"})">
+              <div class="notif-item-dot"></div>
+              <div class="notif-item-body">
+                <div class="notif-item-title">${escapeHtml(n.title)}</div>
+                ${n.body ? `<div class="notif-item-text">${escapeHtml(n.body)}</div>` : ""}
+                <div class="notif-item-time">${fmtNotifTime(n.created_at)}</div>
+              </div>
+            </div>`,
+          )
+          .join("");
+      }
+
+      function fmtNotifTime(iso) {
+        const d = new Date(iso);
+        const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+        if (diffMin < 1) return "just now";
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHr = Math.round(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h ago`;
+        const diffDay = Math.round(diffHr / 24);
+        if (diffDay < 7) return `${diffDay}d ago`;
+        return d.toLocaleDateString();
+      }
+
+      async function onNotifClick(notifId, farmId) {
+        try {
+          await api(`/notifications/${notifId}/read`, { method: "POST" });
+        } catch (e) {
+          // Non-fatal -- still navigate even if marking-read failed.
+        }
+        checkNotifUnreadCount();
+        const item = notifCache.find((n) => n.id === notifId);
+        if (item) item.read = true;
+        await loadNotifications();
+        if (farmId) {
+          document.getElementById("notif-panel").style.display = "none";
+          switchPage("imagery");
+          selectFarm(farmId);
+        }
+      }
+
+      async function markAllNotificationsRead() {
+        try {
+          await api("/notifications/read-all", { method: "POST" });
+        } catch (e) {
+          return showToast("Could not mark notifications as read.");
+        }
+        notifCache.forEach((n) => (n.read = true));
+        await loadNotifications();
+        checkNotifUnreadCount();
+      }
+
+      // Close the notification panel on any outside click.
+      document.addEventListener("click", (e) => {
+        const panel = document.getElementById("notif-panel");
+        const wrap = document.getElementById("header-notif-wrap");
+        if (panel && wrap && !wrap.contains(e.target)) {
+          panel.style.display = "none";
+        }
+      });
+
       function matchingFarms() {
         if (!globalFieldQuery) return farms;
         return farms.filter(
@@ -8312,7 +8568,15 @@
         );
         await api(`/farms/${activeFarmId}/refresh`, {
           method: "POST",
-          body: JSON.stringify({ platforms: [currentPlatform] }),
+          // priority:true routes this to the priority queues (a real
+          // person is waiting right now) AND tells the backend this was a
+          // manual click, not the background sweep -- that's what makes
+          // "refresh complete" / "nothing new" notifications fire for this
+          // button specifically, see fill_gaps_callback's notify_manual.
+          body: JSON.stringify({
+            platforms: [currentPlatform],
+            priority: true,
+          }),
         });
         showToast(
           "Refresh queued. This can take a few minutes for a new scene \u2014 check back shortly.",
@@ -8388,6 +8652,7 @@
         checkApiHealth();
         loadAvailableIndices().then(loadFarms);
         refreshAccountInfo();
+        startNotifPolling();
       }
 
       // Dynamic profile image + name/account fields (item 5: no more static
