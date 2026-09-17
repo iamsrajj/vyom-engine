@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Errors — Vyom Engine</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+    />
     <style>
       :root {
         --canopy: #16a34a;
@@ -273,7 +278,7 @@
       }
 
       async function loadSources() {
-        const res = await fetch(`${API_BASE}/errors/sources`, {
+        const res = await fetch(`${API_BASE}/api/errors/sources`, {
           headers: authHeaders(),
         });
         if (!res.ok) return;
@@ -359,7 +364,7 @@
 
       async function patchResolve(id, resolve, cardEl) {
         const res = await fetch(
-          `${API_BASE}/errors/${id}/${resolve ? "resolve" : "unresolve"}`,
+          `${API_BASE}/api/errors/${id}/${resolve ? "resolve" : "unresolve"}`,
           {
             method: "PATCH",
             headers: authHeaders(),
@@ -382,7 +387,7 @@
         if (resolvedMode === "unresolved") params.resolved = "false";
         if (resolvedMode === "resolved") params.resolved = "true";
 
-        const res = await fetch(`${API_BASE}/errors?${qs(params)}`, {
+        const res = await fetch(`${API_BASE}/api/errors?${qs(params)}`, {
           headers: authHeaders(),
         });
         if (!res.ok) {

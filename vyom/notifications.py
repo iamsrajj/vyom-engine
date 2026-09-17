@@ -58,16 +58,27 @@ def _has_notification(db: Session, farm_id, type_: str) -> bool:
     ).scalar_one_or_none() is not None
 
 
-def notify_farm_data_update(db: Session, farm: Polygon, platform: str) -> None:
+def notify_farm_data_update(db: Session, farm: Polygon, platform: str, had_data_before: bool = False) -> None:
     """Called from tasks.fill_gaps_callback whenever a refresh round for
-    this farm+platform landed >=1 new real reading. Distinguishes the
-    farm's FIRST-ever real reading (field_ready) from every later one
-    (new_reading) by whether a field_ready notification already exists for
-    this farm -- deliberately not based on farm.created_at age, since
-    reuse-check can backfill a brand-new farm's full history instantly from
-    existing coverage, and that instant backfill deserves the same "your
-    field is ready" framing as a slower fresh CDSE fetch would have."""
-    is_first_ever = not _has_notification(db, farm.id, "field_ready")
+    this farm+platform landed >=1 new real reading.
+
+    is_first_ever requires BOTH:
+      (a) had_data_before is False -- the farm had zero real readings
+          before this refresh round even STARTED, computed by the caller
+          once at the top of tasks.refresh_farm. This is what actually
+          matters: checking only "does a field_ready notification already
+          exist" was the bug -- the notifications table starts empty for
+          every farm regardless of age, so the first refresh any
+          pre-existing farm got after this system shipped incorrectly said
+          "your field is ready" for farms that had had real data for months.
+      (b) no field_ready notification has been sent for this farm yet --
+          guards the rarer case of S1 and S2 both landing a farm's very
+          first real data within the same initial refresh call (normal for
+          farm creation, which requests both platforms at once); whichever
+          platform's callback commits first is the only one that should
+          call it "field_ready" rather than both firing independently."""
+    is_first_ever = (not had_data_before) and not _has_notification(
+        db, farm.id, "field_ready")
     name = farm.name or "Your field"
     name_esc = html.escape(name)
     dashboard_url = f"{settings.dashboard_base_url}/"
@@ -196,7 +207,10 @@ def notify_admin_alert(db: Session, source: str, message: str, context: dict | N
     admins = db.execute(select(User).where(
         User.role == "admin")).scalars().all()
     title = f"Error in {source}"
-    body = message[:500]
+    # Panel/DB body is a short preview only -- the full message is still in
+    # the email and in errors.html; a 500-char raw exception dump doesn't
+    # belong in a small notification card even with word-wrap fixed.
+    body = message[:160] + ("..." if len(message) > 160 else "")
     for admin in admins:
         _create(db, user_id=admin.id, type_="admin_alert", title=title, body=body,
                 context={"source": source, **(context or {})})

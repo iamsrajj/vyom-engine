@@ -139,7 +139,8 @@ def compute_stats_task(product_id: str) -> dict:
 
 
 @celery_app.task(name="vyom.stats.fill_gaps_callback")
-def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual: bool = False) -> dict:
+def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual: bool = False,
+                       had_data_before: bool = False) -> dict:
     """Chord callback -- fires once every per-product chain dispatched for
     this farm+platform refresh has finished (success or handled failure --
     every stage task above returns a status dict rather than raising past
@@ -181,7 +182,8 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual
             try:
                 farm = db.get(Polygon, uuid.UUID(farm_id))
                 if farm is not None:
-                    notify_farm_data_update(db, farm, platform)
+                    notify_farm_data_update(
+                        db, farm, platform, had_data_before=had_data_before)
             except Exception:  # noqa: BLE001 -- a notification failure must never
                 # affect the pipeline's own success/failure state.
                 logger.exception(
@@ -274,6 +276,19 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
             logger.error("Farm %s not found", farm_id)
             return {"farm_id": farm_id, "status": "not_found"}
 
+        # Captured ONCE, before dispatching anything, and passed through to
+        # fill_gaps_callback -- this is what "field_ready" actually keys off
+        # of, not notification history. Checking "does a field_ready
+        # notification already exist" alone was wrong: the notifications
+        # table starts empty for EVERY farm regardless of age, so the first
+        # refresh any pre-existing farm got after that system shipped
+        # incorrectly fired "your field is ready" for farms that had had
+        # real data for months. This is the actual fix for that.
+        had_data_before = db.execute(
+            select(ZonalStat.id).where(
+                ZonalStat.polygon_id == farm.id, ZonalStat.value.isnot(None)).limit(1)
+        ).scalar_one_or_none() is not None
+
         dispatched = {}
         for platform in platforms:
             geometry = mapping(to_shape(farm.geom))
@@ -322,7 +337,8 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
                 )
                 for pid in product_ids
             ]
-            callback_sig = fill_gaps_callback.s(farm_id, platform, priority)
+            callback_sig = fill_gaps_callback.s(
+                farm_id, platform, priority, had_data_before)
             if priority:
                 callback_sig = callback_sig.set(
                     queue=priority_queue_name("stats"))

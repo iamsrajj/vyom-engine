@@ -10,7 +10,7 @@ from vyom.auth import require_error_panel_access
 from vyom.db import get_db
 from vyom.models import ErrorLog
 
-router = APIRouter(prefix="/errors", tags=["errors"],
+router = APIRouter(prefix="/api/errors", tags=["errors"],
                    dependencies=[Depends(require_error_panel_access)])
 
 

@@ -468,7 +468,7 @@
         /* position: fixed + JS-computed coordinates, same reason as
            .header-search-results above -- <header> has overflow: hidden. */
         position: fixed;
-        width: 360px;
+        width: 440px;
         max-width: 92vw;
         max-height: 440px;
         background: var(--bg-panel);
@@ -500,6 +500,7 @@
       }
       .notif-list {
         overflow-y: auto;
+        overflow-x: hidden;
       }
       .notif-item {
         display: flex;
@@ -537,11 +538,15 @@
         font-size: 13px;
         font-weight: 600;
         margin-bottom: 2px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
       .notif-item-text {
         font-size: 12px;
         color: var(--text-dim);
         line-height: 1.4;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
       .notif-item-time {
         font-size: 10.5px;

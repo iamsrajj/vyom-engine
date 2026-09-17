@@ -58,7 +58,7 @@ def _fetch_all_pages(url: str, params: dict, platform: str, max_pages: int = 20)
     next_url = url
     next_params = params
     for page in range(max_pages):
-        resp = cdse_request("GET", next_url, params=next_params, timeout=60)
+        resp = cdse_request("GET", next_url, params=next_params, timeout=90)
         resp.raise_for_status()
         body = resp.json()
         all_results.extend(body.get("value", []))

@@ -259,8 +259,29 @@ def cdse_request(method: str, url: str, **kwargs) -> requests.Response:
 
         try:
             resp = requests.request(method, url, headers=headers, **kwargs)
-        finally:
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            # A network-level timeout/connection failure never produces a
+            # response object at all, so it was previously falling straight
+            # through the 429/5xx retry logic below and raising immediately
+            # on the very first attempt -- CDSE's OData search can genuinely
+            # be slow under load, and a single slow response shouldn't kill
+            # the whole refresh when a short backoff-and-retry would likely
+            # succeed.
             release_connection_slot(lease_id)
+            wait = _BASE_BACKOFF_SECONDS * (2 ** (attempt - 1))
+            logger.warning(
+                "CDSE request raised %s on attempt %d/%d, backing off %.1fs: %s (%s)",
+                exc.__class__.__name__, attempt, _MAX_RETRIES, wait, url, exc,
+            )
+            if attempt == _MAX_RETRIES:
+                log_error("cdse_rate_limiter",
+                          f"CDSE request failed after {_MAX_RETRIES} retries: {exc}",
+                          level="warning", context={"url": url}, include_traceback=False)
+                raise
+            time.sleep(wait)
+            continue
+
+        release_connection_slot(lease_id)
 
         if resp.status_code == 429 or resp.status_code >= 500:
             if resp.status_code == 429:
