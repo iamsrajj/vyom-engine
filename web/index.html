@@ -7164,13 +7164,27 @@
           panel.style.display = "none";
           return;
         }
-        // Positioned via fixed + JS-computed coordinates, same reason as
-        // the search results dropdown -- <header> has overflow: hidden.
-        const rect = document
-          .getElementById("header-notif-wrap")
-          .getBoundingClientRect();
-        panel.style.top = `${rect.bottom + 8}px`;
-        panel.style.right = `${window.innerWidth - rect.right}px`;
+        if (window.innerWidth <= 600) {
+          // Precise right-alignment under the bell icon isn't reliable on
+          // narrow mobile headers (icons compress/reflow differently than
+          // desktop) -- snap to a full-width-with-margins sheet instead, a
+          // standard mobile dropdown pattern that doesn't depend on
+          // pixel-perfect anchoring to one small icon.
+          panel.style.top = "60px";
+          panel.style.left = "12px";
+          panel.style.right = "12px";
+          panel.style.width = "auto";
+        } else {
+          // Positioned via fixed + JS-computed coordinates, same reason as
+          // the search results dropdown -- <header> has overflow: hidden.
+          const rect = document
+            .getElementById("header-notif-wrap")
+            .getBoundingClientRect();
+          panel.style.top = `${rect.bottom + 8}px`;
+          panel.style.right = `${window.innerWidth - rect.right}px`;
+          panel.style.left = "auto";
+          panel.style.width = ""; // reset to the CSS default (440px / 92vw) in case a mobile call set it above
+        }
         panel.style.display = "flex";
         await loadNotifications();
       }

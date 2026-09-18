@@ -124,6 +124,23 @@ def compute_stats_task(product_id: str) -> dict:
         if product.status != "processed":
             return {"product_id": product_id, "status": product.status}
 
+        # Skip if this product's stats were already computed in a PREVIOUS
+        # sweep. Without this check, a product's status stays "processed"
+        # forever, so every later poll_all_farms rediscovery of it (CDSE
+        # still lists it within days_back) recomputed identical stats
+        # pointlessly -- and, worse, reported "stats_done" to
+        # fill_gaps_callback every time regardless, which is exactly what
+        # was causing "new reading available" to fire again and again for
+        # data the farm already had (see the on_conflict_do_update in
+        # zonal_stats.py -- this never corrupted the DB with duplicate
+        # rows, it just silently redid the same work and re-notified for it).
+        already_done = db.execute(
+            select(ZonalStat.id).where(
+                ZonalStat.product_id == product.id).limit(1)
+        ).scalar_one_or_none() is not None
+        if already_done:
+            return {"product_id": product_id, "status": "already_computed"}
+
         try:
             compute_zonal_stats_for_product(db, product)
             return {"product_id": product_id, "status": "stats_done"}
