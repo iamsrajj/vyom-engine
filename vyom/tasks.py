@@ -43,7 +43,7 @@ from vyom.processing.pipeline import process_product
 from vyom.zonal_stats import compute_zonal_stats_for_product
 from vyom.interpolation import fill_gaps_for_polygon
 from vyom.raster_interpolation import fill_raster_gaps_for_polygon
-from vyom.tile_grid import link_farm_to_products
+from vyom.tile_grid import link_farm_to_products, farms_for_product
 from vyom.error_log import log_error
 from vyom.notifications import notify_farm_data_update, notify_refresh_complete, notify_stale_data
 
@@ -124,21 +124,25 @@ def compute_stats_task(product_id: str) -> dict:
         if product.status != "processed":
             return {"product_id": product_id, "status": product.status}
 
-        # Skip if this product's stats were already computed in a PREVIOUS
-        # sweep. Without this check, a product's status stays "processed"
-        # forever, so every later poll_all_farms rediscovery of it (CDSE
-        # still lists it within days_back) recomputed identical stats
-        # pointlessly -- and, worse, reported "stats_done" to
-        # fill_gaps_callback every time regardless, which is exactly what
-        # was causing "new reading available" to fire again and again for
-        # data the farm already had (see the on_conflict_do_update in
-        # zonal_stats.py -- this never corrupted the DB with duplicate
-        # rows, it just silently redid the same work and re-notified for it).
-        already_done = db.execute(
-            select(ZonalStat.id).where(
-                ZonalStat.product_id == product.id).limit(1)
-        ).scalar_one_or_none() is not None
-        if already_done:
+        # Skip ONLY if every farm currently linked to this product already
+        # has stats for it -- NOT just "does any ZonalStat exist for this
+        # product at all". That distinction matters: two farms can share
+        # the same satellite tile, and it's normal for farm B's routine
+        # sweep to link to a product that farm A's earlier refresh already
+        # fully processed. If the check were product-wide, farm B would
+        # never get stats for that shared product at all once farm A had
+        # them -- this per-farm check still recomputes (a harmless
+        # re-write for farm A, thanks to zonal_stats.py's
+        # on_conflict_do_update) whenever at least one linked farm is
+        # missing its stats, which correctly fills in farm B too.
+        linked_farms = farms_for_product(db, product.id)
+        covered_farm_ids = {
+            row[0] for row in db.execute(
+                select(ZonalStat.polygon_id).where(
+                    ZonalStat.product_id == product.id).distinct()
+            ).all()
+        }
+        if linked_farms and all(f.id in covered_farm_ids for f in linked_farms):
             return {"product_id": product_id, "status": "already_computed"}
 
         try:
