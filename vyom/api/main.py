@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
+from vyom.api import billing as billing_api
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
 from vyom.error_log import log_error
@@ -66,6 +67,14 @@ app.include_router(prewarm_api.router)
 app.include_router(contact_api.router)
 app.include_router(notifications_api.router,
                    dependencies=[Depends(require_auth)])
+# billing.py's three routers each gate individual routes themselves (mixed
+# public/authenticated/admin-only within the same file -- e.g. the Razorpay
+# webhook must stay public, /coupons/public must stay public, everything
+# else requires a session), so none of them get a blanket router-level
+# dependency here the way farms/tiles/reference/notifications do above.
+app.include_router(billing_api.router)
+app.include_router(billing_api.coupons_router)
+app.include_router(billing_api.admin_coupons_router)
 
 
 @app.exception_handler(Exception)

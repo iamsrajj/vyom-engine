@@ -175,5 +175,30 @@ class Settings(BaseSettings):
     stale_data_threshold_days: int = 20
     dashboard_base_url: str = "https://vyom.agridoot.in"
 
+    # Razorpay (see vyom/razorpay_client.py). razorpay_key_id is also handed
+    # to the frontend as-is (it's the public half, safe to expose -- that's
+    # how Razorpay Checkout.js is designed to work); razorpay_key_secret and
+    # razorpay_webhook_secret must NEVER leave the server.
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    # Separate secret, generated when you register the webhook URL in the
+    # Razorpay dashboard -- NOT the same value as razorpay_key_secret. Used
+    # only to verify X-Razorpay-Signature on incoming webhook calls.
+    razorpay_webhook_secret: str = ""
+
+    # Business account maintenance subscription (see vyom/api/billing.py).
+    # A flat annual fee, not tied to farm count -- kept as a setting rather
+    # than hardcoded so it can change without a code deploy.
+    business_maintenance_fee_paise: int = 99900  # Rs. 999.00
+    business_subscription_days: int = 365
+
+    # GST: NovosEdge is GST-registered; every quoted price in this app is
+    # GST-exclusive, with GST added on top at checkout/invoicing time (see
+    # vyom/gst.py). This is a single flat rate for now -- if HSN/SAC-specific
+    # rates or interstate IGST-vs-CGST/SGST splitting are ever needed, this
+    # becomes a lookup instead of one constant.
+    gst_percent: float = 18.0
+    gst_number: str = ""  # NovosEdge's GSTIN, shown on invoices
+
 
 settings = Settings()

@@ -3,9 +3,9 @@ from datetime import datetime
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
-    Column, String, Numeric, DateTime, Date, Text, ForeignKey, BigInteger, Integer, UniqueConstraint, Boolean
+    Column, String, Numeric, DateTime, Date, Text, ForeignKey, BigInteger, Integer, UniqueConstraint, Boolean, Float
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import relationship
 
 from vyom.db import Base
@@ -300,9 +300,191 @@ class User(Base):
     # UPDATE users SET role = 'admin' WHERE email = '<you>';
     role = Column(String, nullable=False, server_default="user")
 
+    # 'individual' (default) or 'business'. Business unlocks API credential
+    # issuance (see ApiCredential) once business_status='active' -- see
+    # vyom/api/billing.py for the Razorpay upgrade flow that sets these.
+    account_type = Column(String, nullable=False, server_default="individual")
+    # 'active' | 'expired' | NULL (never been a business account). A lapsed
+    # business subscription restricts API access ONLY -- the dashboard,
+    # farms, and their data are completely unaffected either way. See
+    # BusinessSubscription for the payment history behind this flag.
+    business_status = Column(String)
+    business_expires_at = Column(DateTime(timezone=True))
+
+    # Denormalized running total, kept in sync with wallet_transactions in
+    # the SAME db transaction as every insert there (see vyom/wallet.py) --
+    # never computed on the fly from the ledger, so checkout can read it
+    # with a single cheap column access.
+    wallet_balance_paise = Column(Integer, nullable=False, server_default="0")
+
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True),
                         default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BusinessSubscription(Base):
+    """One row per ₹999/year business-maintenance payment attempt (not one
+    row per active year -- 'created' rows for abandoned checkouts are kept,
+    not deleted, so the payment history is a complete audit trail). The
+    CURRENT state of a user's business access lives on User.business_status
+    / business_expires_at -- this table is the ledger that produced it, in
+    the same spirit as zonal_stats vs interpolated_stats: one place records
+    what actually happened (Razorpay orders/payments), a denormalized field
+    elsewhere answers "is it active right now" cheaply.
+
+    Renewal is manual for now (a reminder email with a Checkout link, not an
+    auto-charge/e-mandate) -- see vyom/api/billing.py's renewal reminder job.
+    """
+    __tablename__ = "business_subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+
+    amount_paise = Column(Integer, nullable=False)      # base, pre-GST
+    gst_paise = Column(Integer, nullable=False, server_default="0")
+    # amount + gst, what Razorpay actually charged
+    total_paise = Column(Integer, nullable=False)
+
+    razorpay_order_id = Column(String, unique=True, nullable=False)
+    razorpay_payment_id = Column(String, unique=True)     # set once paid
+    razorpay_signature = Column(String)
+
+    # created -> paid (webhook/verify confirmed) or failed (Razorpay said so)
+    status = Column(String, nullable=False, server_default="created")
+
+    starts_at = Column(DateTime(timezone=True))
+    ends_at = Column(DateTime(timezone=True))
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),
+                        default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WalletTransaction(Base):
+    """Append-only ledger backing User.wallet_balance_paise. Every row here
+    MUST be written in the same db.commit() as whatever caused it (a coupon
+    redemption, a farm-plan purchase spending the balance down, an admin
+    adjustment) -- see vyom/wallet.py, which is the ONLY place that should
+    ever write to this table or to User.wallet_balance_paise, so the two
+    never drift apart.
+
+    amount_paise is signed: positive = credit (cashback, wallet-credit
+    coupon, referral bonus), negative = spend (applied toward a purchase at
+    checkout). balance_after_paise is a point-in-time snapshot for audit/
+    display -- never trust it over recomputing from the full ledger if the
+    two ever disagree, but in normal operation they won't.
+    """
+    __tablename__ = "wallet_transactions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    amount_paise = Column(Integer, nullable=False)
+    # 'coupon_cashback' | 'coupon_credit' | 'farm_plan_spend' | 'referral' | 'admin_adjustment'
+    reason = Column(String, nullable=False)
+    # loosely-typed pointer at whatever caused this (coupon_redemptions.id,
+    # a future farm_plans.id, etc.) -- deliberately no FK, same reasoning as
+    # ErrorLog.context: a ledger row must never fail to write because the
+    # thing it references was since deleted.
+    reference_id = Column(UUID(as_uuid=True))
+    balance_after_paise = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class Coupon(Base):
+    """Generalized coupon engine backing every type in the commercial coupon
+    list (percentage/flat/tiered/spend-threshold/buy-x-get-y/cashback/
+    wallet-credit discounts), with a separate set of eligibility columns that
+    layer on top of ANY calculation type. This is deliberate: "First Order",
+    "New User", "Account/User-Based", "Plan-Specific", "Product-Specific",
+    "Category-Based", "One-Time", "Limited-Use", "Partner", and "Recurring"
+    coupons aren't distinct calculations, they're eligibility constraints --
+    modeling them as one flat set of columns (rather than 22 separate
+    calculation branches) is what keeps this maintainable. See
+    vyom/coupons.py's module docstring for the full mapping from the
+    commercial names to (calculation_type + eligibility columns).
+    """
+    __tablename__ = "coupons"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String, unique=True, nullable=False)
+    description = Column(Text)
+
+    # 'percentage' | 'percentage_max_cap' | 'flat' | 'flat_min_order' |
+    # 'buy_x_get_y' | 'buy_x_get_y_discounted' | 'tiered' | 'spend_x_get_y' |
+    # 'free_shipping' | 'cashback' | 'wallet_credit'
+    calculation_type = Column(String, nullable=False)
+
+    # -- calculation parameters (only the ones relevant to calculation_type
+    #    are populated; kept as plain nullable columns rather than one
+    #    JSONB blob so admin tooling/validation can be straightforward) --
+    percent = Column(Float)
+    flat_paise = Column(Integer)
+    max_discount_paise = Column(Integer)          # percentage_max_cap
+    min_order_paise = Column(Integer)              # flat_min_order
+    buy_qty = Column(Integer)                      # buy_x_get_y[_discounted]
+    get_qty = Column(Integer)
+    # buy_x_get_y_discounted (100 = fully free)
+    get_discount_percent = Column(Float)
+    # buy_x_get_y[_discounted] -- price of the unit being given/discounted
+    unit_price_paise = Column(Integer)
+    spend_threshold_paise = Column(Integer)         # spend_x_get_y
+    # tiered: [{"min_paise": int, "percent": float}, ...]
+    tiers = Column(JSONB)
+    waived_charge_codes = Column(ARRAY(String))     # free_shipping/service
+
+    # -- eligibility (apply on top of any calculation_type above) --
+    # shown in the public coupon section
+    is_public = Column(Boolean, nullable=False, server_default="false")
+    # Account/User-Based, Partner
+    eligible_user_ids = Column(ARRAY(UUID(as_uuid=True)))
+    first_order_only = Column(Boolean, nullable=False, server_default="false")
+    new_user_within_days = Column(Integer)          # New User Coupon
+    # Plan-Specific, Subscription Discount
+    eligible_plan_types = Column(ARRAY(String))
+    eligible_products = Column(ARRAY(String))       # Product-Specific
+    eligible_categories = Column(ARRAY(String))     # Category-Based
+    requires_referral = Column(Boolean, nullable=False, server_default="false")
+    # Recurring Coupon / Subscription Discount: applies to this many
+    # consecutive redemptions by the SAME user (e.g. 3 renewal cycles).
+    # NULL = no recurring limit beyond max_redemptions_per_user below.
+    recurring_cycles = Column(Integer)
+
+    max_redemptions = Column(Integer)               # global cap (Limited-Use)
+    max_redemptions_per_user = Column(
+        Integer, nullable=False, server_default="1")  # =1 gives One-Time behavior
+
+    starts_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+    # active | disabled | expired
+    status = Column(String, nullable=False, server_default="active")
+
+    created_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),
+                        default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CouponRedemption(Base):
+    """One row per successful application of a coupon to an order. Used both
+    to enforce max_redemptions/max_redemptions_per_user and as the audit
+    trail for what discount was actually given on a specific charge."""
+    __tablename__ = "coupon_redemptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    coupon_id = Column(UUID(as_uuid=True), ForeignKey(
+        "coupons.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    # e.g. a business_subscriptions.id or (later) a farm_plans.id -- no FK,
+    # same reasoning as WalletTransaction.reference_id.
+    # 'business_subscription' | 'farm_plan'
+    order_reference_type = Column(String, nullable=False)
+    order_reference_id = Column(UUID(as_uuid=True), nullable=False)
+    discount_paise = Column(Integer, nullable=False, server_default="0")
+    wallet_credit_paise = Column(Integer, nullable=False, server_default="0")
+    redeemed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class OtpVerification(Base):
