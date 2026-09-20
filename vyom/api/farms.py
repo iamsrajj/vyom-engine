@@ -22,6 +22,8 @@ from vyom.models import Polygon, ZonalStat, CatalogProduct, InterpolatedStat, In
 from vyom.processing.index_scale import scales_for_api
 from vyom.reuse_check import backfill_from_existing_products
 from vyom.tasks import refresh_farm
+from vyom.units import HA_TO_ACRE
+from vyom import razorpay_client
 
 logger = logging.getLogger("vyom.api.farms")
 
@@ -97,7 +99,7 @@ def _invalidate_farm_cache(farm_id, owner=None):
 
 router = APIRouter(prefix="/farms", tags=["farms"])
 
-_HA_TO_ACRE = 2.4710538147
+_HA_TO_ACRE = HA_TO_ACRE
 
 
 def _to_utc(dt: datetime) -> datetime:
@@ -145,6 +147,14 @@ class FarmCreate(BaseModel):
     # have the real polygon. Purely a lifecycle marker; fetch behavior is
     # identical either way.
     is_draft: bool = False
+    # REQUIRED for a real (non-draft) farm -- one of 'individual_3m',
+    # 'individual_6m', 'individual_12m' (see vyom/farm_pricing.py). A DRAFT
+    # farm does NOT require this: it's billed once, when it's finalized via
+    # PATCH /farms/{id}/plan/purchase -- charging for a rough placeholder
+    # boundary before the real area is known would be wrong. See
+    # create_farm for the enforcement of "required unless is_draft".
+    plan_type: Optional[str] = None
+    coupon_code: Optional[str] = None
 
 
 class FarmUpdate(BaseModel):
@@ -178,6 +188,20 @@ class FarmOut(BaseModel):
     geometry: dict
     is_draft: bool
     created_at: datetime
+    # 'dashboard' or 'api' -- see Polygon.created_via in models.py. Drives
+    # the "created from API" badge in the dashboard.
+    created_via: str
+    # 'full' or 'indices_only' -- see Polygon.feature_tier in models.py.
+    # Determines whether the dashboard should show weather/Gyan AI/advisory
+    # for this specific farm.
+    feature_tier: str
+    # True once this farm has no active, unexpired FarmPlan -- the
+    # dashboard should show a "Recharge to continue" gate instead of the
+    # farm's map/indices/trend/advisory when this is true. Computed fresh
+    # on every read via vyom/farm_pricing.py's is_farm_locked(), never
+    # cached, since payment can complete at any moment via webhook.
+    plan_locked: bool
+    plan_expires_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -212,10 +236,12 @@ def _geodesic_area_ha(geom_shape) -> float:
     return projected.area / 10_000
 
 
-def _to_farm_out(farm: Polygon) -> FarmOut:
+def _to_farm_out(db: Session, farm: Polygon) -> FarmOut:
+    from vyom import farm_pricing
     area_ha = float(farm.area_ha) if farm.area_ha is not None else None
     crop_age_days = (date_cls.today() -
                      farm.sowing_date).days if farm.sowing_date else None
+    locked, plan = farm_pricing.is_farm_locked(db, farm)
     return FarmOut(
         id=farm.id,
         name=farm.name,
@@ -231,6 +257,10 @@ def _to_farm_out(farm: Polygon) -> FarmOut:
         geometry=mapping(to_shape(farm.geom)),
         is_draft=farm.is_draft,
         created_at=_to_utc(farm.created_at),
+        created_via=farm.created_via,
+        feature_tier=farm.feature_tier,
+        plan_locked=locked,
+        plan_expires_at=plan.expires_at if plan else None,
     )
 
 
@@ -243,6 +273,27 @@ def _get_owned_farm(db: Session, farm_id: uuid.UUID, current_user: str) -> Polyg
     if not farm or farm.user_id != stable_owner_uuid(current_user):
         raise HTTPException(404, "Farm not found")
     return farm
+
+
+def _require_unlocked_farm(db: Session, farm: Polygon) -> None:
+    """The 'recharge to continue' gate -- called by every DETAIL data
+    endpoint (timeseries, latest, available-dates), never by get_farm/
+    list_farms themselves (those must always succeed, including
+    plan_locked=true, so the frontend can actually render the recharge
+    modal in the first place). Raises 402 Payment Required with enough
+    structure for the frontend to show the exact renewal cost without a
+    second round trip."""
+    from vyom import farm_pricing
+    locked, plan = farm_pricing.is_farm_locked(db, farm)
+    if not locked:
+        return
+    raise HTTPException(402, {
+        "code": "FARM_PLAN_EXPIRED" if plan else "FARM_PLAN_REQUIRED",
+        "message": "This farm's plan has expired. Recharge to continue viewing its data."
+                   if plan else "This farm has no active plan yet.",
+        "farm_id": str(farm.id),
+        "expired_plan_id": str(plan.id) if plan else None,
+    })
 
 
 @router.get("/available-indices")
@@ -315,8 +366,62 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = 
     return backfilled
 
 
-@router.post("", response_model=FarmOut)
+class PlanOrderOut(BaseModel):
+    """Mirrors vyom.farm_pricing.PlanOrderResult for the API boundary."""
+    plan_id: uuid.UUID
+    # 'active' (wallet/proration fully covered it) or 'created' (Razorpay payment pending)
+    status: str
+    base_paise: int
+    discount_paise: int
+    proration_credit_paise: int
+    gst_paise: int
+    wallet_applied_paise: int
+    razorpay_paise: int
+    razorpay_order_id: Optional[str] = None
+    razorpay_key_id: Optional[str] = None
+    expires_at: Optional[datetime] = None
+
+
+class FarmCreateOut(BaseModel):
+    """create_farm's response: the farm PLUS the plan purchase that was
+    (or wasn't, for a draft) charged alongside it. `payment` is None only
+    when the farm was created as a draft (is_draft=True) -- see
+    FarmCreate.plan_type's docstring."""
+    farm: FarmOut
+    payment: Optional[PlanOrderOut] = None
+
+
+def _plan_order_to_out(result) -> PlanOrderOut:
+    return PlanOrderOut(
+        plan_id=result.plan_id, status=result.status, base_paise=result.base_paise,
+        discount_paise=result.discount_paise, proration_credit_paise=result.proration_credit_paise,
+        gst_paise=result.gst_paise, wallet_applied_paise=result.wallet_applied_paise,
+        razorpay_paise=result.razorpay_paise, razorpay_order_id=result.razorpay_order_id,
+        razorpay_key_id=result.razorpay_key_id, expires_at=result.expires_at,
+    )
+
+
+def _get_owning_user(db: Session, current_user: str):
+    """Farm billing requires a real Users row (FarmPlan.user_id is a real
+    FK) -- fetches it via the same stable_owner_uuid() every ownership
+    check already uses. Raises for the legacy AUTH_USERS session path
+    (see stable_owner_uuid's docstring), which predates the Users table and
+    has no row to bill against."""
+    from vyom.models import User
+    user = db.get(User, stable_owner_uuid(current_user))
+    if user is None:
+        raise HTTPException(
+            400, "Farm billing requires a full account (Google or phone sign-in).")
+    return user
+
+
+@router.post("", response_model=FarmCreateOut)
 def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    if not payload.is_draft and not payload.plan_type:
+        raise HTTPException(
+            422, "plan_type is required to create a farm (one of individual_3m, individual_6m, individual_12m). "
+            "Draft farms (is_draft=true) don't need this yet -- see POST /farms/{id}/plan/purchase.")
+
     try:
         clean_geometry = sanitize_polygon_geojson(payload.geometry)
     except ValueError as exc:
@@ -347,9 +452,32 @@ def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), 
     # INSTANTLY from existing data, with zero CDSE calls, then dispatch a
     # priority refresh for genuinely current data. Never blocks/fails farm
     # creation itself -- see _backfill_and_dispatch_refresh's try/except.
+    #
+    # This runs REGARDLESS of payment status -- a farm sits locked (see
+    # is_farm_locked) until its plan is paid, but there's no reason to
+    # delay the (free, CDSE-side) data pipeline starting to warm up in the
+    # background while the farmer completes Checkout.
     _backfill_and_dispatch_refresh(db, farm)
 
-    return _to_farm_out(farm)
+    payment = None
+    if not payload.is_draft:
+        from vyom import farm_pricing
+        user = _get_owning_user(db, current_user)
+        try:
+            result = farm_pricing.purchase_plan(
+                db, farm=farm, user=user, plan_type=payload.plan_type, coupon_code=payload.coupon_code)
+        except farm_pricing.FarmPricingError as exc:
+            # The farm itself is NOT rolled back -- it already exists and
+            # its data pipeline already started, and it's simply locked
+            # (no active plan) until a plan purchase succeeds, which the
+            # farmer can retry via POST /farms/{id}/plan/purchase without
+            # losing the farm or its dispatched backfill.
+            raise HTTPException(400, str(exc))
+        except razorpay_client.RazorpayError as exc:
+            raise HTTPException(502, f"Could not start payment: {exc}")
+        payment = _plan_order_to_out(result)
+
+    return FarmCreateOut(farm=_to_farm_out(db, farm), payment=payment)
 
 
 @router.patch("/{farm_id}", response_model=FarmOut)
@@ -389,10 +517,89 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, current_user: str = Dep
     if payload.geometry is not None:
         _backfill_and_dispatch_refresh(db, farm)
 
-    return _to_farm_out(farm)
+    return _to_farm_out(db, farm)
 
 
-@router.get("", response_model=list[FarmOut])
+class PlanPurchaseRequest(BaseModel):
+    plan_type: str
+    coupon_code: Optional[str] = None
+
+
+@router.post("/{farm_id}/plan/purchase", response_model=PlanOrderOut)
+def purchase_farm_plan(farm_id: uuid.UUID, payload: PlanPurchaseRequest,
+                       current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Buys a plan for a farm that doesn't have an active one yet -- either
+    a draft being finalized for the first time, or (defensively) any farm
+    that somehow has none. Use /plan/upgrade instead for a farm that
+    already has an active plan and is moving to a different tier."""
+    from vyom import farm_pricing
+    farm = _get_owned_farm(db, farm_id, current_user)
+    user = _get_owning_user(db, current_user)
+    locked, existing_plan = farm_pricing.is_farm_locked(db, farm)
+    if existing_plan is not None and existing_plan.status == "active":
+        raise HTTPException(
+            400, "This farm already has an active plan -- use /plan/upgrade to change tiers, "
+            "or wait for it to expire to purchase a fresh one.")
+    try:
+        result = farm_pricing.purchase_plan(
+            db, farm=farm, user=user, plan_type=payload.plan_type, coupon_code=payload.coupon_code)
+    except farm_pricing.FarmPricingError as exc:
+        raise HTTPException(400, str(exc))
+    except razorpay_client.RazorpayError as exc:
+        raise HTTPException(502, f"Could not start payment: {exc}")
+    return _plan_order_to_out(result)
+
+
+@router.post("/{farm_id}/plan/upgrade", response_model=PlanOrderOut)
+def upgrade_farm_plan(farm_id: uuid.UUID, payload: PlanPurchaseRequest,
+                      current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Moves a farm from its current active plan to a different tier,
+    crediting the unused remaining value of the old plan toward the new
+    one. See vyom/farm_pricing.py's upgrade_plan() for the proration math."""
+    from vyom import farm_pricing
+    farm = _get_owned_farm(db, farm_id, current_user)
+    user = _get_owning_user(db, current_user)
+    try:
+        result = farm_pricing.upgrade_plan(
+            db, farm=farm, user=user, new_plan_type=payload.plan_type, coupon_code=payload.coupon_code)
+    except farm_pricing.FarmPricingError as exc:
+        raise HTTPException(400, str(exc))
+    except razorpay_client.RazorpayError as exc:
+        raise HTTPException(502, f"Could not start payment: {exc}")
+    return _plan_order_to_out(result)
+
+
+class PlanVerifyRequest(BaseModel):
+    plan_id: uuid.UUID
+    razorpay_payment_id: str
+    razorpay_signature: str
+    coupon_code: Optional[str] = None
+
+
+@router.post("/{farm_id}/plan/verify")
+def verify_farm_plan_payment(farm_id: uuid.UUID, payload: PlanVerifyRequest,
+                             current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Fast UI-confirmation path, mirroring /billing/business/verify -- the
+    Razorpay webhook (extended in vyom/api/billing.py to also resolve
+    FarmPlan orders) is still the authoritative confirmation; this just
+    unlocks the farm immediately in the requesting browser rather than
+    waiting for a webhook round trip."""
+    from vyom.models import FarmPlan
+    from vyom import farm_pricing
+    farm = _get_owned_farm(db, farm_id, current_user)
+    plan = db.get(FarmPlan, payload.plan_id)
+    if plan is None or plan.farm_id != farm.id:
+        raise HTTPException(404, "No matching plan found for this farm.")
+    try:
+        farm_pricing.verify_and_activate(
+            db, plan=plan, farm=farm, razorpay_payment_id=payload.razorpay_payment_id,
+            razorpay_signature=payload.razorpay_signature, coupon_code=payload.coupon_code,
+        )
+    except farm_pricing.FarmPricingError as exc:
+        raise HTTPException(400, str(exc))
+    return {"status": "activated", "expires_at": plan.expires_at}
+
+
 def list_farms(include_drafts: bool = False, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Always scoped to the authenticated caller's own farms (security fix:
     this used to take an arbitrary `user_id` query param with no check that
@@ -406,7 +613,7 @@ def list_farms(include_drafts: bool = False, current_user: str = Depends(require
     if not include_drafts:
         stmt = stmt.where(Polygon.is_draft == False, Polygon.is_prewarm_seed == False)  # noqa: E712
     farms = db.execute(stmt).scalars().all()
-    return [_to_farm_out(f) for f in farms]
+    return [_to_farm_out(db, f) for f in farms]
 
 
 @router.get("/current-status")
@@ -490,7 +697,7 @@ def current_status(response: Response, metric: str = "NDVI_mean", current_user: 
 @router.get("/{farm_id}", response_model=FarmOut)
 def get_farm(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     farm = _get_owned_farm(db, farm_id, current_user)
-    return _to_farm_out(farm)
+    return _to_farm_out(db, farm)
 
 
 @router.delete("/{farm_id}")
@@ -627,6 +834,7 @@ def timeseries(
     include_interpolated) -- computed AFTER the ownership check below, so a
     cache hit can never leak another user's farm data."""
     farm = _get_owned_farm(db, farm_id, current_user)
+    _require_unlocked_farm(db, farm)
 
     def _compute():
         stmt = (
@@ -719,6 +927,7 @@ def latest_snapshot(response: Response, farm_id: uuid.UUID, date: str = "latest"
     Cached in-process for _READ_CACHE_TTL_SECONDS keyed by (farm_id, date,
     include_interpolated) -- computed AFTER the ownership check below."""
     farm = _get_owned_farm(db, farm_id, current_user)
+    _require_unlocked_farm(db, farm)
 
     target_date = None
     if date and date != "latest":
@@ -805,6 +1014,7 @@ def available_dates(response: Response, farm_id: uuid.UUID, platform: str = "S2"
     platform, index, include_interpolated) -- computed AFTER the ownership
     check below."""
     farm = _get_owned_farm(db, farm_id, current_user)
+    _require_unlocked_farm(db, farm)
 
     def _compute():
         from vyom.models import PolygonTileMap

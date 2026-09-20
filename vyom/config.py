@@ -200,5 +200,18 @@ class Settings(BaseSettings):
     gst_percent: float = 18.0
     gst_number: str = ""  # NovosEdge's GSTIN, shown on invoices
 
+    # Individual farm plans (see vyom/farm_pricing.py). Per-acre, GST-
+    # exclusive, in paise -- kept as settings rather than hardcoded so
+    # prices can change without a code deploy.
+    individual_plan_rate_3m_paise: int = 8500     # Rs. 85/acre/3 months
+    individual_plan_rate_6m_paise: int = 15500    # Rs. 155/acre/6 months
+    individual_plan_rate_12m_paise: int = 29500   # Rs. 295/acre/12 months
+
+    # Business API-created-farm billing (see vyom/billing_tasks.py) --
+    # ahead of the API-key platform itself, see BusinessApiInvoice's
+    # docstring in models.py.
+    business_api_rate_per_acre_year_paise: int = 5500  # Rs. 55/acre/year
+    business_api_invoice_grace_days: int = 15
+
 
 settings = Settings()

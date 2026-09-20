@@ -93,7 +93,162 @@ class Polygon(Base):
     # here"), so these rows can be deleted later without undoing the
     # benefit. Always excluded from list_farms, same as is_draft.
     is_prewarm_seed = Column(Boolean, nullable=False, server_default="false")
+
+    # 'dashboard' (default) or 'api'. Drives the whole individual-vs-business
+    # pricing/feature split -- see FarmPlan and BusinessApiInvoice below.
+    # NEVER derived from account_type: a business account's OWN
+    # dashboard-created farms are still 'dashboard'/'full', exactly like an
+    # individual's -- only farms actually created through the (not yet
+    # built) partner API get 'api'/'indices_only'. Keeping this on the farm
+    # itself, not computed from the owner's account_type, is what prevents
+    # the two surfaces (dashboard rendering, future API responses) from
+    # ever silently drifting out of sync on which farms get which features.
+    created_via = Column(String, nullable=False, server_default="dashboard")
+    # 'full' (all satellite indices + Hyperlocal Weather + Gyan AI Expanded
+    # + farm-based dynamic advisory) or 'indices_only' (satellite indices
+    # only). Every place that decides whether to show/return weather, Gyan
+    # AI, or advisory for a farm MUST check this field, not created_via or
+    # account_type directly -- this is the one flag both the dashboard and
+    # any future API surface read.
+    feature_tier = Column(String, nullable=False, server_default="full")
+
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class FarmPlan(Base):
+    """One row per individual farm-plan purchase/renewal/upgrade attempt --
+    same 'ledger of attempts, not just the current state' shape as
+    BusinessSubscription, and for the same reason (abandoned checkouts stay
+    visible as status='created', never deleted).
+
+    A farm's CURRENT lock state is derived by looking up this farm's most
+    recent row with status='active' and checking expires_at against now --
+    see vyom/farm_pricing.py's is_farm_locked(), which is the ONLY function
+    that should make that determination (every gated endpoint calls it,
+    rather than re-deriving the lock logic inline in multiple places).
+
+    Upgrading a farm's plan does NOT delete or edit the old row -- it marks
+    the old row status='upgraded' and creates a new one, so the purchase
+    history (and the exact proration credit given) stays fully auditable.
+    """
+    __tablename__ = "farm_plans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    farm_id = Column(UUID(as_uuid=True), ForeignKey(
+        "polygons.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+
+    # 'individual_3m' | 'individual_6m' | 'individual_12m'
+    plan_type = Column(String, nullable=False)
+    duration_days = Column(Integer, nullable=False)
+    # Area at the moment of purchase -- kept even though Polygon.area_ha can
+    # change later (a redrawn boundary), so a past invoice always shows what
+    # was actually charged, not today's area.
+    area_acre_snapshot = Column(Numeric, nullable=False)
+    rate_per_acre_paise = Column(Integer, nullable=False)
+
+    # area * rate, pre-discount
+    base_paise = Column(Integer, nullable=False)
+    discount_paise = Column(Integer, nullable=False, server_default="0")
+    # Credit from an old plan's unused remaining value, applied toward this
+    # purchase -- only set on an upgrade, see vyom/farm_pricing.py.
+    proration_credit_paise = Column(
+        Integer, nullable=False, server_default="0")
+    gst_paise = Column(Integer, nullable=False, server_default="0")
+    wallet_applied_paise = Column(Integer, nullable=False, server_default="0")
+    # What Razorpay actually needs to charge = base - discount - proration
+    # - wallet + gst. Can be 0 if wallet/proration fully covers it, in which
+    # case razorpay_order_id stays NULL and the plan activates immediately.
+    razorpay_paise = Column(Integer, nullable=False, server_default="0")
+
+    coupon_id = Column(UUID(as_uuid=True), ForeignKey("coupons.id"))
+    # Set only on an upgrade -- see vyom/farm_pricing.py's upgrade_plan().
+    # Persisted here (not passed around as a function parameter) because
+    # activation can happen much later, asynchronously, via the Razorpay
+    # webhook -- the link has to survive that round trip on the row itself.
+    upgraded_from_plan_id = Column(
+        UUID(as_uuid=True), ForeignKey("farm_plans.id"))
+    razorpay_order_id = Column(String, unique=True)
+    razorpay_payment_id = Column(String, unique=True)
+
+    # created (awaiting payment, or awaiting nothing if razorpay_paise=0 --
+    # see activate_farm_plan, which is called immediately in that case) ->
+    # active -> expired | upgraded. failed if Razorpay reported failure.
+    status = Column(String, nullable=False, server_default="created")
+
+    starts_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),
+                        default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BusinessApiInvoice(Base):
+    """One row per calendar month per business account, covering every farm
+    that account's API key(s) created THAT month (not farms created in
+    earlier months -- each month's cohort gets its own invoice, matching
+    'billed in the next month for all farms created by API in that month').
+
+    This table exists now, ahead of the API-key platform itself, so the
+    monthly billing job (vyom/billing_tasks.py) is ready the moment farms
+    start getting created_via='api' -- until then, generate_monthly_
+    business_api_invoices() simply finds zero qualifying farms per account
+    and creates nothing.
+    """
+    __tablename__ = "business_api_invoices"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    # First day of the billed month, e.g. 2026-09-01 for September's farms.
+    billing_month = Column(Date, nullable=False)
+
+    total_area_acre = Column(Numeric, nullable=False)
+    rate_per_acre_paise = Column(Integer, nullable=False)
+    base_paise = Column(Integer, nullable=False)
+    gst_paise = Column(Integer, nullable=False, server_default="0")
+    total_paise = Column(Integer, nullable=False)
+
+    razorpay_payment_link_id = Column(String, unique=True)
+    razorpay_payment_link_url = Column(String)
+    razorpay_payment_id = Column(String, unique=True)
+
+    issued_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    due_at = Column(DateTime(timezone=True),
+                    nullable=False)  # issued_at + 15 days
+
+    # pending -> paid, or pending -> overdue (past due_at/15-day grace,
+    # unpaid -- vyom/billing_tasks.py's daily check sets this AND flips the
+    # owning User.business_api_payment_status to 'suspended' in the same
+    # transaction, so the two never disagree about whether the account is
+    # currently restricted).
+    status = Column(String, nullable=False, server_default="pending")
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True),
+                        default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "billing_month",
+                         name="uq_business_invoice_user_month"),
+    )
+
+
+class BusinessApiInvoiceFarm(Base):
+    """Junction row: which farms (and what area) a given monthly invoice
+    actually covers. Recorded explicitly at invoice-generation time rather
+    than re-derived later from Polygon.area_ha, so a farm's boundary being
+    redrawn afterwards never silently changes a past invoice's total."""
+    __tablename__ = "business_api_invoice_farms"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    invoice_id = Column(UUID(as_uuid=True), ForeignKey(
+        "business_api_invoices.id", ondelete="CASCADE"), nullable=False)
+    farm_id = Column(UUID(as_uuid=True), ForeignKey(
+        "polygons.id", ondelete="CASCADE"), nullable=False)
+    area_acre_snapshot = Column(Numeric, nullable=False)
 
 
 class PolygonTileMap(Base):
@@ -310,6 +465,16 @@ class User(Base):
     # BusinessSubscription for the payment history behind this flag.
     business_status = Column(String)
     business_expires_at = Column(DateTime(timezone=True))
+    # 'current' (default) | 'overdue' (past a monthly invoice's due_at, one
+    # or more reminders sent) | 'suspended' (grace period lapsed). Read by
+    # the future API-key auth gate (see vyom/api/billing.py's spec notes) --
+    # kept on User rather than waiting for ApiCredential to exist, since the
+    # monthly invoicing job (vyom/billing_tasks.py) needs somewhere to
+    # record this state regardless of whether the API platform has shipped
+    # yet. Never affects business_status/dashboard access -- see the "lapsed
+    # business invoice restricts API access only" decision.
+    business_api_payment_status = Column(
+        String, nullable=False, server_default="current")
 
     # Denormalized running total, kept in sync with wallet_transactions in
     # the SAME db transaction as every insert there (see vyom/wallet.py) --

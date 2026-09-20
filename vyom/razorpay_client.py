@@ -63,6 +63,41 @@ def create_order(*, amount_paise: int, receipt: str, notes: dict | None = None) 
     return resp.json()
 
 
+def create_payment_link(*, amount_paise: int, description: str, customer_email: str,
+                        customer_name: str, reference_id: str, notes: dict | None = None) -> dict:
+    """Creates a Razorpay Payment Link -- used for the business monthly
+    API-usage invoice (vyom/billing_tasks.py), where we're emailing someone
+    a link to pay on their own time, rather than a Checkout popup driven by
+    a page they're actively on (that's what create_order/Checkout.js is
+    for). Returns Razorpay's JSON response, which includes 'short_url' (the
+    link to put in the email) and 'id'.
+    """
+    try:
+        resp = requests.post(
+            f"{_BASE_URL}/payment_links",
+            auth=_auth(),
+            json={
+                "amount": amount_paise,
+                "currency": "INR",
+                "description": description,
+                "customer": {"name": customer_name, "email": customer_email},
+                "notify": {"email": True, "sms": False},
+                "reference_id": reference_id,
+                "notes": notes or {},
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise RazorpayError(f"Could not reach Razorpay: {exc}") from exc
+
+    if resp.status_code >= 300:
+        logger.error("Razorpay payment link creation failed: %s %s",
+                     resp.status_code, resp.text)
+        raise RazorpayError(
+            f"Razorpay payment link creation failed: {resp.text}")
+    return resp.json()
+
+
 def verify_payment_signature(*, order_id: str, payment_id: str, signature: str) -> bool:
     """Verifies the signature Razorpay Checkout returns to the FRONTEND on
     success (razorpay_order_id, razorpay_payment_id, razorpay_signature).

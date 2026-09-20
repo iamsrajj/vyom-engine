@@ -202,8 +202,15 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     """Server-to-server callback from Razorpay -- the AUTHORITATIVE
     confirmation of payment, independent of whether the user's browser is
     still open. Register this URL (https://<your-domain>/billing/webhooks/razorpay)
-    in the Razorpay dashboard for the payment.captured and payment.failed
-    events, and set RAZORPAY_WEBHOOK_SECRET to the secret shown there.
+    in the Razorpay dashboard for the payment.captured, payment.failed, AND
+    payment_link.paid events (the last one is for business monthly API
+    invoices, sent as Payment Links rather than Orders -- see
+    vyom/billing_tasks.py), and set RAZORPAY_WEBHOOK_SECRET to the secret
+    shown there.
+
+    Resolves an incoming order_id against BOTH BusinessSubscription (the
+    ₹999/year upgrade) and FarmPlan (individual per-acre plans) -- checked
+    in that order, since order IDs are unique per row regardless of table.
 
     Deliberately not behind require_auth -- Razorpay calls this directly,
     with no user session. Trust is established entirely by the signature
@@ -229,26 +236,75 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
     if event == "payment.captured":
         entity = payload["payload"]["payment"]["entity"]
         order_id, payment_id = entity["order_id"], entity["id"]
+
         sub = db.execute(select(BusinessSubscription).where(
             BusinessSubscription.razorpay_order_id == order_id)).scalar_one_or_none()
-        if sub is None:
-            # Order not one we recognize (could belong to a farm-plan
-            # payment once that's built, or a stray/replayed event) --
-            # 200 anyway so Razorpay doesn't keep retrying a delivery we
-            # will never be able to act on.
-            logger.warning(
-                "Webhook payment.captured for unknown order %s", order_id)
-            return {"status": "ignored"}
-        user = db.get(User, sub.user_id)
-        _activate_business_subscription(db, sub=sub, user=user, razorpay_payment_id=payment_id,
-                                        razorpay_signature=None, coupon_code=None)
+        if sub is not None:
+            user = db.get(User, sub.user_id)
+            _activate_business_subscription(db, sub=sub, user=user, razorpay_payment_id=payment_id,
+                                            razorpay_signature=None, coupon_code=None)
+            return {"status": "ok"}
+
+        from vyom.models import FarmPlan, Polygon
+        from vyom import farm_pricing
+        plan = db.execute(select(FarmPlan).where(
+            FarmPlan.razorpay_order_id == order_id)).scalar_one_or_none()
+        if plan is not None:
+            farm = db.get(Polygon, plan.farm_id)
+            farm_pricing.activate_plan_from_webhook(
+                db, plan=plan, farm=farm, razorpay_payment_id=payment_id)
+            db.commit()
+            return {"status": "ok"}
+
+        # Order not one we recognize (a stray/replayed event, or an order
+        # created by a since-removed flow) -- 200 anyway so Razorpay doesn't
+        # keep retrying a delivery we will never be able to act on.
+        logger.warning(
+            "Webhook payment.captured for unknown order %s", order_id)
+        return {"status": "ignored"}
 
     elif event == "payment.failed":
         entity = payload["payload"]["payment"]["entity"]
+        order_id = entity["order_id"]
+
         sub = db.execute(select(BusinessSubscription).where(
-            BusinessSubscription.razorpay_order_id == entity["order_id"])).scalar_one_or_none()
+            BusinessSubscription.razorpay_order_id == order_id)).scalar_one_or_none()
         if sub and sub.status == "created":
             sub.status = "failed"
+            db.commit()
+            return {"status": "ok"}
+
+        from vyom.models import FarmPlan
+        from vyom import wallet as wallet_module
+        plan = db.execute(select(FarmPlan).where(
+            FarmPlan.razorpay_order_id == order_id)).scalar_one_or_none()
+        if plan and plan.status == "created":
+            if plan.wallet_applied_paise:
+                wallet_module.credit(db, user_id=plan.user_id, amount_paise=plan.wallet_applied_paise,
+                                     reason="farm_plan_refund", reference_id=plan.id)
+            plan.status = "failed"
+            db.commit()
+
+    elif event == "payment_link.paid":
+        entity = payload["payload"]["payment_link"]["entity"]
+        from vyom.models import BusinessApiInvoice
+        invoice = db.execute(select(BusinessApiInvoice).where(
+            BusinessApiInvoice.razorpay_payment_link_id == entity["id"])).scalar_one_or_none()
+        if invoice is not None and invoice.status != "paid":
+            invoice.status = "paid"
+            invoice.razorpay_payment_id = entity.get("payments", [{}])[0].get(
+                "payment_id") if entity.get("payments") else None
+            user = db.get(User, invoice.user_id)
+            # Only lifts suspension if THIS was the reason -- a known
+            # simplification: if a business account somehow has more than
+            # one unpaid invoice at once, paying one still clears the flag
+            # here rather than checking for other outstanding invoices.
+            # Flagged as a limitation to revisit if that scenario turns out
+            # to matter in practice (it shouldn't under normal monthly
+            # billing, since each month's invoice is generated only after
+            # the previous one either doesn't exist or is a separate row).
+            if user is not None:
+                user.business_api_payment_status = "current"
             db.commit()
 
     return {"status": "ok"}

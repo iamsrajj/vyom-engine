@@ -6,7 +6,7 @@ celery_app = Celery(
     "vyom",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["vyom.tasks"],
+    include=["vyom.tasks", "vyom.billing_tasks"],
 )
 
 # Every pipeline stage has a normal queue and a "_priority" twin. A farm-
@@ -32,6 +32,7 @@ celery_app.conf.update(
         "vyom.process.*": {"queue": "process"},
         "vyom.stats.*": {"queue": "stats"},
         "vyom.discovery.*": {"queue": "discover"},
+        "vyom.billing.*": {"queue": "billing"},
     },
     task_serializer="json",
     result_serializer="json",
@@ -49,5 +50,29 @@ celery_app.conf.beat_schedule = {
         "task": "vyom.discovery.poll_all_farms",
         # every 6 hours; Sentinel-2 revisit is ~5 days so this is generous headroom
         "schedule": 6 * 60 * 60,
+    },
+    # Farm-plan billing (vyom/billing_tasks.py) -- all run daily; the
+    # exact hour just needs to not collide with the heavier discovery
+    # sweep above, so these are offset by a couple hours.
+    "expire-farm-plans-daily": {
+        "task": "vyom.billing.expire_farm_plans",
+        "schedule": 24 * 60 * 60,
+    },
+    "reconcile-abandoned-farm-plans-daily": {
+        "task": "vyom.billing.reconcile_abandoned_farm_plans",
+        "schedule": 24 * 60 * 60,
+    },
+    # Cheap to run daily rather than trying to schedule "only on the 1st" --
+    # the task itself is a no-op for every account once that month's
+    # invoice already exists (see the UNIQUE(user_id, billing_month)
+    # guard), so a daily cron-like check is simpler and just as correct as
+    # a calendar-aware schedule, and self-heals if a run is ever missed.
+    "generate-monthly-business-api-invoices-daily": {
+        "task": "vyom.billing.generate_monthly_business_api_invoices",
+        "schedule": 24 * 60 * 60,
+    },
+    "suspend-overdue-business-invoices-daily": {
+        "task": "vyom.billing.suspend_overdue_business_invoices",
+        "schedule": 24 * 60 * 60,
     },
 }
