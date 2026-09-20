@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Billing Terms — Vyom Engine / AgriDoot</title>
+    <link
+      rel="icon"
+      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --canopy: #16a34a;
+        --canopy-bright: #22c55e;
+        --canopy-deep: #166534;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-lg: 18px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 20px;
+        --sp-6: 28px;
+        --sp-7: 40px;
+      }
+      html[data-theme="light"] {
+        --bg-deep: #f4f7f2;
+        --bg-panel: #ffffff;
+        --bg-raised: #f7faf5;
+        --line: #e6ebe2;
+        --text-primary: #16241a;
+        --text-muted: #5c6b60;
+        --text-dim: #8b9a8f;
+        --shadow: 0 10px 32px rgba(30, 50, 30, 0.08);
+      }
+      html[data-theme="dark"] {
+        --bg-deep: #0d1512;
+        --bg-panel: #131c17;
+        --bg-raised: #1e2b23;
+        --line: #263329;
+        --text-primary: #eef1ea;
+        --text-muted: #9aa79a;
+        --text-dim: #64766a;
+        --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        line-height: 1.65;
+      }
+      h1,
+      h2 {
+        font-family: "Space Grotesk", sans-serif;
+      }
+      header.top {
+        padding: var(--sp-4) var(--sp-6);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: var(--sp-3);
+        background: var(--bg-panel);
+      }
+      header.top .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        font-family: "Space Grotesk", sans-serif;
+        font-weight: 600;
+      }
+      header.top img {
+        height: 28px;
+        width: auto;
+        border-radius: 6px;
+      }
+      nav.legal-nav {
+        display: flex;
+        gap: var(--sp-4);
+        flex-wrap: wrap;
+        font-size: 0.88rem;
+      }
+      nav.legal-nav a {
+        color: var(--text-muted);
+        text-decoration: none;
+      }
+      nav.legal-nav a.active,
+      nav.legal-nav a:hover {
+        color: var(--canopy-deep);
+        font-weight: 600;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: var(--sp-7) var(--sp-6) var(--sp-7);
+      }
+      main h1 {
+        font-size: 1.8rem;
+        margin-bottom: var(--sp-1);
+      }
+      .meta {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        margin-bottom: var(--sp-6);
+      }
+      .panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: var(--sp-6);
+        box-shadow: var(--shadow);
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin-top: var(--sp-6);
+        margin-bottom: var(--sp-2);
+        color: var(--canopy-deep);
+      }
+      h2:first-of-type {
+        margin-top: 0;
+      }
+      p,
+      li {
+        color: var(--text-primary);
+        font-size: 0.96rem;
+      }
+      ul {
+        padding-left: var(--sp-5);
+      }
+      a {
+        color: var(--canopy-deep);
+      }
+      .entity-block {
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: var(--sp-4);
+        font-size: 0.88rem;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-6);
+      }
+      .entity-block strong {
+        color: var(--text-primary);
+      }
+      footer.site {
+        text-align: center;
+        padding: var(--sp-6);
+        color: var(--text-dim);
+        font-size: 0.82rem;
+      }
+      footer.site a {
+        color: var(--text-dim);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <img
+          src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+          alt="AgriDoot"
+        />
+        Vyom Engine
+      </div>
+      <nav class="legal-nav">
+        <a href="/legal/terms-and-conditions">Terms &amp; Conditions</a>
+        <a href="/legal/privacy-policy">Privacy Policy</a>
+        <a href="/legal/refund-policy">Refund Policy</a>
+        <a href="/legal/billing-terms" class="active">Billing Terms</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Billing Terms</h1>
+      <p class="meta">
+        Effective Date: September 20, 2026 &nbsp;&middot;&nbsp; Last Updated:
+        September 20, 2026
+      </p>
+
+      <div class="entity-block">
+        <strong>NovosEdge Pvt. Ltd.</strong> (operating the AgriDoot brand and
+        the Vyom Engine platform)<br />
+        GSTIN: 23AAJCN0421G1ZZ &nbsp;&middot;&nbsp; Registered office: Bhopal,
+        Madhya Pradesh, India<br />
+        All matters arising under this document are subject to the exclusive
+        jurisdiction of the courts at Bhopal, Madhya Pradesh.
+      </div>
+
+      <div class="panel">
+        <h2>1. Currency and taxes</h2>
+        <p>
+          All prices on the Service are listed in Indian Rupees (₹) and are
+          <strong>exclusive of GST</strong>. Applicable GST is added to the
+          final amount at checkout or at invoicing. NovosEdge Pvt. Ltd. is
+          GST-registered under GSTIN <strong>23AAJCN0421G1ZZ</strong>, and a
+          GST-compliant invoice is issued for every payment made through the
+          Service.
+        </p>
+
+        <h2>2. Payment processing</h2>
+        <p>
+          All payments are processed through Razorpay. We do not store your
+          card, UPI, or net-banking credentials on our own systems.
+        </p>
+
+        <h2>3. Business Account maintenance subscription</h2>
+        <p>
+          The Business Account maintenance fee is ₹999 + GST, charged annually
+          via a manual renewal link — this is not an automatic recurring debit.
+          Reminder emails with a "Renew now" payment link are sent 7, 3, and 1
+          day before expiry. If not renewed, <strong>API access only</strong> is
+          suspended; your dashboard, account, and all existing farm data remain
+          fully accessible.
+        </p>
+
+        <h2>4. Individual farm plans</h2>
+        <table
+          style="
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+            font-size: 0.92rem;
+          "
+        >
+          <tr style="border-bottom: 1px solid var(--line); text-align: left">
+            <th style="padding: 6px 0">Duration</th>
+            <th>Rate per acre (excl. GST)</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--line)">
+            <td style="padding: 6px 0">3 months</td>
+            <td>₹85</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--line)">
+            <td style="padding: 6px 0">6 months</td>
+            <td>₹155</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0">12 months</td>
+            <td>₹295</td>
+          </tr>
+        </table>
+        <p>
+          This plan includes all available satellite indices, hyperlocal weather
+          data, Gyan AI expanded access, and farm-based dynamic advisory for
+          that farm. Charged in full (+ GST) at the time a farm is created or a
+          new plan is purchased.
+        </p>
+        <p>
+          <strong>Upgrades:</strong> moving to a longer-duration plan before the
+          current one expires credits the unused, prorated value of the current
+          plan toward the new plan's cost — you pay only the difference (+ GST
+          on that difference).
+        </p>
+        <p>
+          <strong>Expiry:</strong> once a farm's plan expires, opening that farm
+          displays a "Recharge to continue" prompt showing the renewal cost. The
+          farm's map, indices, weather, and advisory become accessible again
+          immediately once payment is completed.
+        </p>
+
+        <h2>5. Business API usage billing</h2>
+        <p>
+          Farms created via the Vyom Engine API are billed at
+          <strong>₹55 per acre per year (excl. GST)</strong>, invoiced
+          <strong>monthly in arrears</strong> for that calendar month's newly
+          created API farms. This plan covers creating, updating, and fetching
+          satellite-indices data only — it does not include hyperlocal weather
+          data, Gyan AI access, or dynamic advisory, which are available only
+          for farms created through the dashboard. Gyan AI integration for
+          API-created farms is planned as a future paid add-on.
+        </p>
+        <p>
+          Invoices are emailed with a Razorpay payment link and are due within
+          <strong>15 days</strong> of issue. If not paid within this window,
+          <strong>API access only</strong> is automatically suspended until the
+          outstanding invoice is settled — your dashboard and all farm data,
+          including farms created via the API, remain fully visible and
+          accessible in the dashboard throughout.
+        </p>
+        <p>
+          A Business Account's own farms created directly through the dashboard
+          (rather than via the API) are billed at the standard individual
+          farm-plan rates in Section 4 above, and receive the full individual
+          feature set. Such farms are visible only on the dashboard and are
+          never exposed through the API.
+        </p>
+
+        <h2>6. Coupons and discounts</h2>
+        <p>
+          Coupon eligibility, discount amount, expiry, and redemption limits are
+          governed by the specific terms of each coupon at the time it is
+          applied. Coupons have no cash value, cannot be combined with other
+          coupons unless explicitly stated, and may be withdrawn or invalidated
+          where we reasonably suspect abuse.
+        </p>
+
+        <h2>7. Wallet balance</h2>
+        <p>
+          Cashback and wallet-credit coupons are credited to a real, spendable
+          wallet balance on your account. Your wallet balance is applied
+          automatically toward the cost of a purchase at checkout, before any
+          remaining amount is charged via Razorpay. Wallet balance has no cash
+          withdrawal value and can only be used toward purchases within the
+          Service.
+        </p>
+
+        <h2>8. Billing disputes</h2>
+        <p>
+          Any billing dispute must be raised within 30 days of the relevant
+          invoice or charge date by contacting
+          <a href="mailto:support@agridoot.com">support@agridoot.com</a>.
+        </p>
+
+        <h2>9. Governing law</h2>
+        <p>
+          These Billing Terms are governed by the laws of India and are subject
+          to the exclusive jurisdiction of the courts at Bhopal, Madhya Pradesh.
+        </p>
+      </div>
+    </main>
+
+    <footer class="site">
+      &copy; 2026 NovosEdge Pvt. Ltd. &nbsp;&middot;&nbsp;
+      <a href="mailto:support@agridoot.com">support@agridoot.com</a>
+    </footer>
+  </body>
+</html>
