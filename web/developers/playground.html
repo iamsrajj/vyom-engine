@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vyom Engine API Playground</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --canopy: #16a34a;
+        --canopy-bright: #22c55e;
+        --canopy-deep: #166534;
+        --danger: #dc2626;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-lg: 18px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 20px;
+        --sp-6: 28px;
+      }
+      html[data-theme="light"] {
+        --bg-deep: #f4f7f2;
+        --bg-panel: #ffffff;
+        --bg-raised: #f7faf5;
+        --line: #e6ebe2;
+        --text-primary: #16241a;
+        --text-muted: #5c6b60;
+        --text-dim: #8b9a8f;
+        --shadow: 0 10px 32px rgba(30, 50, 30, 0.08);
+      }
+      html[data-theme="dark"] {
+        --bg-deep: #0d1512;
+        --bg-panel: #131c17;
+        --bg-raised: #1e2b23;
+        --line: #263329;
+        --text-primary: #eef1ea;
+        --text-muted: #9aa79a;
+        --text-dim: #64766a;
+        --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        min-height: 100vh;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: "Space Grotesk", sans-serif;
+        margin: 0 0 var(--sp-2);
+      }
+      code,
+      pre,
+      textarea.code,
+      input.code {
+        font-family: "IBM Plex Mono", monospace;
+      }
+      header {
+        padding: var(--sp-5) var(--sp-6);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: var(--sp-3);
+      }
+      header h1 {
+        font-size: 1.3rem;
+      }
+      header p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+      .theme-toggle {
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: var(--sp-1) var(--sp-3);
+        cursor: pointer;
+        color: var(--text-primary);
+        font-size: 0.85rem;
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--sp-6);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--sp-5);
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: var(--sp-5);
+        box-shadow: var(--shadow);
+      }
+      label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin: var(--sp-3) 0 var(--sp-1);
+        font-weight: 500;
+      }
+      label:first-of-type {
+        margin-top: 0;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: var(--sp-2) var(--sp-3);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+      }
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        gap: var(--sp-3);
+      }
+      .row > div {
+        flex: 1;
+      }
+      .hint {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        margin-top: var(--sp-1);
+      }
+      .warn {
+        font-size: 0.78rem;
+        color: var(--danger);
+        margin-top: var(--sp-1);
+      }
+      button.primary {
+        margin-top: var(--sp-4);
+        width: 100%;
+        padding: var(--sp-3);
+        background: var(--canopy);
+        color: white;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      button.primary:hover {
+        background: var(--canopy-deep);
+      }
+      button.primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .tabs {
+        display: flex;
+        gap: var(--sp-1);
+        margin-bottom: var(--sp-3);
+        border-bottom: 1px solid var(--line);
+      }
+      .tab {
+        padding: var(--sp-2) var(--sp-3);
+        cursor: pointer;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        border-bottom: 2px solid transparent;
+      }
+      .tab.active {
+        color: var(--canopy-deep);
+        border-bottom-color: var(--canopy);
+        font-weight: 600;
+      }
+      pre.output {
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: var(--sp-3);
+        font-size: 0.82rem;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-bottom: var(--sp-2);
+      }
+      .status-2xx {
+        background: rgba(22, 163, 74, 0.15);
+        color: var(--canopy-deep);
+      }
+      .status-4xx,
+      .status-5xx {
+        background: rgba(220, 38, 38, 0.12);
+        color: var(--danger);
+      }
+      .snippet-code {
+        display: none;
+      }
+      .snippet-code.active {
+        display: block;
+      }
+      .footer-note {
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 0.8rem;
+        padding: var(--sp-5);
+      }
+      a {
+        color: var(--canopy-deep);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Vyom Engine API Playground</h1>
+        <p>
+          Test the partner API against your own account. Nothing you enter here
+          is sent anywhere except directly to this API.
+        </p>
+      </div>
+      <div style="display: flex; gap: var(--sp-3); align-items: center">
+        <a href="/developers/docs" style="font-size: 0.85rem"
+          >Full API docs &rarr;</a
+        >
+        <button class="theme-toggle" id="themeToggle">🌙 Dark</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" id="requestPanel">
+        <h2>Request</h2>
+
+        <label>API Key</label>
+        <input class="code" id="apiKey" placeholder="vyom_key_..." />
+
+        <label>API Secret</label>
+        <input
+          class="code"
+          id="apiSecret"
+          type="password"
+          placeholder="Paste the secret shown once at generation"
+        />
+        <p class="warn">
+          Stored only in this browser's localStorage, and only sent to
+          vyom.agridoot.in itself -- never to any third party.
+        </p>
+
+        <label>Endpoint</label>
+        <select id="endpoint"></select>
+
+        <div id="farmIdRow" style="display: none">
+          <label>Farm ID</label>
+          <input
+            class="code"
+            id="farmId"
+            placeholder="e.g. 4ec38a8b-b7e9-4ab1-90d0-a14a623bf1d9"
+          />
+        </div>
+
+        <div id="metricRow" style="display: none">
+          <label>Metric</label>
+          <input
+            class="code"
+            id="metric"
+            placeholder="NDVI_mean"
+            value="NDVI_mean"
+          />
+          <p class="hint">
+            e.g. NDVI_mean, NDRE_mean, RVI_mean -- see /farms/available-indices
+            for the full list.
+          </p>
+        </div>
+
+        <div id="bodyRow" style="display: none">
+          <label>Request body (JSON)</label>
+          <textarea class="code" id="requestBody"></textarea>
+        </div>
+
+        <label
+          >Idempotency-Key
+          <span style="font-weight: 400"
+            >(optional, for Create/Update)</span
+          ></label
+        >
+        <input
+          class="code"
+          id="idempotencyKey"
+          placeholder="any unique string, e.g. a UUID you generate"
+        />
+
+        <button class="primary" id="sendBtn">Send request</button>
+      </section>
+
+      <section class="panel">
+        <div class="tabs">
+          <div class="tab active" data-panel="response">Response</div>
+          <div class="tab" data-panel="snippets">Code snippets</div>
+        </div>
+
+        <div id="responsePanelView">
+          <div id="responseMeta"></div>
+          <pre class="output" id="responseOutput">
+Fill in your credentials and pick an endpoint, then hit Send.</pre
+          >
+        </div>
+
+        <div id="snippetsPanelView" style="display: none">
+          <div class="tabs">
+            <div class="tab active" data-snippet="curl">curl</div>
+            <div class="tab" data-snippet="python">Python</div>
+            <div class="tab" data-snippet="node">Node.js</div>
+          </div>
+          <pre class="output snippet-code active" id="snippet-curl"></pre>
+          <pre class="output snippet-code" id="snippet-python"></pre>
+          <pre class="output snippet-code" id="snippet-node"></pre>
+        </div>
+      </section>
+    </main>
+
+    <p class="footer-note">
+      Every request here counts against your account's real rate limit and
+      monthly farm count, exactly like production traffic from your own
+      integration.
+    </p>
+
+    <script>
+      const API_BASE = window.location.origin;
+
+      const ENDPOINTS = {
+        create_farm: {
+          label: "POST /api/v1/farms -- Create farm",
+          method: "POST",
+          path: "/api/v1/farms",
+          needsFarmId: false,
+          needsMetric: false,
+          needsBody: true,
+          defaultBody: {
+            name: "Playground Test Farm",
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [77.41, 23.259],
+                  [77.412, 23.259],
+                  [77.412, 23.261],
+                  [77.41, 23.261],
+                  [77.41, 23.259],
+                ],
+              ],
+            },
+            crop_type: "wheat",
+            soil_type: "loam",
+            sowing_date: "2026-11-01",
+          },
+        },
+        list_farms: {
+          label: "GET /api/v1/farms -- List farms",
+          method: "GET",
+          path: "/api/v1/farms",
+          needsFarmId: false,
+          needsMetric: false,
+          needsBody: false,
+        },
+        get_farm: {
+          label: "GET /api/v1/farms/{farm_id} -- Get farm",
+          method: "GET",
+          path: "/api/v1/farms/{farm_id}",
+          needsFarmId: true,
+          needsMetric: false,
+          needsBody: false,
+        },
+        update_farm: {
+          label: "PATCH /api/v1/farms/{farm_id} -- Update farm",
+          method: "PATCH",
+          path: "/api/v1/farms/{farm_id}",
+          needsFarmId: true,
+          needsMetric: false,
+          needsBody: true,
+          defaultBody: { crop_type: "rice", sowing_date: "2026-11-15" },
+        },
+        get_indices: {
+          label: "GET /api/v1/farms/{farm_id}/indices -- Latest indices",
+          method: "GET",
+          path: "/api/v1/farms/{farm_id}/indices",
+          needsFarmId: true,
+          needsMetric: false,
+          needsBody: false,
+        },
+        get_timeseries: {
+          label: "GET /api/v1/farms/{farm_id}/timeseries -- Timeseries",
+          method: "GET",
+          path: "/api/v1/farms/{farm_id}/timeseries",
+          needsFarmId: true,
+          needsMetric: true,
+          needsBody: false,
+        },
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const endpointSelect = $("endpoint");
+      Object.entries(ENDPOINTS).forEach(([key, cfg]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = cfg.label;
+        endpointSelect.appendChild(opt);
+      });
+
+      function currentConfig() {
+        return ENDPOINTS[endpointSelect.value];
+      }
+
+      function refreshFormVisibility() {
+        const cfg = currentConfig();
+        $("farmIdRow").style.display = cfg.needsFarmId ? "block" : "none";
+        $("metricRow").style.display = cfg.needsMetric ? "block" : "none";
+        $("bodyRow").style.display = cfg.needsBody ? "block" : "none";
+        if (cfg.needsBody && cfg.defaultBody && !$("requestBody").value) {
+          $("requestBody").value = JSON.stringify(cfg.defaultBody, null, 2);
+        }
+      }
+      endpointSelect.addEventListener("change", refreshFormVisibility);
+      refreshFormVisibility();
+
+      // Persist credentials locally for convenience across visits -- never sent anywhere but this API.
+      ["apiKey", "apiSecret"].forEach((id) => {
+        const saved = localStorage.getItem("vyom_playground_" + id);
+        if (saved) $(id).value = saved;
+        $(id).addEventListener("change", () =>
+          localStorage.setItem("vyom_playground_" + id, $(id).value),
+        );
+      });
+
+      function buildRequest() {
+        const cfg = currentConfig();
+        let path = cfg.path;
+        if (cfg.needsFarmId)
+          path = path.replace(
+            "{farm_id}",
+            encodeURIComponent($("farmId").value.trim()),
+          );
+        if (cfg.needsMetric)
+          path +=
+            "?metric=" +
+            encodeURIComponent($("metric").value.trim() || "NDVI_mean");
+
+        const headers = {
+          "X-Api-Key": $("apiKey").value.trim(),
+          "X-Api-Secret": $("apiSecret").value.trim(),
+          "Content-Type": "application/json",
+        };
+        const idem = $("idempotencyKey").value.trim();
+        if (idem && (cfg.method === "POST" || cfg.method === "PATCH"))
+          headers["Idempotency-Key"] = idem;
+
+        let body = null;
+        if (cfg.needsBody) {
+          try {
+            body = JSON.parse($("requestBody").value || "{}");
+          } catch (e) {
+            throw new Error("Request body is not valid JSON: " + e.message);
+          }
+        }
+        return { method: cfg.method, url: API_BASE + path, headers, body };
+      }
+
+      function renderSnippets(req) {
+        const maskedHeaders = { ...req.headers };
+        const curlHeaders = Object.entries(req.headers)
+          .map(([k, v]) => `  -H "${k}: ${v}"`)
+          .join(" \\\n");
+        const bodyArg = req.body
+          ? ` \\\n  -d '${JSON.stringify(req.body)}'`
+          : "";
+        $("snippet-curl").textContent =
+          `curl -X ${req.method} "${req.url}" \\\n${curlHeaders}${bodyArg}`;
+
+        $("snippet-python").textContent = `import requests
+
+resp = requests.request(
+    "${req.method}",
+    "${req.url}",
+    headers=${JSON.stringify(req.headers, null, 4).replace(/^/gm, "    ").trim()},
+${req.body ? "    json=" + JSON.stringify(req.body, null, 4).replace(/^/gm, "    ").trim() + "," : ""}
+)
+print(resp.status_code, resp.json())`;
+
+        $("snippet-node").textContent =
+          `const resp = await fetch("${req.url}", {
+  method: "${req.method}",
+  headers: ${JSON.stringify(req.headers, null, 2)},
+${req.body ? "  body: JSON.stringify(" + JSON.stringify(req.body) + ")," : ""}
+});
+console.log(resp.status, await resp.json());`;
+      }
+
+      $("sendBtn").addEventListener("click", async () => {
+        const out = $("responseOutput");
+        const meta = $("responseMeta");
+        meta.innerHTML = "";
+        out.textContent = "Sending...";
+        $("sendBtn").disabled = true;
+        try {
+          const req = buildRequest();
+          renderSnippets(req);
+          const fetchOpts = { method: req.method, headers: req.headers };
+          if (req.body) fetchOpts.body = JSON.stringify(req.body);
+
+          const resp = await fetch(req.url, fetchOpts);
+          const text = await resp.text();
+          let parsed;
+          try {
+            parsed = JSON.parse(text);
+          } catch {
+            parsed = text;
+          }
+
+          const cls =
+            resp.status < 300
+              ? "status-2xx"
+              : resp.status < 500
+                ? "status-4xx"
+                : "status-5xx";
+          meta.innerHTML = `<span class="status-pill ${cls}">${resp.status} ${resp.statusText}</span>`;
+          const rl = resp.headers.get("X-RateLimit-Remaining");
+          if (rl !== null)
+            meta.innerHTML += ` <span class="hint">Rate limit remaining: ${rl}</span>`;
+
+          out.textContent =
+            typeof parsed === "string"
+              ? parsed
+              : JSON.stringify(parsed, null, 2);
+        } catch (err) {
+          meta.innerHTML = `<span class="status-pill status-4xx">Error</span>`;
+          out.textContent = err.message;
+        } finally {
+          $("sendBtn").disabled = false;
+        }
+      });
+
+      // Tab switching
+      document.querySelectorAll(".tab[data-panel]").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document
+            .querySelectorAll(".tab[data-panel]")
+            .forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          $("responsePanelView").style.display =
+            tab.dataset.panel === "response" ? "block" : "none";
+          $("snippetsPanelView").style.display =
+            tab.dataset.panel === "snippets" ? "block" : "none";
+        });
+      });
+      document.querySelectorAll(".tab[data-snippet]").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          document
+            .querySelectorAll(".tab[data-snippet]")
+            .forEach((t) => t.classList.remove("active"));
+          document
+            .querySelectorAll(".snippet-code")
+            .forEach((el) => el.classList.remove("active"));
+          tab.classList.add("active");
+          $("snippet-" + tab.dataset.snippet).classList.add("active");
+        });
+      });
+
+      // Theme toggle, defaulting to light per the main dashboard's convention.
+      const themeToggle = $("themeToggle");
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        themeToggle.textContent = theme === "dark" ? "☀️ Light" : "🌙 Dark";
+      }
+      applyTheme(localStorage.getItem("vyom_playground_theme") || "light");
+      themeToggle.addEventListener("click", () => {
+        const next =
+          document.documentElement.getAttribute("data-theme") === "dark"
+            ? "light"
+            : "dark";
+        localStorage.setItem("vyom_playground_theme", next);
+        applyTheme(next);
+      });
+    </script>
+  </body>
+</html>

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
 from vyom.api import billing as billing_api
-from vyom.api import business_api_credentials, partner_farms
+from vyom.api import business_api_credentials, partner_farms, developer_docs
 from vyom.api_auth import ApiV1Error
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
@@ -85,6 +85,9 @@ app.include_router(business_api_credentials.router,
 # different scheme from the dashboard session cookie/JWT every other
 # router above uses.
 app.include_router(partner_farms.router)
+# Public docs -- no auth dependency, same reasoning as the router comment
+# in developer_docs.py itself.
+app.include_router(developer_docs.router)
 
 
 @app.exception_handler(ApiV1Error)
