@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
 from vyom.api import billing as billing_api
+from vyom.api import business_api_credentials, partner_farms
+from vyom.api_auth import ApiV1Error
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
 from vyom.error_log import log_error
@@ -75,6 +77,29 @@ app.include_router(notifications_api.router,
 app.include_router(billing_api.router)
 app.include_router(billing_api.coupons_router)
 app.include_router(billing_api.admin_coupons_router)
+app.include_router(business_api_credentials.router,
+                   dependencies=[Depends(require_auth)])
+# partner_farms.router is NOT given a require_auth dependency here -- it
+# authenticates via API key/secret (require_business_api_auth, called
+# per-route inside vyom/api/partner_farms.py itself), a completely
+# different scheme from the dashboard session cookie/JWT every other
+# router above uses.
+app.include_router(partner_farms.router)
+
+
+@app.exception_handler(ApiV1Error)
+async def api_v1_error_handler(request: Request, exc: ApiV1Error):
+    """Renders the standard {"error": {code, message, retriable}} envelope
+    for the business partner API -- kept deliberately separate from the
+    dashboard's plain {"detail": ...} HTTPException shape used everywhere
+    else in this app, since integrators need a stable, documented error
+    contract to branch their own retry/alerting logic on (see the
+    monetization spec's §5 reliability notes)."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code,
+                           "message": exc.message, "retriable": exc.retriable}},
+    )
 
 
 @app.exception_handler(Exception)

@@ -213,5 +213,8 @@ class Settings(BaseSettings):
     business_api_rate_per_acre_year_paise: int = 5500  # Rs. 55/acre/year
     business_api_invoice_grace_days: int = 15
 
+    # Partner API platform (see vyom/api_auth.py, vyom/api/partner_farms.py)
+    api_rate_limit_per_minute: int = 60
+
 
 settings = Settings()

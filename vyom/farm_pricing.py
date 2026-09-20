@@ -255,9 +255,24 @@ def activate_plan_from_webhook(db: Session, *, plan: FarmPlan, farm: Polygon, ra
 def is_farm_locked(db: Session, farm: Polygon) -> tuple[bool, Optional[FarmPlan]]:
     """The single source of truth for the 'recharge to continue' gate --
     every gated endpoint in vyom/api/farms.py calls this rather than
-    re-deriving lock logic inline. A farm with NO plan row at all (shouldn't
-    normally happen once purchase-at-creation is enforced, but handled
-    defensively) counts as locked."""
+    re-deriving lock logic inline.
+
+    Farms with created_via='api' are billed through BusinessApiInvoice
+    (monthly, in arrears -- see vyom/billing_tasks.py), never through
+    FarmPlan, so they never have a FarmPlan row at all and must NEVER be
+    treated as locked here -- enforcement for those lives entirely at the
+    account level (User.business_api_payment_status), checked by
+    vyom/api_auth.py's partner-API auth gate, not per-farm. Getting this
+    backwards would have every API-created farm shown in the dashboard
+    incorrectly appear locked, since it has no active FarmPlan by design.
+
+    A dashboard-created farm (created_via='dashboard', the default) with NO
+    plan row at all (shouldn't normally happen once purchase-at-creation is
+    enforced, but handled defensively) counts as locked.
+    """
+    if farm.created_via == "api":
+        return False, None
+
     plan = db.execute(
         select(FarmPlan).where(FarmPlan.farm_id ==
                                farm.id, FarmPlan.status == "active")

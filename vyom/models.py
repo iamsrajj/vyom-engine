@@ -652,6 +652,73 @@ class CouponRedemption(Base):
     redeemed_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
+class ApiCredential(Base):
+    """API key/secret pair for a business account's partner integration
+    (points 2/3 of the monetization spec). A business account can hold
+    multiple credentials (e.g. one per integration/environment) -- each is
+    independently revocable.
+
+    The secret is hashed with plain SHA-256, not bcrypt/argon2: unlike a
+    human password, api_secret is already a full-entropy random token
+    (secrets.token_urlsafe(32), see vyom/api_auth.py) -- a slow KDF exists
+    to defend against brute-forcing LOW-entropy secrets, which doesn't
+    apply here, and this is the same reasoning GitHub/Stripe use for their
+    own API token hashing. The raw secret is shown to the user exactly
+    once, at generation time, and never stored or logged anywhere.
+    """
+    __tablename__ = "api_credentials"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    api_key = Column(String, unique=True, nullable=False)
+    api_secret_hash = Column(String, nullable=False)
+    # for display ("...ab12") without re-exposing the secret
+    secret_last4 = Column(String, nullable=False)
+    # optional user-given name, e.g. "Production integration"
+    label = Column(String)
+
+    # 'active' | 'revoked'. Deliberately NOT where business-maintenance-
+    # lapsed or payment-due suspension is recorded -- those are account-
+    # level states (User.business_status / business_api_payment_status),
+    # checked independently in vyom/api_auth.py's auth gate, so revoking
+    # one key never has to be confused with the account being suspended,
+    # and vice versa.
+    status = Column(String, nullable=False, server_default="active")
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_used_at = Column(DateTime(timezone=True))
+    revoked_at = Column(DateTime(timezone=True))
+    revoked_reason = Column(String)
+
+
+class ApiIdempotencyKey(Base):
+    """Backs the Idempotency-Key header on partner-API POST/PATCH calls
+    (vyom/idempotency.py) -- a retried request with the same key returns
+    the ORIGINAL response instead of creating a second farm/duplicate
+    update. Scoped per-credential (not per-user) since that's the natural
+    identity boundary for an integration retrying its own request."""
+    __tablename__ = "api_idempotency_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    api_credential_id = Column(UUID(as_uuid=True), ForeignKey(
+        "api_credentials.id", ondelete="CASCADE"), nullable=False)
+    idempotency_key = Column(String, nullable=False)
+    # Hash of the request body -- if a caller reuses the same Idempotency-Key
+    # with a DIFFERENT body, that's a client bug (key reuse across distinct
+    # requests), not a safe retry; vyom/idempotency.py rejects that case
+    # rather than silently returning the wrong cached response.
+    request_hash = Column(String, nullable=False)
+    response_status = Column(Integer, nullable=False)
+    response_body = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("api_credential_id", "idempotency_key",
+                         name="uq_idempotency_credential_key"),
+    )
+
+
 class OtpVerification(Base):
     """One row per OTP attempt. The actual OTP digits are never sent to or
     trusted from the client -- AgriDoot's genotp API returns otp_value to
