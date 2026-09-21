@@ -98,6 +98,42 @@ def create_payment_link(*, amount_paise: int, description: str, customer_email: 
     return resp.json()
 
 
+def get_payment_link(link_id: str) -> dict:
+    """Fetches the current status of a Payment Link -- used by the
+    reconciliation tasks in vyom/billing_tasks.py as a self-healing check
+    in case a webhook delivery was ever missed or delayed. Returns
+    Razorpay's JSON response, which includes 'status' ('created',
+    'paid', 'cancelled', 'expired') and, if paid, a 'payments' array.
+    """
+    try:
+        resp = requests.get(
+            f"{_BASE_URL}/payment_links/{link_id}", auth=_auth(), timeout=15)
+    except requests.RequestException as exc:
+        raise RazorpayError(f"Could not reach Razorpay: {exc}") from exc
+    if resp.status_code >= 300:
+        raise RazorpayError(
+            f"Could not fetch payment link {link_id}: {resp.text}")
+    return resp.json()
+
+
+def get_order_payments(order_id: str) -> list[dict]:
+    """Lists payments made against an Order -- used by the reconciliation
+    task for the business ₹999/year subscription (which uses Orders +
+    Checkout, not Payment Links) to self-heal a 'created' subscription row
+    whose webhook delivery may have been missed. Returns a list of payment
+    entities; a captured one has status == 'captured'.
+    """
+    try:
+        resp = requests.get(
+            f"{_BASE_URL}/orders/{order_id}/payments", auth=_auth(), timeout=15)
+    except requests.RequestException as exc:
+        raise RazorpayError(f"Could not reach Razorpay: {exc}") from exc
+    if resp.status_code >= 300:
+        raise RazorpayError(
+            f"Could not fetch payments for order {order_id}: {resp.text}")
+    return resp.json().get("items", [])
+
+
 def verify_payment_signature(*, order_id: str, payment_id: str, signature: str) -> bool:
     """Verifies the signature Razorpay Checkout returns to the FRONTEND on
     success (razorpay_order_id, razorpay_payment_id, razorpay_signature).

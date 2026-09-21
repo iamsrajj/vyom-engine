@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coupon Management — Vyom Engine Admin</title>
+    <link
+      rel="icon"
+      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+    />
+    <style>
+      :root {
+        --canopy: #16a34a;
+        --canopy-bright: #22c55e;
+        --canopy-deep: #166534;
+        --soil: #c98a3d;
+        --sky: #4f8fb0;
+        --danger: #dc2626;
+        --radius-sm: 8px;
+        --radius: 14px;
+        --radius-lg: 18px;
+        --sp-1: 4px;
+        --sp-2: 8px;
+        --sp-3: 12px;
+        --sp-4: 16px;
+        --sp-5: 20px;
+        --sp-6: 28px;
+      }
+      html[data-theme="dark"] {
+        --bg-deep: #0d1512;
+        --bg-panel: #131c17;
+        --bg-panel-2: #18221c;
+        --bg-raised: #1e2b23;
+        --line: #263329;
+        --line-soft: #1e2921;
+        --text-primary: #eef1ea;
+        --text-muted: #9aa79a;
+        --text-dim: #64766a;
+        --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+        --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.35);
+        --overlay-scrim: rgba(7, 11, 9, 0.75);
+      }
+      html[data-theme="light"] {
+        --bg-deep: #f4f7f2;
+        --bg-panel: #ffffff;
+        --bg-panel-2: #ffffff;
+        --bg-raised: #f7faf5;
+        --line: #e6ebe2;
+        --line-soft: #eef2ea;
+        --text-primary: #16241a;
+        --text-muted: #5c6b60;
+        --text-dim: #8b9a8f;
+        --shadow: 0 10px 32px rgba(30, 50, 30, 0.08);
+        --shadow-sm: 0 2px 10px rgba(30, 50, 30, 0.06);
+        --overlay-scrim: rgba(244, 247, 242, 0.9);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background: var(--bg-deep);
+        color: var(--text-primary);
+      }
+      header {
+        padding: var(--sp-4) var(--sp-6);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--bg-panel);
+      }
+      header h1 {
+        font-size: 1.15rem;
+        margin: 0;
+      }
+      header a {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+        text-decoration: none;
+        margin-left: var(--sp-4);
+      }
+      header a:hover {
+        color: var(--canopy-bright);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: var(--sp-6);
+      }
+      .card {
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+      }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--sp-4);
+      }
+      .btn {
+        padding: 10px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 13px;
+        cursor: pointer;
+        font-weight: 500;
+        font-family: inherit;
+      }
+      .btn:hover {
+        border-color: var(--canopy);
+      }
+      .btn-primary {
+        background: var(--canopy);
+        color: #0f1b14;
+        border-color: var(--canopy);
+        font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: var(--canopy-bright);
+      }
+      .btn-danger {
+        color: var(--danger);
+      }
+      .btn-danger:hover {
+        border-color: var(--danger);
+        background: rgba(220, 38, 38, 0.08);
+      }
+      .btn-sm {
+        padding: 6px 10px;
+        font-size: 12px;
+        width: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--text-dim);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .pill-active {
+        background: rgba(22, 163, 74, 0.15);
+        color: var(--canopy-bright);
+      }
+      .pill-disabled {
+        background: rgba(220, 38, 38, 0.12);
+        color: var(--danger);
+      }
+      .pill-public {
+        background: rgba(79, 143, 176, 0.15);
+        color: var(--sky);
+      }
+      .pill-hidden {
+        background: var(--bg-raised);
+        color: var(--text-dim);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--text-dim);
+        margin: 10px 0 4px;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 9px 11px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: var(--bg-deep);
+        color: var(--text-primary);
+        font-size: 13.5px;
+        font-family: inherit;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+      }
+      .row > div {
+        flex: 1;
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        background: var(--overlay-scrim);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .modal-overlay.open {
+        display: flex;
+      }
+      .modal-card {
+        width: 620px;
+        max-width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        background: var(--bg-panel);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 22px;
+      }
+      .modal-card h2 {
+        margin: 0 0 16px;
+        font-size: 1.05rem;
+      }
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .checkbox-row input {
+        width: auto;
+      }
+      .checkbox-row label {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 13.5px;
+      }
+      .field-group {
+        display: none;
+      }
+      .field-group.active {
+        display: block;
+      }
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .empty-state {
+        text-align: center;
+        color: var(--text-dim);
+        padding: var(--sp-6);
+      }
+      .gate-screen {
+        max-width: 420px;
+        margin: 15vh auto;
+        text-align: center;
+        padding: var(--sp-6);
+      }
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 5000;
+        background: var(--bg-panel-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 10px 16px;
+        font-size: 13px;
+        box-shadow: var(--shadow);
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🎟️ Coupon Management</h1>
+      <div>
+        <a href="/">← Back to Dashboard</a>
+        <a href="/errors">Errors Panel</a>
+      </div>
+    </header>
+
+    <main>
+      <div id="gate" class="gate-screen" style="display: none">
+        <p>You need to be signed in with admin access to use this panel.</p>
+        <a
+          href="/"
+          class="btn btn-primary"
+          style="display: inline-block; width: auto; padding: 10px 20px"
+          >Go to Dashboard to sign in</a
+        >
+      </div>
+
+      <div id="panel" style="display: none">
+        <div class="toolbar">
+          <div
+            style="color: var(--text-dim); font-size: 13px"
+            id="summaryLine"
+          ></div>
+          <button
+            class="btn btn-primary"
+            style="width: auto"
+            onclick="openCouponModal()"
+          >
+            + New Coupon
+          </button>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Type</th>
+                <th>Value</th>
+                <th>Visibility</th>
+                <th>Status</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="couponRows"></tbody>
+          </table>
+          <div id="emptyState" class="empty-state" style="display: none">
+            No coupons yet. Create your first one above.
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="modal-overlay" id="couponModal">
+      <div class="modal-card">
+        <h2 id="modalTitle">New Coupon</h2>
+        <form id="couponForm" onsubmit="return false;">
+          <input type="hidden" id="couponId" />
+
+          <div class="row">
+            <div>
+              <label>Coupon Code</label>
+              <input
+                type="text"
+                id="f_code"
+                placeholder="e.g. SAVE15"
+                style="text-transform: uppercase"
+              />
+            </div>
+            <div>
+              <label>Calculation Type</label>
+              <select id="f_calculation_type" onchange="renderFieldGroups()">
+                <option value="percentage">Percentage Discount</option>
+                <option value="percentage_max_cap">
+                  Percentage Discount (Max Cap)
+                </option>
+                <option value="flat">Flat Discount</option>
+                <option value="flat_min_order">
+                  Flat Discount (Min Order)
+                </option>
+                <option value="buy_x_get_y">Buy X Get Y Free</option>
+                <option value="buy_x_get_y_discounted">
+                  Buy X Get Y Discounted
+                </option>
+                <option value="tiered">Tiered Discount</option>
+                <option value="spend_x_get_y">Spend X Get Y</option>
+                <option value="free_shipping">Free Shipping/Service</option>
+                <option value="cashback">Cashback (to Wallet)</option>
+                <option value="wallet_credit">Wallet Credit</option>
+              </select>
+            </div>
+          </div>
+
+          <label
+            >Description
+            <span style="font-weight: 400"
+              >(shown publicly if visible)</span
+            ></label
+          >
+          <input
+            type="text"
+            id="f_description"
+            placeholder="e.g. 15% off your first farm plan"
+          />
+
+          <!-- percentage / percentage_max_cap -->
+          <div
+            class="field-group"
+            data-group="percentage,percentage_max_cap,cashback"
+          >
+            <label>Percent (%)</label>
+            <input type="number" id="f_percent" step="0.01" placeholder="15" />
+          </div>
+          <div class="field-group" data-group="percentage_max_cap">
+            <label>Max Discount (₹)</label>
+            <input
+              type="number"
+              id="f_max_discount"
+              step="0.01"
+              placeholder="500"
+            />
+          </div>
+
+          <!-- flat / flat_min_order / spend_x_get_y / wallet_credit -->
+          <div
+            class="field-group"
+            data-group="flat,flat_min_order,spend_x_get_y,wallet_credit"
+          >
+            <label>Flat Amount (₹)</label>
+            <input type="number" id="f_flat" step="0.01" placeholder="500" />
+          </div>
+          <div class="field-group" data-group="flat_min_order">
+            <label>Minimum Order (₹)</label>
+            <input
+              type="number"
+              id="f_min_order"
+              step="0.01"
+              placeholder="2000"
+            />
+          </div>
+          <div class="field-group" data-group="spend_x_get_y">
+            <label>Spend Threshold (₹)</label>
+            <input
+              type="number"
+              id="f_spend_threshold"
+              step="0.01"
+              placeholder="5000"
+            />
+          </div>
+
+          <!-- buy x get y -->
+          <div
+            class="field-group"
+            data-group="buy_x_get_y,buy_x_get_y_discounted"
+          >
+            <div class="row">
+              <div>
+                <label>Buy Qty</label
+                ><input type="number" id="f_buy_qty" placeholder="2" />
+              </div>
+              <div>
+                <label>Get Qty</label
+                ><input type="number" id="f_get_qty" placeholder="1" />
+              </div>
+            </div>
+            <div class="row">
+              <div
+                class="field-group"
+                data-group="buy_x_get_y_discounted"
+                style="flex: 1"
+              >
+                <label>Discount on Free Item (%)</label>
+                <input
+                  type="number"
+                  id="f_get_discount_percent"
+                  placeholder="50"
+                />
+              </div>
+              <div style="flex: 1">
+                <label>Unit Price (₹, for calculating the freebie value)</label>
+                <input type="number" id="f_unit_price" step="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <!-- tiered -->
+          <div class="field-group" data-group="tiered">
+            <label
+              >Tiers
+              <span style="font-weight: 400"
+                >(min order ₹ : percent, one per line, e.g. "0:10", "5000:15",
+                "10000:20")</span
+              ></label
+            >
+            <textarea
+              id="f_tiers"
+              rows="3"
+              placeholder="0:10&#10;5000:15&#10;10000:20"
+            ></textarea>
+          </div>
+
+          <!-- free_shipping -->
+          <div class="field-group" data-group="free_shipping">
+            <label
+              >Waived Charge Codes
+              <span style="font-weight: 400">(comma-separated)</span></label
+            >
+            <input
+              type="text"
+              id="f_waived_charges"
+              placeholder="processing_fee"
+            />
+          </div>
+
+          <hr style="border-color: var(--line); margin: 18px 0" />
+          <h2 style="font-size: 0.95rem">Eligibility</h2>
+
+          <div class="row">
+            <div>
+              <label>Max redemptions per user</label>
+              <input type="number" id="f_max_per_user" value="1" />
+            </div>
+            <div>
+              <label
+                >Global redemption limit
+                <span style="font-weight: 400">(blank = unlimited)</span></label
+              >
+              <input type="number" id="f_max_redemptions" placeholder="1000" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label
+                >Valid from
+                <span style="font-weight: 400">(optional)</span></label
+              >
+              <input type="datetime-local" id="f_starts_at" />
+            </div>
+            <div>
+              <label
+                >Expires at
+                <span style="font-weight: 400">(optional)</span></label
+              >
+              <input type="datetime-local" id="f_expires_at" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label
+                >Eligible plan types
+                <span style="font-weight: 400"
+                  >(comma-separated, blank = any)</span
+                ></label
+              >
+              <input
+                type="text"
+                id="f_eligible_plans"
+                placeholder="individual_3m,individual_6m"
+              />
+            </div>
+            <div>
+              <label
+                >Eligible products
+                <span style="font-weight: 400"
+                  >(comma-separated, blank = any)</span
+                ></label
+              >
+              <input
+                type="text"
+                id="f_eligible_products"
+                placeholder="vyom_individual_farm"
+              />
+            </div>
+          </div>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="f_is_public" /><label for="f_is_public"
+              >Show in public coupon list</label
+            >
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="f_first_order_only" /><label
+              for="f_first_order_only"
+              >First order only</label
+            >
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="f_requires_referral" /><label
+              for="f_requires_referral"
+              >Requires referral</label
+            >
+          </div>
+
+          <label
+            >New user only, within days
+            <span style="font-weight: 400"
+              >(blank = no restriction)</span
+            ></label
+          >
+          <input type="number" id="f_new_user_days" placeholder="30" />
+
+          <label
+            >Recurring cycles
+            <span style="font-weight: 400"
+              >(e.g. applies to next 3 renewals; blank = not recurring)</span
+            ></label
+          >
+          <input type="number" id="f_recurring_cycles" placeholder="3" />
+
+          <div class="modal-footer">
+            <button
+              class="btn"
+              style="width: auto"
+              onclick="closeCouponModal()"
+            >
+              Cancel
+            </button>
+            <button
+              class="btn btn-primary"
+              style="width: auto"
+              onclick="saveCoupon()"
+            >
+              Save Coupon
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const API_BASE = window.location.origin;
+
+      function getToken() {
+        try {
+          const raw = localStorage.getItem("vyom_session");
+          if (raw) return JSON.parse(raw).token;
+        } catch (e) {}
+        return null;
+      }
+
+      function authHeaders() {
+        const t = getToken();
+        return t ? { Authorization: "Bearer " + t } : {};
+      }
+
+      function showToast(msg) {
+        const el = document.getElementById("toast");
+        el.textContent = msg;
+        el.style.display = "block";
+        setTimeout(() => (el.style.display = "none"), 3000);
+      }
+
+      async function api(path, opts = {}) {
+        const res = await fetch(API_BASE + path, {
+          ...opts,
+          headers: {
+            "Content-Type": "application/json",
+            ...authHeaders(),
+            ...(opts.headers || {}),
+          },
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`${res.status}: ${text}`);
+        }
+        if (res.status === 204) return null;
+        return res.json();
+      }
+
+      const CALC_LABELS = {
+        percentage: "% off",
+        percentage_max_cap: "% off (capped)",
+        flat: "Flat ₹ off",
+        flat_min_order: "Flat ₹ off (min order)",
+        buy_x_get_y: "Buy X Get Y",
+        buy_x_get_y_discounted: "Buy X Get Y (discounted)",
+        tiered: "Tiered %",
+        spend_x_get_y: "Spend X Get Y",
+        free_shipping: "Free service",
+        cashback: "Cashback",
+        wallet_credit: "Wallet credit",
+      };
+
+      function couponValueSummary(c) {
+        if (
+          c.calculation_type === "percentage" ||
+          c.calculation_type === "cashback"
+        )
+          return `${c.percent || 0}%`;
+        if (c.calculation_type === "percentage_max_cap")
+          return `${c.percent || 0}% (max ₹${c.max_discount_paise ? c.max_discount_paise / 100 : "-"})`;
+        if (
+          c.calculation_type === "flat" ||
+          c.calculation_type === "flat_min_order" ||
+          c.calculation_type === "spend_x_get_y" ||
+          c.calculation_type === "wallet_credit"
+        )
+          return `₹${c.flat_paise ? c.flat_paise / 100 : 0}`;
+        if (
+          c.calculation_type === "buy_x_get_y" ||
+          c.calculation_type === "buy_x_get_y_discounted"
+        )
+          return `Buy ${c.buy_qty || "?"} Get ${c.get_qty || "?"}`;
+        if (c.calculation_type === "tiered")
+          return `${(c.tiers || []).length} tier(s)`;
+        return "--";
+      }
+
+      async function loadCoupons() {
+        try {
+          const coupons = await api("/admin/coupons");
+          const rows = document.getElementById("couponRows");
+          rows.innerHTML = "";
+          document.getElementById("emptyState").style.display = coupons.length
+            ? "none"
+            : "block";
+          document.getElementById("summaryLine").textContent =
+            `${coupons.length} coupon(s)`;
+          coupons.forEach((c) => {
+            const tr = document.createElement("tr");
+            const expires = c.expires_at
+              ? new Date(c.expires_at).toLocaleDateString()
+              : "Never";
+            tr.innerHTML = `
+        <td><strong>${c.code}</strong><div style="color:var(--text-dim); font-size:11.5px;">${c.description || ""}</div></td>
+        <td>${CALC_LABELS[c.calculation_type] || c.calculation_type}</td>
+        <td>${couponValueSummary(c)}</td>
+        <td><span class="pill ${c.is_public ? "pill-public" : "pill-hidden"}">${c.is_public ? "Public" : "Hidden"}</span></td>
+        <td><span class="pill ${c.status === "active" ? "pill-active" : "pill-disabled"}">${c.status}</span></td>
+        <td>${expires}</td>
+        <td>
+          <button class="btn btn-sm" onclick='editCoupon(${JSON.stringify(c).replace(/'/g, "&apos;")})'>Edit</button>
+          ${c.status === "active" ? `<button class="btn btn-sm btn-danger" onclick="disableCoupon('${c.id}')">Disable</button>` : ""}
+        </td>
+      `;
+            rows.appendChild(tr);
+          });
+        } catch (e) {
+          showToast("Could not load coupons: " + e.message);
+        }
+      }
+
+      function renderFieldGroups() {
+        const type = document.getElementById("f_calculation_type").value;
+        document.querySelectorAll(".field-group").forEach((el) => {
+          const groups = el.dataset.group.split(",");
+          el.classList.toggle("active", groups.includes(type));
+        });
+      }
+
+      function resetForm() {
+        document.getElementById("couponForm").reset();
+        document.getElementById("couponId").value = "";
+        document.getElementById("f_max_per_user").value = "1";
+        renderFieldGroups();
+      }
+
+      function openCouponModal() {
+        resetForm();
+        document.getElementById("modalTitle").textContent = "New Coupon";
+        document.getElementById("couponModal").classList.add("open");
+      }
+
+      function closeCouponModal() {
+        document.getElementById("couponModal").classList.remove("open");
+      }
+
+      function toDatetimeLocal(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+          .toISOString()
+          .slice(0, 16);
+      }
+
+      function editCoupon(c) {
+        resetForm();
+        document.getElementById("modalTitle").textContent = "Edit Coupon";
+        document.getElementById("couponId").value = c.id;
+        document.getElementById("f_code").value = c.code;
+        document.getElementById("f_calculation_type").value =
+          c.calculation_type;
+        document.getElementById("f_description").value = c.description || "";
+        document.getElementById("f_percent").value = c.percent ?? "";
+        document.getElementById("f_max_discount").value = c.max_discount_paise
+          ? c.max_discount_paise / 100
+          : "";
+        document.getElementById("f_flat").value = c.flat_paise
+          ? c.flat_paise / 100
+          : "";
+        document.getElementById("f_min_order").value = c.min_order_paise
+          ? c.min_order_paise / 100
+          : "";
+        document.getElementById("f_spend_threshold").value =
+          c.spend_threshold_paise ? c.spend_threshold_paise / 100 : "";
+        document.getElementById("f_buy_qty").value = c.buy_qty ?? "";
+        document.getElementById("f_get_qty").value = c.get_qty ?? "";
+        document.getElementById("f_get_discount_percent").value =
+          c.get_discount_percent ?? "";
+        document.getElementById("f_unit_price").value = c.unit_price_paise
+          ? c.unit_price_paise / 100
+          : "";
+        document.getElementById("f_tiers").value = (c.tiers || [])
+          .map((t) => `${t.min_paise / 100}:${t.percent}`)
+          .join("\n");
+        document.getElementById("f_waived_charges").value = (
+          c.waived_charge_codes || []
+        ).join(",");
+        document.getElementById("f_max_per_user").value =
+          c.max_redemptions_per_user ?? 1;
+        document.getElementById("f_max_redemptions").value =
+          c.max_redemptions ?? "";
+        document.getElementById("f_starts_at").value = toDatetimeLocal(
+          c.starts_at,
+        );
+        document.getElementById("f_expires_at").value = toDatetimeLocal(
+          c.expires_at,
+        );
+        document.getElementById("f_eligible_plans").value = (
+          c.eligible_plan_types || []
+        ).join(",");
+        document.getElementById("f_eligible_products").value = (
+          c.eligible_products || []
+        ).join(",");
+        document.getElementById("f_is_public").checked = !!c.is_public;
+        document.getElementById("f_first_order_only").checked =
+          !!c.first_order_only;
+        document.getElementById("f_requires_referral").checked =
+          !!c.requires_referral;
+        document.getElementById("f_new_user_days").value =
+          c.new_user_within_days ?? "";
+        document.getElementById("f_recurring_cycles").value =
+          c.recurring_cycles ?? "";
+        renderFieldGroups();
+        document.getElementById("couponModal").classList.add("open");
+      }
+
+      function parseCsv(id) {
+        const v = document.getElementById(id).value.trim();
+        return v
+          ? v
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : null;
+      }
+
+      function toPaise(id) {
+        const v = document.getElementById(id).value;
+        return v === "" ? null : Math.round(parseFloat(v) * 100);
+      }
+
+      function toNum(id) {
+        const v = document.getElementById(id).value;
+        return v === "" ? null : parseFloat(v);
+      }
+
+      function toInt(id) {
+        const v = document.getElementById(id).value;
+        return v === "" ? null : parseInt(v, 10);
+      }
+
+      function parseTiers() {
+        const raw = document.getElementById("f_tiers").value.trim();
+        if (!raw) return null;
+        return raw
+          .split("\n")
+          .map((line) => {
+            const [minRupees, percent] = line.split(":").map((s) => s.trim());
+            return {
+              min_paise: Math.round(parseFloat(minRupees) * 100),
+              percent: parseFloat(percent),
+            };
+          })
+          .filter((t) => !isNaN(t.min_paise) && !isNaN(t.percent));
+      }
+
+      async function saveCoupon() {
+        const id = document.getElementById("couponId").value;
+        const code = document
+          .getElementById("f_code")
+          .value.trim()
+          .toUpperCase();
+        if (!code) {
+          showToast("Coupon code is required");
+          return;
+        }
+
+        const payload = {
+          code,
+          calculation_type: document.getElementById("f_calculation_type").value,
+          description:
+            document.getElementById("f_description").value.trim() || null,
+          percent: toNum("f_percent"),
+          flat_paise: toPaise("f_flat"),
+          max_discount_paise: toPaise("f_max_discount"),
+          min_order_paise: toPaise("f_min_order"),
+          buy_qty: toInt("f_buy_qty"),
+          get_qty: toInt("f_get_qty"),
+          get_discount_percent: toNum("f_get_discount_percent"),
+          unit_price_paise: toPaise("f_unit_price"),
+          spend_threshold_paise: toPaise("f_spend_threshold"),
+          tiers: parseTiers(),
+          waived_charge_codes: parseCsv("f_waived_charges"),
+          is_public: document.getElementById("f_is_public").checked,
+          first_order_only:
+            document.getElementById("f_first_order_only").checked,
+          new_user_within_days: toInt("f_new_user_days"),
+          eligible_plan_types: parseCsv("f_eligible_plans"),
+          eligible_products: parseCsv("f_eligible_products"),
+          eligible_categories: null,
+          eligible_user_ids: null,
+          requires_referral: document.getElementById("f_requires_referral")
+            .checked,
+          recurring_cycles: toInt("f_recurring_cycles"),
+          max_redemptions: toInt("f_max_redemptions"),
+          max_redemptions_per_user: toInt("f_max_per_user") || 1,
+          starts_at: document.getElementById("f_starts_at").value
+            ? new Date(
+                document.getElementById("f_starts_at").value,
+              ).toISOString()
+            : null,
+          expires_at: document.getElementById("f_expires_at").value
+            ? new Date(
+                document.getElementById("f_expires_at").value,
+              ).toISOString()
+            : null,
+        };
+
+        try {
+          if (id) {
+            await api(`/admin/coupons/${id}`, {
+              method: "PATCH",
+              body: JSON.stringify(payload),
+            });
+            showToast("Coupon updated.");
+          } else {
+            await api("/admin/coupons", {
+              method: "POST",
+              body: JSON.stringify(payload),
+            });
+            showToast("Coupon created.");
+          }
+          closeCouponModal();
+          loadCoupons();
+        } catch (e) {
+          showToast("Could not save: " + e.message);
+        }
+      }
+
+      async function disableCoupon(id) {
+        if (!confirm("Disable this coupon? It will stop working immediately."))
+          return;
+        try {
+          await api(`/admin/coupons/${id}/disable`, { method: "POST" });
+          showToast("Coupon disabled.");
+          loadCoupons();
+        } catch (e) {
+          showToast("Could not disable: " + e.message);
+        }
+      }
+
+      // Boot: gate on having a session at all -- the /admin/coupons endpoints
+      // themselves are the real authorization check (require_error_panel_access,
+      // same allowlist as the Errors panel); a signed-in-but-non-admin user will
+      // see a clear 403 from loadCoupons() rather than silently empty state.
+      (function boot() {
+        if (!getToken()) {
+          document.getElementById("gate").style.display = "block";
+          return;
+        }
+        document.getElementById("panel").style.display = "block";
+        renderFieldGroups();
+        loadCoupons();
+      })();
+    </script>
+  </body>
+</html>

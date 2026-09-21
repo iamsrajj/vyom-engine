@@ -476,6 +476,23 @@ class User(Base):
     business_api_payment_status = Column(
         String, nullable=False, server_default="current")
 
+    # -- Business verification (see vyom/gst_verification.py, vyom/api/business_onboarding.py) --
+    # Populated only once a GSTIN has been verified as Active against a
+    # third-party GST lookup provider -- gstin is the user-entered number;
+    # the other two are what the provider returned, kept as a point-in-time
+    # record (a business could legally change its registered address
+    # later; this is what it was AT VERIFICATION TIME, not a live mirror).
+    gstin = Column(String)
+    company_legal_name = Column(String)
+    company_registered_address = Column(String)
+    gst_verified_at = Column(DateTime(timezone=True))
+    # A business email distinct from the account's login email/Gmail,
+    # verified via an OTP emailed through our own SMTP (see
+    # BusinessEmailOtp below) -- required, alongside GST verification,
+    # before /billing/business/upgrade will accept a payment.
+    business_email = Column(String)
+    business_email_verified_at = Column(DateTime(timezone=True))
+
     # Denormalized running total, kept in sync with wallet_transactions in
     # the SAME db transaction as every insert there (see vyom/wallet.py) --
     # never computed on the fly from the ledger, so checkout can read it
@@ -717,6 +734,69 @@ class ApiIdempotencyKey(Base):
         UniqueConstraint("api_credential_id", "idempotency_key",
                          name="uq_idempotency_credential_key"),
     )
+
+
+class BusinessRenewalReminder(Base):
+    """De-dupe record for the 7/3/1-day business-subscription renewal
+    reminder emails (vyom/billing_tasks.py). Keyed on the SPECIFIC
+    business_expires_at value, not just user_id+days_before, so a renewal
+    (which changes expires_at) naturally opens up a fresh set of reminder
+    slots for the new cycle without needing to explicitly reset anything."""
+    __tablename__ = "business_renewal_reminders"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    days_before = Column(Integer, nullable=False)  # 7, 3, or 1
+    sent_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "expires_at", "days_before",
+                         name="uq_renewal_reminder_user_cycle_day"),
+    )
+
+
+class BusinessEmailOtp(Base):
+    """OTP verification for a business account's business-email requirement
+    (point 6 of the monetization spec) -- sent via our own SMTP
+    (vyom/email_utils.py), not the AgriDoot genotp phone-OTP API used for
+    login. otp_hash, never the raw code, is stored -- same reasoning as
+    ApiCredential's secret_hash (the code is short-lived and single-use,
+    but there's no reason to keep it recoverable even for that window)."""
+    __tablename__ = "business_email_otps"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="CASCADE"), nullable=False)
+    email = Column(String, nullable=False)
+    otp_hash = Column(String, nullable=False)
+    attempts = Column(Integer, nullable=False, server_default="0")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    verified_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ApiAccessLog(Base):
+    """Full per-call audit trail for the partner API (point 5 of the
+    monetization spec) -- written by middleware in vyom/api/main.py for
+    every request under /api/v1/. api_credential_id/user_id are nullable
+    since a request can fail auth before either is known (e.g. a bad key),
+    and an audit trail of REJECTED calls is exactly as valuable as one of
+    successful calls."""
+    __tablename__ = "api_access_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    api_credential_id = Column(UUID(as_uuid=True), ForeignKey(
+        "api_credentials.id", ondelete="SET NULL"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey(
+        "users.id", ondelete="SET NULL"))
+    method = Column(String, nullable=False)
+    path = Column(String, nullable=False)
+    status_code = Column(Integer, nullable=False)
+    ip_address = Column(String)
+    duration_ms = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
 
 class OtpVerification(Base):

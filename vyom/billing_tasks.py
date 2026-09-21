@@ -13,7 +13,10 @@ from vyom.db import SessionLocal
 from vyom.email_utils import render_email, send_email
 from vyom.error_log import log_error
 from vyom.gst import total_with_gst
-from vyom.models import BusinessApiInvoice, BusinessApiInvoiceFarm, FarmPlan, Polygon, User
+from vyom.models import (
+    ApiIdempotencyKey, BusinessApiInvoice, BusinessApiInvoiceFarm, BusinessRenewalReminder,
+    BusinessSubscription, FarmPlan, Polygon, User,
+)
 from vyom.units import HA_TO_ACRE
 from vyom import razorpay_client, wallet
 
@@ -185,19 +188,28 @@ def _send_invoice_email(user: User, invoice: BusinessApiInvoice, farms: list[Pol
         return
     body_html = f"""
     <p>Hi {user.name},</p>
-    <p>Your Vyom Engine API usage invoice for <strong>{invoice.billing_month.strftime('%B %Y')}</strong>
-    is ready -- {len(farms)} farm(s) created via the API this month, totalling
-    {float(invoice.total_area_acre):.2f} acres.</p>
-    <p><strong>Amount due: Rs.{invoice.total_paise / 100:,.2f}</strong> (incl. GST)</p>
+    <p>Your Vyom Engine API usage invoice for <strong>{invoice.billing_month.strftime('%B %Y')}</strong> is ready.</p>
+    <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">
+      <tr><td style="padding:4px 0; color:#5c6b60;">Farms created via API this month</td><td style="text-align:right;">{len(farms)}</td></tr>
+      <tr><td style="padding:4px 0; color:#5c6b60;">Total area</td><td style="text-align:right;">{float(invoice.total_area_acre):.2f} acres</td></tr>
+      <tr><td style="padding:4px 0; color:#5c6b60;">Rate</td><td style="text-align:right;">Rs.{invoice.rate_per_acre_paise / 100:.2f} / acre / year</td></tr>
+      <tr><td style="padding:4px 0; color:#5c6b60;">Subtotal</td><td style="text-align:right;">Rs.{invoice.base_paise / 100:,.2f}</td></tr>
+      <tr><td style="padding:4px 0; color:#5c6b60;">GST</td><td style="text-align:right;">Rs.{invoice.gst_paise / 100:,.2f}</td></tr>
+      <tr style="border-top:1px solid #e6ebe2; font-weight:700;"><td style="padding:6px 0;">Total due</td><td style="text-align:right;">Rs.{invoice.total_paise / 100:,.2f}</td></tr>
+    </table>
     <p>Payment is due within {settings.business_api_invoice_grace_days} days
-    ({invoice.due_at.strftime('%d %b %Y')}). If unpaid by then, API access on
-    this account is automatically suspended until the invoice is settled --
-    your dashboard and existing farm data are not affected either way.</p>
+    ({invoice.due_at.strftime('%d %b %Y')}) -- pay using the button below, or from
+    the <strong>Business</strong> section of your <a href="{settings.dashboard_base_url}">Vyom Engine dashboard</a>,
+    whichever is easiest. Both use the same secure Razorpay payment page.</p>
+    <p>If unpaid by the due date, API access on this account is automatically suspended
+    until the invoice is settled -- your dashboard and all existing farm data are not
+    affected either way, and access resumes automatically the moment payment is received,
+    whether that's before or after the due date.</p>
     """
     try:
         send_email(
             to=user.email,
-            subject=f"Vyom Engine API invoice -- {invoice.billing_month.strftime('%B %Y')}",
+            subject=f"Vyom Engine API invoice -- {invoice.billing_month.strftime('%B %Y')} (Rs.{invoice.total_paise / 100:,.2f} due {invoice.due_at.strftime('%d %b')})",
             html_body=render_email(
                 preheader="Your monthly Vyom Engine API usage invoice is ready",
                 heading="API usage invoice",
@@ -206,8 +218,10 @@ def _send_invoice_email(user: User, invoice: BusinessApiInvoice, farms: list[Pol
                 cta_url=invoice.razorpay_payment_link_url,
             ),
             text_fallback=f"Vyom Engine API invoice for {invoice.billing_month.strftime('%B %Y')}: "
+                          f"{len(farms)} farm(s), {float(invoice.total_area_acre):.2f} acres, "
                           f"Rs.{invoice.total_paise / 100:,.2f} due by {invoice.due_at.strftime('%d %b %Y')}. "
-                          f"Pay at: {invoice.razorpay_payment_link_url or '(link unavailable, contact support)'}",
+                          f"Pay at: {invoice.razorpay_payment_link_url or '(link unavailable, contact support)'} "
+                          f"or from your dashboard's Business section: {settings.dashboard_base_url}",
         )
     except Exception as exc:  # noqa: BLE001 -- email failure must never break invoicing itself
         log_error("billing_tasks",
@@ -240,5 +254,185 @@ def suspend_overdue_business_invoices() -> dict:
         logger.info("suspend_overdue_business_invoices: %d invoice(s), %d account(s) suspended",
                     len(overdue), len(suspended_users))
         return {"overdue_invoices": len(overdue), "accounts_suspended": len(suspended_users)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="vyom.billing.send_business_renewal_reminders")
+def send_business_renewal_reminders() -> dict:
+    """Daily: emails a renewal reminder 7, 3, and 1 day before a business
+    account's annual ₹999 maintenance subscription expires. De-duped via
+    BusinessRenewalReminder, keyed to the SPECIFIC expires_at value so a
+    renewal (which changes expires_at) naturally opens a fresh set of
+    reminder slots for the next cycle."""
+    db: Session = SessionLocal()
+    sent = 0
+    try:
+        now = datetime.now(timezone.utc)
+        candidates = db.execute(
+            select(User).where(User.account_type == "business", User.business_status == "active",
+                               User.business_expires_at.isnot(None))
+        ).scalars().all()
+
+        for user in candidates:
+            days_left = (user.business_expires_at - now).days
+            if days_left not in (7, 3, 1):
+                continue
+            already = db.execute(
+                select(BusinessRenewalReminder).where(
+                    BusinessRenewalReminder.user_id == user.id,
+                    BusinessRenewalReminder.expires_at == user.business_expires_at,
+                    BusinessRenewalReminder.days_before == days_left,
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                continue
+            if not user.email:
+                log_error(
+                    "billing_tasks", f"Business user {user.id} has no email -- renewal reminder not sent")
+                continue
+
+            base_paise = settings.business_maintenance_fee_paise
+            _, gst_paise, total_paise = total_with_gst(base_paise)
+            day_word = "day" if days_left == 1 else "days"
+            try:
+                send_email(
+                    to=user.email,
+                    subject=f"Your Vyom Engine business subscription expires in {days_left} {day_word}",
+                    html_body=render_email(
+                        preheader=f"Renew your business subscription -- {days_left} {day_word} left",
+                        heading="Time to renew your business subscription",
+                        body_html=(
+                            f"<p>Hi {user.name},</p>"
+                            f"<p>Your Vyom Engine business account's annual maintenance subscription "
+                            f"expires on <strong>{user.business_expires_at.strftime('%d %b %Y')}</strong> "
+                            f"({days_left} {day_word} from now).</p>"
+                            f"<p>Renewal cost: <strong>Rs.{total_paise / 100:,.2f}</strong> (incl. GST).</p>"
+                            f"<p>If it lapses, your API access is suspended until renewed -- your dashboard "
+                            f"and all farm data are unaffected either way. Renew any time, before or after "
+                            f"expiry, from the Business section of your dashboard.</p>"
+                        ),
+                        cta_label="Renew now",
+                        cta_url=settings.dashboard_base_url,
+                    ),
+                    text_fallback=f"Your Vyom Engine business subscription expires on "
+                    f"{user.business_expires_at.strftime('%d %b %Y')} ({days_left} {day_word}). "
+                    f"Renewal cost: Rs.{total_paise / 100:,.2f}. Renew from your dashboard: "
+                    f"{settings.dashboard_base_url}",
+                )
+            except Exception as exc:  # noqa: BLE001
+                log_error(
+                    "billing_tasks", f"Failed to send renewal reminder to {user.email}: {exc}")
+                continue
+
+            db.add(BusinessRenewalReminder(
+                user_id=user.id, expires_at=user.business_expires_at, days_before=days_left))
+            db.commit()
+            sent += 1
+
+        logger.info(
+            "send_business_renewal_reminders: sent %d reminder(s)", sent)
+        return {"reminders_sent": sent}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="vyom.billing.cleanup_idempotency_keys")
+def cleanup_idempotency_keys() -> dict:
+    """Daily: purges partner-API idempotency-key records older than 48
+    hours -- well past any realistic retry window, so replay protection is
+    never lost for a genuine retry, while keeping the table from growing
+    unbounded."""
+    db: Session = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+        result = db.execute(
+            ApiIdempotencyKey.__table__.delete().where(
+                ApiIdempotencyKey.created_at < cutoff)
+        )
+        db.commit()
+        deleted = result.rowcount or 0
+        logger.info("cleanup_idempotency_keys: deleted %d row(s)", deleted)
+        return {"deleted": deleted}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="vyom.billing.reconcile_pending_business_subscriptions")
+def reconcile_pending_business_subscriptions() -> dict:
+    """Daily self-healing check: a BusinessSubscription stuck in
+    status='created' for over an hour might mean the webhook delivery for
+    its payment was missed or delayed (network blip, Razorpay retry
+    exhaustion, etc). Polls Razorpay directly for a captured payment
+    against that order and activates it if found -- this is what makes
+    'auto-renew whether paid on time or late' actually robust rather than
+    depending entirely on a single webhook delivery."""
+    from vyom.api.billing import _activate_business_subscription
+
+    db: Session = SessionLocal()
+    healed = 0
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        stuck = db.execute(
+            select(BusinessSubscription).where(
+                BusinessSubscription.status == "created", BusinessSubscription.created_at <= cutoff)
+        ).scalars().all()
+        for sub in stuck:
+            try:
+                payments = razorpay_client.get_order_payments(
+                    sub.razorpay_order_id)
+            except razorpay_client.RazorpayError as exc:
+                log_error(
+                    "billing_tasks", f"Reconcile check failed for subscription {sub.id}: {exc}")
+                continue
+            captured = next(
+                (p for p in payments if p.get("status") == "captured"), None)
+            if captured is None:
+                continue
+            user = db.get(User, sub.user_id)
+            _activate_business_subscription(db, sub=sub, user=user, razorpay_payment_id=captured["id"],
+                                            razorpay_signature=None, coupon_code=None)
+            healed += 1
+        logger.info(
+            "reconcile_pending_business_subscriptions: healed %d", healed)
+        return {"healed": healed}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="vyom.billing.reconcile_pending_business_invoices")
+def reconcile_pending_business_invoices() -> dict:
+    """Same self-healing idea as reconcile_pending_business_subscriptions,
+    for monthly API-usage invoices (Payment Links rather than Orders)."""
+    db: Session = SessionLocal()
+    healed = 0
+    try:
+        candidates = db.execute(
+            select(BusinessApiInvoice).where(
+                BusinessApiInvoice.status.in_(["pending", "overdue"]),
+                BusinessApiInvoice.razorpay_payment_link_id.isnot(None),
+            )
+        ).scalars().all()
+        for invoice in candidates:
+            try:
+                link = razorpay_client.get_payment_link(
+                    invoice.razorpay_payment_link_id)
+            except razorpay_client.RazorpayError as exc:
+                log_error(
+                    "billing_tasks", f"Reconcile check failed for invoice {invoice.id}: {exc}")
+                continue
+            if link.get("status") != "paid":
+                continue
+            invoice.status = "paid"
+            payments = link.get("payments") or []
+            if payments:
+                invoice.razorpay_payment_id = payments[0].get("payment_id")
+            user = db.get(User, invoice.user_id)
+            if user is not None:
+                user.business_api_payment_status = "current"
+            db.commit()
+            healed += 1
+        logger.info("reconcile_pending_business_invoices: healed %d", healed)
+        return {"healed": healed}
     finally:
         db.close()

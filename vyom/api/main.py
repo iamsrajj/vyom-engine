@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
 from vyom.api import billing as billing_api
 from vyom.api import business_api_credentials, partner_farms, developer_docs
+from vyom.api import business_onboarding
 from vyom.api_auth import ApiV1Error
 from vyom.auth import require_auth, require_auth_query
 from vyom.config import settings
@@ -79,6 +80,8 @@ app.include_router(billing_api.coupons_router)
 app.include_router(billing_api.admin_coupons_router)
 app.include_router(business_api_credentials.router,
                    dependencies=[Depends(require_auth)])
+app.include_router(business_onboarding.router,
+                   dependencies=[Depends(require_auth)])
 # partner_farms.router is NOT given a require_auth dependency here -- it
 # authenticates via API key/secret (require_business_api_auth, called
 # per-route inside vyom/api/partner_farms.py itself), a completely
@@ -88,6 +91,51 @@ app.include_router(partner_farms.router)
 # Public docs -- no auth dependency, same reasoning as the router comment
 # in developer_docs.py itself.
 app.include_router(developer_docs.router)
+
+
+@app.middleware("http")
+async def partner_api_audit_log(request: Request, call_next):
+    """Full per-call audit trail for the partner API (point 5 of the
+    monetization spec) -- every request under /api/v1/ gets a row in
+    api_access_log, whether it succeeded or was rejected at any auth gate.
+    require_business_api_auth (vyom/api_auth.py) sets request.state.
+    api_credential_id/api_user_id as soon as a credential is identified,
+    even if a later gate then rejects the request -- so a revoked-key or
+    payment-due REJECTION is exactly as visible here as a successful call.
+
+    A synchronous DB write per request adds latency; acceptable at current
+    partner-API volume, flagged as a candidate for batching/async logging
+    if that ever changes.
+    """
+    if not request.url.path.startswith("/api/v1"):
+        return await call_next(request)
+
+    import time as _time
+    start = _time.monotonic()
+    response = await call_next(request)
+    duration_ms = int((_time.monotonic() - start) * 1000)
+
+    try:
+        from vyom.db import SessionLocal
+        from vyom.models import ApiAccessLog
+        db = SessionLocal()
+        try:
+            db.add(ApiAccessLog(
+                api_credential_id=getattr(
+                    request.state, "api_credential_id", None),
+                user_id=getattr(request.state, "api_user_id", None),
+                method=request.method, path=request.url.path,
+                status_code=response.status_code,
+                ip_address=request.client.host if request.client else None,
+                duration_ms=duration_ms,
+            ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001 -- audit logging must never break a real request
+        logger.error("Failed to write api_access_log row: %s", exc)
+
+    return response
 
 
 @app.exception_handler(ApiV1Error)

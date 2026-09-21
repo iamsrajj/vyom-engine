@@ -100,12 +100,19 @@ class PartnerFarmIn(BaseModel):
 
 
 class PartnerFarmUpdate(BaseModel):
-    """All fields optional -- only supplied ones are changed. Passing
-    `geometry` re-sanitizes, recomputes area, and re-dispatches the reuse-
-    check/backfill pipeline against the new boundary, same as the
-    dashboard's PATCH /farms/{id}."""
+    """All fields optional -- only supplied ones are changed.
+
+    Deliberately does NOT accept `geometry` -- redrawing a farm's boundary
+    via the partner API is intentionally unsupported. A farm's area is
+    what its billing (₹55/acre/year) is calculated against; allowing a
+    silent boundary change through an unattended API integration is both
+    a billing-integrity risk and a data-integrity one (it would re-trigger
+    the reuse-check/backfill pipeline against a new shape without any of
+    the geometry-review a human gets on the dashboard's draw-and-confirm
+    flow). To change a farm's boundary, delete and recreate it, or use the
+    dashboard.
+    """
     name: Optional[str] = None
-    geometry: Optional[dict] = None
     crop_type: Optional[str] = None
     soil_type: Optional[str] = None
     country: Optional[str] = None
@@ -202,27 +209,13 @@ def update_partner_farm(
 
     farm = _get_owned_api_farm(db, farm_id, ctx)
 
-    updates = payload.model_dump(exclude_unset=True, exclude={"geometry"})
+    updates = payload.model_dump(exclude_unset=True)
     for field_name, value in updates.items():
         setattr(farm, field_name, value)
-
-    geometry_changed = payload.geometry is not None
-    if geometry_changed:
-        try:
-            clean_geometry = sanitize_polygon_geojson(payload.geometry)
-        except ValueError as exc:
-            raise ApiV1Error(422, "VALIDATION_ERROR",
-                             f"Invalid farm boundary: {exc}")
-        geom_shape = shape(clean_geometry)
-        farm.geom = from_shape(geom_shape, srid=4326)
-        farm.area_ha = _geodesic_area_ha(geom_shape)
 
     db.add(farm)
     db.commit()
     db.refresh(farm)
-
-    if geometry_changed:
-        _backfill_and_dispatch_refresh(db, farm)
 
     result = Envelope(data=_to_partner_farm_out(farm),
                       meta=_build_meta(db, ctx))

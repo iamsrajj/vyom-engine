@@ -68,6 +68,12 @@ def create_business_upgrade_order(payload: UpgradeRequest, user_id: str = Depend
     if user.account_type == "business" and user.business_status == "active":
         raise HTTPException(
             400, "Account is already an active business account.")
+    if user.gst_verified_at is None:
+        raise HTTPException(
+            400, "Please verify your GSTIN before upgrading to a business account.")
+    if user.business_email_verified_at is None:
+        raise HTTPException(
+            400, "Please verify your business email before upgrading to a business account.")
 
     base_paise = settings.business_maintenance_fee_paise
     discount_paise = 0
@@ -308,6 +314,46 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             db.commit()
 
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Business invoices -- lets a business account pay from the dashboard,
+# using the SAME Razorpay Payment Link emailed to them (point 4 of the
+# monetization spec) rather than a separate parallel payment flow.
+# ---------------------------------------------------------------------------
+
+class BusinessInvoiceOut(BaseModel):
+    id: UUID
+    billing_month: str
+    total_area_acre: float
+    base_paise: int
+    gst_paise: int
+    total_paise: int
+    status: str
+    issued_at: datetime
+    due_at: datetime
+    razorpay_payment_link_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/business/invoices", response_model=list[BusinessInvoiceOut])
+def list_business_invoices(user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    from vyom.models import BusinessApiInvoice
+    user = _get_user(db, user_id)
+    rows = db.execute(
+        select(BusinessApiInvoice).where(BusinessApiInvoice.user_id == user.id)
+        .order_by(BusinessApiInvoice.billing_month.desc())
+    ).scalars().all()
+    return [
+        BusinessInvoiceOut(
+            id=r.id, billing_month=r.billing_month.isoformat(), total_area_acre=float(r.total_area_acre),
+            base_paise=r.base_paise, gst_paise=r.gst_paise, total_paise=r.total_paise, status=r.status,
+            issued_at=r.issued_at, due_at=r.due_at, razorpay_payment_link_url=r.razorpay_payment_link_url,
+        )
+        for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

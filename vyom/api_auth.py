@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import redis
-from fastapi import Depends, Header, Response
+from fastapi import Depends, Header, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -143,6 +143,7 @@ def _compute_warnings(db: Session, user: User) -> list[str]:
 
 
 def require_business_api_auth(
+    request: Request,
     response: Response,
     x_api_key: str = Header(default=None, alias="X-Api-Key"),
     x_api_secret: str = Header(default=None, alias="X-Api-Secret"),
@@ -163,6 +164,14 @@ def require_business_api_auth(
         "no-such-key")
     if credential is None or not hmac.compare_digest(stored_hash, supplied_hash):
         raise ApiV1Error(401, "AUTH_INVALID", "Invalid API key or secret")
+    # From here on, a credential row is known -- record it on request.state
+    # immediately (before any further gate can reject the request) so the
+    # audit-log middleware in vyom/api/main.py can attribute even a
+    # REJECTED call (revoked key, business inactive, payment due, rate
+    # limited) to the right credential/user, not just successful ones.
+    request.state.api_credential_id = credential.id
+    request.state.api_user_id = credential.user_id
+
     if credential.status != "active":
         raise ApiV1Error(
             401, "KEY_REVOKED", "This API key has been revoked. Generate a new one from your business dashboard.")

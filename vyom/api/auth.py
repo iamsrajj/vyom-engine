@@ -327,4 +327,18 @@ def _user_out(user: User) -> dict:
         "address": user.address,
         "phone": user.phone,
         "phone_cc": user.phone_cc,
+        # Business account status/details (see the monetization spec) --
+        # additive fields, safe for any existing frontend that doesn't yet
+        # read them to simply ignore.
+        "account_type": user.account_type,
+        "business_status": user.business_status,
+        "business_expires_at": user.business_expires_at,
+        "business_api_payment_status": user.business_api_payment_status,
+        "wallet_balance_paise": user.wallet_balance_paise,
+        "gstin": user.gstin,
+        "company_legal_name": user.company_legal_name,
+        "company_registered_address": user.company_registered_address,
+        "gst_verified_at": user.gst_verified_at,
+        "business_email": user.business_email,
+        "business_email_verified_at": user.business_email_verified_at,
     }

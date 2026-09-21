@@ -15,6 +15,7 @@
       rel="stylesheet"
     />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <!-- config.js is gitignored (real API keys live there) -- copy from
          config.js.example and fill in real values. This must load before
          the main script below so window.GOOGLE_MAPS_API_KEY / GOOGLE_CLIENT_ID
@@ -3809,6 +3810,120 @@
                   ></span>
                 </div>
 
+                <div
+                  style="
+                    border-top: 1px solid var(--line);
+                    margin: 16px 0 12px;
+                    padding-top: 12px;
+                  "
+                >
+                  <label>Plan</label>
+                  <div id="plan-tier-options" style="display: grid; gap: 8px">
+                    <label
+                      class="plan-tier-option"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 10px;
+                        border: 1px solid var(--line);
+                        border-radius: 9px;
+                        cursor: pointer;
+                      "
+                    >
+                      <input
+                        type="radio"
+                        name="plan_tier"
+                        value="individual_3m"
+                        onchange="updatePlanPricePreview()"
+                        style="width: auto"
+                      />
+                      <span>3 months &mdash; ₹85/acre</span>
+                    </label>
+                    <label
+                      class="plan-tier-option"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 10px;
+                        border: 1px solid var(--line);
+                        border-radius: 9px;
+                        cursor: pointer;
+                      "
+                    >
+                      <input
+                        type="radio"
+                        name="plan_tier"
+                        value="individual_6m"
+                        onchange="updatePlanPricePreview()"
+                        style="width: auto"
+                        checked
+                      />
+                      <span>6 months &mdash; ₹155/acre</span>
+                    </label>
+                    <label
+                      class="plan-tier-option"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 10px;
+                        border: 1px solid var(--line);
+                        border-radius: 9px;
+                        cursor: pointer;
+                      "
+                    >
+                      <input
+                        type="radio"
+                        name="plan_tier"
+                        value="individual_12m"
+                        onchange="updatePlanPricePreview()"
+                        style="width: auto"
+                      />
+                      <span>12 months &mdash; ₹295/acre</span>
+                    </label>
+                  </div>
+                  <p
+                    style="
+                      font-size: 11.5px;
+                      color: var(--text-dim);
+                      margin: 6px 0 0;
+                    "
+                  >
+                    Includes all satellite indices, hyperlocal weather, Gyan AI
+                    expanded access, and dynamic advisory.
+                  </p>
+
+                  <label style="margin-top: 12px">Coupon code (optional)</label>
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="new-farm-coupon"
+                      placeholder="e.g. SAVE15"
+                      style="flex: 1"
+                      oninput="clearCouponPreview()"
+                    />
+                    <button
+                      class="btn btn-sm"
+                      style="width: auto"
+                      onclick="updatePlanPricePreview()"
+                    >
+                      Apply
+                    </button>
+                  </div>
+
+                  <div
+                    id="plan-price-preview"
+                    class="mono"
+                    style="
+                      margin-top: 10px;
+                      font-size: 13px;
+                      color: var(--text-primary);
+                    "
+                  ></div>
+                </div>
+
                 <div class="btn-row" style="margin-top: 12px">
                   <button class="btn" onclick="cancelDraft()">Discard</button>
                   <button
@@ -3816,7 +3931,7 @@
                     id="save-draft-btn"
                     onclick="saveDraft()"
                   >
-                    Save field
+                    Save &amp; pay
                   </button>
                 </div>
               </div>
@@ -4542,6 +4657,271 @@
                 </div>
               </div>
             </div>
+
+            <!-- ================= Business Account ================= -->
+            <div class="card" style="padding: 22px; margin-top: 20px">
+              <h3 style="margin: 0 0 6px">Business Account</h3>
+              <p
+                style="
+                  color: var(--text-dim);
+                  font-size: 13px;
+                  margin: 0 0 16px;
+                "
+              >
+                Get an API to create, update, and fetch your farms' satellite
+                indices programmatically.
+              </p>
+
+              <!-- State: not yet a business account -->
+              <div id="business-upgrade-flow" style="display: none">
+                <div id="biz-step-gst">
+                  <label>GSTIN</label>
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="biz-gstin-input"
+                      placeholder="e.g. 23AAJCN0421G1ZZ"
+                      style="flex: 1; text-transform: uppercase"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      style="width: auto"
+                      onclick="verifyBusinessGst()"
+                    >
+                      Verify GST
+                    </button>
+                  </div>
+                  <p
+                    id="biz-gst-status"
+                    style="font-size: 12.5px; margin-top: 6px"
+                  ></p>
+                </div>
+
+                <div
+                  id="biz-step-email"
+                  style="
+                    display: none;
+                    margin-top: 18px;
+                    padding-top: 18px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <label
+                    >Business email
+                    <span style="font-weight: 400; color: var(--text-dim)"
+                      >(not Gmail/Yahoo/Outlook, and different from your login
+                      email)</span
+                    ></label
+                  >
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="biz-email-input"
+                      placeholder="finance@yourcompany.com"
+                      style="flex: 1"
+                    />
+                    <button
+                      class="btn"
+                      style="width: auto"
+                      onclick="startBusinessEmailVerification()"
+                    >
+                      Send code
+                    </button>
+                  </div>
+                  <div
+                    id="biz-email-otp-row"
+                    style="display: none; margin-top: 10px"
+                  >
+                    <label>Verification code</label>
+                    <div style="display: flex; gap: 8px">
+                      <input
+                        type="text"
+                        id="biz-email-otp-input"
+                        placeholder="6-digit code"
+                        style="flex: 1"
+                        maxlength="6"
+                      />
+                      <button
+                        class="btn btn-primary"
+                        style="width: auto"
+                        onclick="verifyBusinessEmailOtp()"
+                      >
+                        Verify code
+                      </button>
+                    </div>
+                  </div>
+                  <p
+                    id="biz-email-status"
+                    style="font-size: 12.5px; margin-top: 6px"
+                  ></p>
+                </div>
+
+                <div
+                  id="biz-step-pay"
+                  style="
+                    display: none;
+                    margin-top: 18px;
+                    padding-top: 18px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <p style="font-size: 13.5px">
+                    Verified! Upgrading costs
+                    <strong>₹999 + GST / year</strong>.
+                  </p>
+                  <label>Coupon code (optional)</label>
+                  <div style="display: flex; gap: 8px; margin-bottom: 10px">
+                    <input
+                      type="text"
+                      id="biz-upgrade-coupon"
+                      placeholder="e.g. SAVE15"
+                      style="flex: 1"
+                    />
+                  </div>
+                  <button
+                    class="btn btn-primary"
+                    style="width: auto"
+                    onclick="payBusinessUpgrade()"
+                    id="biz-pay-btn"
+                  >
+                    Pay &amp; upgrade to Business
+                  </button>
+                </div>
+              </div>
+
+              <!-- State: already business -->
+              <div id="business-active-panel" style="display: none">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: auto 1fr;
+                    column-gap: 10px;
+                    row-gap: 10px;
+                    font-size: 14px;
+                    margin-bottom: 18px;
+                  "
+                >
+                  <span style="color: var(--text-dim)">Status</span
+                  ><span id="biz-status-value"></span>
+                  <span style="color: var(--text-dim)">Company</span
+                  ><span id="biz-company-name"></span>
+                  <span style="color: var(--text-dim)">Registered address</span
+                  ><span id="biz-company-address"></span>
+                  <span style="color: var(--text-dim)">GSTIN</span
+                  ><span id="biz-company-gstin" class="mono"></span>
+                  <span style="color: var(--text-dim)">Business email</span
+                  ><span id="biz-company-email"></span>
+                  <span style="color: var(--text-dim)">Wallet balance</span
+                  ><span id="biz-wallet-balance" class="mono"></span>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin: 18px 0 10px;
+                    padding-top: 14px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <h4 style="margin: 0">API Credentials</h4>
+                  <button
+                    class="btn btn-sm"
+                    style="width: auto"
+                    onclick="generateApiCredential()"
+                  >
+                    + Generate new key
+                  </button>
+                </div>
+                <table
+                  style="
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                  "
+                >
+                  <thead>
+                    <tr
+                      style="
+                        text-align: left;
+                        color: var(--text-dim);
+                        font-size: 11.5px;
+                        text-transform: uppercase;
+                      "
+                    >
+                      <th style="padding: 6px 0">API Key</th>
+                      <th>Label</th>
+                      <th>Status</th>
+                      <th>Last used</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="api-credentials-rows"></tbody>
+                </table>
+                <p
+                  id="api-credentials-empty"
+                  style="color: var(--text-dim); font-size: 13px; display: none"
+                >
+                  No API keys yet.
+                </p>
+                <p
+                  style="
+                    font-size: 12px;
+                    color: var(--text-dim);
+                    margin-top: 8px;
+                  "
+                >
+                  <a href="/developers/docs" target="_blank">API docs</a>
+                  &middot;
+                  <a href="/developers/playground" target="_blank"
+                    >API playground</a
+                  >
+                </p>
+
+                <div
+                  style="
+                    margin: 22px 0 10px;
+                    padding-top: 14px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <h4 style="margin: 0 0 10px">Invoices</h4>
+                </div>
+                <table
+                  style="
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                  "
+                >
+                  <thead>
+                    <tr
+                      style="
+                        text-align: left;
+                        color: var(--text-dim);
+                        font-size: 11.5px;
+                        text-transform: uppercase;
+                      "
+                    >
+                      <th style="padding: 6px 0">Month</th>
+                      <th>Area</th>
+                      <th>Total</th>
+                      <th>Due</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="business-invoices-rows"></tbody>
+                </table>
+                <p
+                  id="business-invoices-empty"
+                  style="color: var(--text-dim); font-size: 13px; display: none"
+                >
+                  No invoices yet.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -4573,6 +4953,121 @@
     descendant) so it can be opened from the login screen too, before
     #app's display:none is ever lifted -- the FAQ and Contact Us form are
     both meant to be reachable by someone who isn't signed in yet. -->
+    <div class="modal-overlay" id="recharge-modal" style="display: none">
+      <div class="modal-card" style="width: 440px">
+        <div class="modal-header">
+          <h2>Recharge to continue</h2>
+          <button class="icon-btn" onclick="closeRechargeModal()">✕</button>
+        </div>
+        <p
+          id="recharge-modal-message"
+          style="color: var(--text-muted); font-size: 13.5px"
+        ></p>
+
+        <label>Plan</label>
+        <div id="recharge-plan-options" style="display: grid; gap: 8px">
+          <label
+            class="plan-tier-option"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 8px 10px;
+              border: 1px solid var(--line);
+              border-radius: 9px;
+              cursor: pointer;
+            "
+          >
+            <input
+              type="radio"
+              name="recharge_plan_tier"
+              value="individual_3m"
+              onchange="updateRechargePricePreview()"
+              style="width: auto"
+            />
+            <span>3 months &mdash; ₹85/acre</span>
+          </label>
+          <label
+            class="plan-tier-option"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 8px 10px;
+              border: 1px solid var(--line);
+              border-radius: 9px;
+              cursor: pointer;
+            "
+          >
+            <input
+              type="radio"
+              name="recharge_plan_tier"
+              value="individual_6m"
+              onchange="updateRechargePricePreview()"
+              style="width: auto"
+              checked
+            />
+            <span>6 months &mdash; ₹155/acre</span>
+          </label>
+          <label
+            class="plan-tier-option"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 8px 10px;
+              border: 1px solid var(--line);
+              border-radius: 9px;
+              cursor: pointer;
+            "
+          >
+            <input
+              type="radio"
+              name="recharge_plan_tier"
+              value="individual_12m"
+              onchange="updateRechargePricePreview()"
+              style="width: auto"
+            />
+            <span>12 months &mdash; ₹295/acre</span>
+          </label>
+        </div>
+
+        <label style="margin-top: 12px">Coupon code (optional)</label>
+        <div style="display: flex; gap: 8px">
+          <input
+            type="text"
+            id="recharge-coupon"
+            placeholder="e.g. SAVE15"
+            style="flex: 1"
+          />
+          <button
+            class="btn btn-sm"
+            style="width: auto"
+            onclick="updateRechargePricePreview()"
+          >
+            Apply
+          </button>
+        </div>
+
+        <div
+          id="recharge-price-preview"
+          class="mono"
+          style="margin-top: 10px; font-size: 13px"
+        ></div>
+
+        <div class="btn-row" style="margin-top: 16px">
+          <button class="btn" onclick="closeRechargeModal()">Cancel</button>
+          <button
+            class="btn btn-primary"
+            id="recharge-pay-btn"
+            onclick="payRecharge()"
+          >
+            Recharge now
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="help-modal" style="display: none">
       <div class="modal-card help-modal-card">
         <div class="modal-header">
@@ -5347,6 +5842,24 @@
           showLogin("Your session expired. Please sign in again.");
           throw new Error("Not authenticated");
         }
+        if (res.status === 402) {
+          // The "recharge to continue" gate (vyom/farm_pricing.py's
+          // is_farm_locked) -- structured so callers can show the recharge
+          // modal instead of a generic error toast. See openRechargeModal().
+          let detail = {};
+          try {
+            detail = (await res.json()).detail || {};
+          } catch (e) {
+            /* malformed body -- fall through with an empty detail */
+          }
+          const err = new Error(
+            detail.message || "This farm's plan needs to be renewed.",
+          );
+          err.isPlanLocked = true;
+          err.farmId = detail.farm_id;
+          err.planCode = detail.code;
+          throw err;
+        }
         if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
         return res.json();
       }
@@ -5494,7 +6007,7 @@
           ],
         };
         try {
-          const farm = await api("/farms", {
+          const result = await api("/farms", {
             method: "POST",
             body: JSON.stringify({
               name: "Untitled field (drawing...)",
@@ -5502,7 +6015,10 @@
               is_draft: true,
             }),
           });
-          draftFarmId = farm.id;
+          // POST /farms now returns {farm, payment} (payment is always null
+          // for a draft, since is_draft farms aren't billed at creation --
+          // see FarmCreate.plan_type's docstring in api/farms.py).
+          draftFarmId = result.farm.id;
         } catch (e) {
           // Silent -- saveDraft() falls back to a normal one-step create if
           // draftFarmId never got set. Not worth interrupting the farmer's
@@ -5580,6 +6096,240 @@
         const acres = sqm / _SQM_PER_ACRE;
         banner.textContent = `Field area: ${acres >= 100 ? acres.toFixed(1) : acres.toFixed(2)} acre`;
         banner.style.display = "flex";
+        updatePlanPricePreview();
+      }
+
+      // ================= Farm plan pricing (individual per-acre plans) =====
+      // Rates mirror vyom/config.py's individual_plan_rate_*_paise settings --
+      // this is a CLIENT-SIDE PREVIEW ONLY; the authoritative charge is always
+      // computed server-side in vyom/farm_pricing.py against the farm's real
+      // geodesic area, same "preview vs authoritative" split as the acre-area
+      // banner above.
+      const PLAN_RATES_PER_ACRE = {
+        individual_3m: 85,
+        individual_6m: 155,
+        individual_12m: 295,
+      };
+
+      function getSelectedPlanType(radioName) {
+        const el = document.querySelector(`input[name="${radioName}"]:checked`);
+        return el ? el.value : "individual_6m";
+      }
+
+      function clearCouponPreview() {
+        document.getElementById("plan-price-preview").textContent = "";
+      }
+
+      async function computePricePreview(
+        acres,
+        planType,
+        couponCode,
+        productForCoupon,
+      ) {
+        const rate = PLAN_RATES_PER_ACRE[planType];
+        const basePaise = Math.round(acres * rate * 100);
+        let discountPaise = 0;
+        let couponError = null;
+        if (couponCode) {
+          try {
+            const result = await api("/coupons/validate", {
+              method: "POST",
+              body: JSON.stringify({
+                code: couponCode,
+                order_amount_paise: basePaise,
+                plan_type: planType,
+                product: productForCoupon,
+              }),
+            });
+            discountPaise = result.discount_paise || 0;
+          } catch (e) {
+            couponError = e.message.replace(/^\d+:\s*/, "");
+          }
+        }
+        const gstPaise = Math.round((basePaise - discountPaise) * 0.18);
+        const totalPaise = basePaise - discountPaise + gstPaise;
+        return {
+          acres,
+          rate,
+          basePaise,
+          discountPaise,
+          gstPaise,
+          totalPaise,
+          couponError,
+        };
+      }
+
+      function renderPricePreview(el, quote) {
+        if (quote.couponError) {
+          el.innerHTML = `<span style="color: var(--danger)">Coupon: ${quote.couponError}</span>`;
+          return;
+        }
+        el.innerHTML = `
+          ${quote.acres.toFixed(2)} acre &times; ₹${quote.rate}/acre = ₹${(quote.basePaise / 100).toFixed(2)}<br/>
+          ${quote.discountPaise ? `Coupon discount: -₹${(quote.discountPaise / 100).toFixed(2)}<br/>` : ""}
+          GST (18%): ₹${(quote.gstPaise / 100).toFixed(2)}<br/>
+          <strong>Total: ₹${(quote.totalPaise / 100).toFixed(2)}</strong>
+        `;
+      }
+
+      async function updatePlanPricePreview() {
+        const preview = document.getElementById("plan-price-preview");
+        if (!draftPolygon || !google.maps.geometry) {
+          preview.textContent = "";
+          return;
+        }
+        const sqm = google.maps.geometry.spherical.computeArea(
+          draftPolygon.getPath(),
+        );
+        const acres = sqm / _SQM_PER_ACRE;
+        const planType = getSelectedPlanType("plan_tier");
+        const couponCode = document
+          .getElementById("new-farm-coupon")
+          .value.trim();
+        const quote = await computePricePreview(
+          acres,
+          planType,
+          couponCode,
+          "vyom_individual_farm",
+        );
+        renderPricePreview(preview, quote);
+      }
+
+      // ================= Razorpay Checkout helper =================
+      // Wraps the Checkout.js popup in a Promise -- resolves with
+      // {razorpay_payment_id, razorpay_order_id, razorpay_signature} on
+      // success, rejects (WITHOUT throwing away anything already saved --
+      // see saveDraft()/payRecharge()'s catch blocks) if the farmer closes
+      // the popup or the payment fails.
+      function openRazorpayCheckout({
+        order_id,
+        key_id,
+        amount_paise,
+        description,
+      }) {
+        return new Promise((resolve, reject) => {
+          const rzp = new Razorpay({
+            key: key_id,
+            order_id: order_id,
+            amount: amount_paise,
+            currency: "INR",
+            name: "Vyom Engine",
+            description: description || "Farm plan",
+            theme: { color: "#16a34a" },
+            handler: function (response) {
+              resolve(response);
+            },
+            modal: {
+              ondismiss: function () {
+                reject(new Error("Payment window closed before completing."));
+              },
+            },
+          });
+          rzp.on("payment.failed", function (response) {
+            reject(
+              new Error(
+                (response.error && response.error.description) ||
+                  "Payment failed.",
+              ),
+            );
+          });
+          rzp.open();
+        });
+      }
+
+      // ================= Recharge-to-continue modal =================
+      // Opened from selectFarm() (and anywhere else a 402 FARM_PLAN_LOCKED
+      // response surfaces via api()'s isPlanLocked flag) -- lets the farmer
+      // buy a fresh plan for an already-existing (expired, or never-paid)
+      // farm without going through farm creation again.
+      let rechargeTargetFarmId = null;
+
+      function openRechargeModal(farmId, farmName, message) {
+        rechargeTargetFarmId = farmId;
+        document.getElementById("recharge-modal-message").textContent =
+          message || `"${farmName}" needs an active plan to show its data.`;
+        document.getElementById("recharge-coupon").value = "";
+        document.getElementById("recharge-price-preview").textContent = "";
+        document.getElementById("recharge-modal").style.display = "flex";
+      }
+
+      function closeRechargeModal() {
+        document.getElementById("recharge-modal").style.display = "none";
+        rechargeTargetFarmId = null;
+      }
+
+      async function updateRechargePricePreview() {
+        const preview = document.getElementById("recharge-price-preview");
+        const farm = farms.find((f) => f.id === rechargeTargetFarmId);
+        if (!farm || farm.area_acre == null) {
+          preview.textContent = "";
+          return;
+        }
+        const planType = getSelectedPlanType("recharge_plan_tier");
+        const couponCode = document
+          .getElementById("recharge-coupon")
+          .value.trim();
+        const quote = await computePricePreview(
+          farm.area_acre,
+          planType,
+          couponCode,
+          "vyom_individual_farm",
+        );
+        renderPricePreview(preview, quote);
+      }
+
+      async function payRecharge() {
+        const farmId = rechargeTargetFarmId;
+        if (!farmId) return;
+        const planType = getSelectedPlanType("recharge_plan_tier");
+        const couponCode =
+          document.getElementById("recharge-coupon").value.trim() || null;
+        const btn = document.getElementById("recharge-pay-btn");
+        btn.disabled = true;
+        btn.textContent = "Processing\u2026";
+
+        try {
+          const farm = farms.find((f) => f.id === farmId);
+          // A farm that already has an expired plan uses /plan/upgrade's
+          // sibling for a fresh term -- but purchase_plan only accepts a
+          // farm with NO active plan, so an expired one is fine here (its
+          // most recent plan's status is 'expired', not 'active').
+          const payment = await api(`/farms/${farmId}/plan/purchase`, {
+            method: "POST",
+            body: JSON.stringify({
+              plan_type: planType,
+              coupon_code: couponCode,
+            }),
+          });
+
+          if (payment.status === "created") {
+            const rzpResponse = await openRazorpayCheckout({
+              order_id: payment.razorpay_order_id,
+              key_id: payment.razorpay_key_id,
+              amount_paise: payment.razorpay_paise,
+              description: `${farm ? farm.name : "Farm"} \u2014 plan recharge`,
+            });
+            await api(`/farms/${farmId}/plan/verify`, {
+              method: "POST",
+              body: JSON.stringify({
+                plan_id: payment.plan_id,
+                razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                razorpay_signature: rzpResponse.razorpay_signature,
+                coupon_code: couponCode,
+              }),
+            });
+          }
+
+          closeRechargeModal();
+          showToast("Recharged \u2014 loading the farm's data now.");
+          await loadFarms();
+          selectFarm(farmId);
+        } catch (e) {
+          showToast("Payment not completed: " + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Recharge now";
+        }
       }
 
       // ================= Auto-fetched location (replaces the old manual
@@ -6452,13 +7202,19 @@
         draftCountry = null;
         renderCropField();
         renderSoilField();
+        document.getElementById("new-farm-coupon").value = "";
+        document.getElementById("plan-price-preview").textContent = "";
+        const defaultPlanRadio = document.querySelector(
+          'input[name="plan_tier"][value="individual_6m"]',
+        );
+        if (defaultPlanRadio) defaultPlanRadio.checked = true;
         // Defensive reset in case a previous save's finally{} somehow
         // didn't run (e.g. a hard navigation mid-request) -- next time this
         // form is opened, the Save button should never come up pre-disabled.
         isSavingDraft = false;
         const saveBtn = document.getElementById("save-draft-btn");
         saveBtn.disabled = false;
-        saveBtn.textContent = "Save field";
+        saveBtn.textContent = "Save & pay";
       }
 
       function cancelDrawing() {
@@ -7671,40 +8427,83 @@
           // field's centroid, silently, same as the Location display above it.
           country: draftCountry,
         };
+        const planType = getSelectedPlanType("plan_tier");
+        const couponCode =
+          document.getElementById("new-farm-coupon").value.trim() || null;
 
         try {
-          let farm;
+          let farm, payment;
           if (draftFarmId) {
             // Finalize the draft created at first-click time -- same
             // farm.id throughout, so any coverage its cold-start fetch
             // already pulled carries straight over via reuse-check instead
             // of triggering a second fresh CDSE fetch for the real shape.
+            // Finalizing (geometry/metadata) and paying for a plan are two
+            // separate calls -- see POST .../plan/purchase below -- so a
+            // payment hiccup never risks the farm's own save.
             farm = await api(`/farms/${draftFarmId}`, {
               method: "PATCH",
               body: JSON.stringify({ ...farmFields, geometry: draftGeoJSON }),
             });
+            saveBtn.textContent = "Starting payment\u2026";
+            payment = await api(`/farms/${draftFarmId}/plan/purchase`, {
+              method: "POST",
+              body: JSON.stringify({
+                plan_type: planType,
+                coupon_code: couponCode,
+              }),
+            });
           } else {
             // Fallback: the background draft-create at first-click either
-            // failed or never fired (e.g. a very fast draw) -- same
-            // single-step create as before, nothing lost.
-            farm = await api("/farms", {
+            // failed or never fired (e.g. a very fast draw) -- one-step
+            // create, billed inline (plan_type is required for any
+            // non-draft farm -- see FarmCreate in api/farms.py).
+            const result = await api("/farms", {
               method: "POST",
               body: JSON.stringify({
                 ...farmFields,
                 geometry: draftGeoJSON,
+                plan_type: planType,
+                coupon_code: couponCode,
               }),
             });
+            farm = result.farm;
+            payment = result.payment;
           }
-          if (draftPolygon) draftPolygon.setMap(null);
-          draftPolygon = null;
-          draftGeoJSON = null;
-          draftFarmId = null;
-          document.getElementById("create-form").style.display = "none";
-          resetCreateForm();
-          closeDrawFieldModal(/* skipConfirm */ true);
-          await loadFarms();
-          switchPage("imagery");
-          selectFarm(farm.id);
+
+          if (payment && payment.status === "created") {
+            // Wallet/proration didn't fully cover it -- open Razorpay for
+            // the remainder. If the farmer closes this or it fails, the
+            // farm itself is ALREADY saved (just left locked, same as any
+            // other unpaid/expired plan) -- so that's handled as a
+            // successful save with a follow-up-payment note, not an error.
+            try {
+              saveBtn.textContent = "Waiting for payment\u2026";
+              const rzpResponse = await openRazorpayCheckout({
+                order_id: payment.razorpay_order_id,
+                key_id: payment.razorpay_key_id,
+                amount_paise: payment.razorpay_paise,
+                description: `${name} \u2014 farm plan`,
+              });
+              await api(`/farms/${farm.id}/plan/verify`, {
+                method: "POST",
+                body: JSON.stringify({
+                  plan_id: payment.plan_id,
+                  razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                  razorpay_signature: rzpResponse.razorpay_signature,
+                  coupon_code: couponCode,
+                }),
+              });
+            } catch (payErr) {
+              finishSaveDraftUI(farm);
+              showToast(
+                `"${farm.name}" is saved \u2014 payment wasn't completed, so open it any time to recharge and unlock its data.`,
+              );
+              return;
+            }
+          }
+
+          finishSaveDraftUI(farm);
           showToast(
             `Saved "${farm.name}" \u2014 fetching its satellite history now, this can take up to 12\u201318 hours.`,
           );
@@ -7714,8 +8513,26 @@
         } finally {
           isSavingDraft = false;
           saveBtn.disabled = false;
-          saveBtn.textContent = "Save field";
+          saveBtn.textContent = "Save & pay";
         }
+      }
+
+      // Shared cleanup/navigation after a farm is successfully saved,
+      // whether or not its plan payment also completed in the same flow --
+      // factored out since saveDraft() has two success-shaped exits (fully
+      // paid, and saved-but-unpaid) that both need it.
+      function finishSaveDraftUI(farm) {
+        if (draftPolygon) draftPolygon.setMap(null);
+        draftPolygon = null;
+        draftGeoJSON = null;
+        draftFarmId = null;
+        document.getElementById("create-form").style.display = "none";
+        resetCreateForm();
+        closeDrawFieldModal(/* skipConfirm */ true);
+        loadFarms().then(() => {
+          switchPage("imagery");
+          selectFarm(farm.id);
+        });
       }
 
       async function deleteFarm() {
@@ -7949,8 +8766,16 @@
         flashFarmOutline(farmId);
 
         populateIndexSelect();
-        await loadDates();
-        await refreshLayerAndReadouts();
+        try {
+          await loadDates();
+          await refreshLayerAndReadouts();
+        } catch (e) {
+          if (e.isPlanLocked) {
+            openRechargeModal(farmId, farm.name, e.message);
+          } else {
+            throw e;
+          }
+        }
         renderFarmList();
 
         startFarmStatusPolling(farmId);
@@ -8687,6 +9512,8 @@
             info.name || info.account_id || "";
           if (typeof renderAccountSettings === "function")
             renderAccountSettings(info);
+          if (typeof renderBusinessSection === "function")
+            renderBusinessSection(info);
         } catch (e) {
           // Non-fatal -- keep whatever was already shown (session username,
           // default avatar). api() itself already handles a 401 by logging out.
@@ -8720,6 +9547,244 @@
         document.getElementById("settings-address").value = info.address || "";
         document.getElementById("settings-link-google-row").style.display =
           info.email ? "none" : "block";
+      }
+
+      // ================= Business Account section =================
+      function renderBusinessSection(info) {
+        const upgradeFlow = document.getElementById("business-upgrade-flow");
+        const activePanel = document.getElementById("business-active-panel");
+        if (!upgradeFlow || !activePanel) return; // settings markup not mounted yet
+
+        const isActiveBusiness =
+          info.account_type === "business" && info.business_status === "active";
+
+        upgradeFlow.style.display = isActiveBusiness ? "none" : "block";
+        activePanel.style.display = isActiveBusiness ? "block" : "none";
+
+        if (isActiveBusiness) {
+          document.getElementById("biz-status-value").textContent =
+            info.business_expires_at
+              ? `Active until ${new Date(info.business_expires_at).toLocaleDateString()}`
+              : "Active";
+          document.getElementById("biz-company-name").textContent =
+            info.company_legal_name || "--";
+          document.getElementById("biz-company-address").textContent =
+            info.company_registered_address || "--";
+          document.getElementById("biz-company-gstin").textContent =
+            info.gstin || "--";
+          document.getElementById("biz-company-email").textContent =
+            info.business_email || "--";
+          document.getElementById("biz-wallet-balance").textContent =
+            `₹${((info.wallet_balance_paise || 0) / 100).toFixed(2)}`;
+          loadApiCredentials();
+          loadBusinessInvoices();
+        } else {
+          // Reflect whatever verification has already been completed, so
+          // reopening Settings mid-flow doesn't make the farmer redo steps.
+          document.getElementById("biz-step-gst").style.display = "block";
+          const gstDone = !!info.gst_verified_at;
+          document.getElementById("biz-gst-status").textContent = gstDone
+            ? `Verified: ${info.company_legal_name}`
+            : "";
+          document.getElementById("biz-step-email").style.display = gstDone
+            ? "block"
+            : "none";
+          const emailDone = !!info.business_email_verified_at;
+          document.getElementById("biz-email-status").textContent = emailDone
+            ? `Verified: ${info.business_email}`
+            : "";
+          document.getElementById("biz-step-pay").style.display =
+            gstDone && emailDone ? "block" : "none";
+        }
+      }
+
+      async function verifyBusinessGst() {
+        const gstin = document.getElementById("biz-gstin-input").value.trim();
+        const statusEl = document.getElementById("biz-gst-status");
+        if (!gstin) return;
+        statusEl.textContent = "Verifying\u2026";
+        try {
+          const result = await api("/business/onboarding/verify-gst", {
+            method: "POST",
+            body: JSON.stringify({ gstin }),
+          });
+          statusEl.style.color = "var(--canopy)";
+          statusEl.textContent = `Verified: ${result.company_legal_name}`;
+          document.getElementById("biz-step-email").style.display = "block";
+          await refreshAccountInfo();
+        } catch (e) {
+          statusEl.style.color = "var(--danger)";
+          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+        }
+      }
+
+      async function startBusinessEmailVerification() {
+        const email = document.getElementById("biz-email-input").value.trim();
+        const statusEl = document.getElementById("biz-email-status");
+        if (!email) return;
+        statusEl.textContent = "Sending code\u2026";
+        try {
+          await api("/business/onboarding/business-email/start", {
+            method: "POST",
+            body: JSON.stringify({ email }),
+          });
+          statusEl.style.color = "var(--text-dim)";
+          statusEl.textContent = "Code sent -- check that inbox.";
+          document.getElementById("biz-email-otp-row").style.display = "block";
+        } catch (e) {
+          statusEl.style.color = "var(--danger)";
+          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+        }
+      }
+
+      async function verifyBusinessEmailOtp() {
+        const email = document.getElementById("biz-email-input").value.trim();
+        const otp = document.getElementById("biz-email-otp-input").value.trim();
+        const statusEl = document.getElementById("biz-email-status");
+        if (!otp) return;
+        try {
+          await api("/business/onboarding/business-email/verify", {
+            method: "POST",
+            body: JSON.stringify({ email, otp }),
+          });
+          statusEl.style.color = "var(--canopy)";
+          statusEl.textContent = `Verified: ${email}`;
+          document.getElementById("biz-step-pay").style.display = "block";
+          await refreshAccountInfo();
+        } catch (e) {
+          statusEl.style.color = "var(--danger)";
+          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+        }
+      }
+
+      async function payBusinessUpgrade() {
+        const btn = document.getElementById("biz-pay-btn");
+        const couponCode =
+          document.getElementById("biz-upgrade-coupon").value.trim() || null;
+        btn.disabled = true;
+        btn.textContent = "Starting payment\u2026";
+        try {
+          const order = await api("/billing/business/upgrade", {
+            method: "POST",
+            body: JSON.stringify({ coupon_code: couponCode }),
+          });
+          const rzpResponse = await openRazorpayCheckout({
+            order_id: order.razorpay_order_id,
+            key_id: order.razorpay_key_id,
+            amount_paise: order.amount_paise,
+            description: "Vyom Engine Business Account -- annual subscription",
+          });
+          await api("/billing/business/verify", {
+            method: "POST",
+            body: JSON.stringify({
+              razorpay_order_id: order.razorpay_order_id,
+              razorpay_payment_id: rzpResponse.razorpay_payment_id,
+              razorpay_signature: rzpResponse.razorpay_signature,
+              coupon_code: couponCode,
+            }),
+          });
+          showToast("Upgraded to a Business Account!");
+          await refreshAccountInfo();
+        } catch (e) {
+          showToast("Upgrade not completed: " + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Pay & upgrade to Business";
+        }
+      }
+
+      // -------- API credentials --------
+      async function loadApiCredentials() {
+        try {
+          const creds = await api("/business/api-credentials");
+          const rows = document.getElementById("api-credentials-rows");
+          rows.innerHTML = "";
+          document.getElementById("api-credentials-empty").style.display =
+            creds.length ? "none" : "block";
+          creds.forEach((c) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td class="mono" style="padding: 6px 0">${c.api_key}</td>
+              <td>${c.label || "--"}</td>
+              <td>${c.status}</td>
+              <td>${c.last_used_at ? new Date(c.last_used_at).toLocaleDateString() : "Never"}</td>
+              <td>${c.status === "active" ? `<button class="btn btn-sm" onclick="revokeApiCredential('${c.id}')">Revoke</button>` : ""}</td>
+            `;
+            rows.appendChild(tr);
+          });
+        } catch (e) {
+          console.warn("Could not load API credentials:", e);
+        }
+      }
+
+      async function generateApiCredential() {
+        const label = prompt(
+          "Optional label for this key (e.g. 'Production'):",
+          "",
+        );
+        try {
+          const cred = await api("/business/api-credentials", {
+            method: "POST",
+            body: JSON.stringify({ label: label || null }),
+          });
+          // Shown exactly once -- the backend never stores or re-displays
+          // the raw secret again after this (see ApiCredential in models.py).
+          alert(
+            `Save these now -- the secret is shown only this one time:\n\nAPI Key: ${cred.api_key}\nAPI Secret: ${cred.api_secret}`,
+          );
+          loadApiCredentials();
+        } catch (e) {
+          showToast("Could not generate key: " + e.message);
+        }
+      }
+
+      async function revokeApiCredential(id) {
+        if (
+          !confirm(
+            "Revoke this API key? Any integration using it will stop working immediately.",
+          )
+        )
+          return;
+        try {
+          await api(`/business/api-credentials/${id}/revoke`, {
+            method: "POST",
+          });
+          loadApiCredentials();
+        } catch (e) {
+          showToast("Could not revoke key: " + e.message);
+        }
+      }
+
+      // -------- Business invoices --------
+      async function loadBusinessInvoices() {
+        try {
+          const invoices = await api("/billing/business/invoices");
+          const rows = document.getElementById("business-invoices-rows");
+          rows.innerHTML = "";
+          document.getElementById("business-invoices-empty").style.display =
+            invoices.length ? "none" : "block";
+          invoices.forEach((inv) => {
+            const tr = document.createElement("tr");
+            const month = new Date(
+              inv.billing_month + "T00:00:00",
+            ).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+            const payBtn =
+              inv.status === "pending" && inv.razorpay_payment_link_url
+                ? `<a class="btn btn-sm" href="${inv.razorpay_payment_link_url}" target="_blank">Pay now</a>`
+                : "";
+            tr.innerHTML = `
+              <td style="padding: 6px 0">${month}</td>
+              <td>${inv.total_area_acre.toFixed(2)} ac</td>
+              <td>₹${(inv.total_paise / 100).toFixed(2)}</td>
+              <td>${new Date(inv.due_at).toLocaleDateString()}</td>
+              <td>${inv.status}</td>
+              <td>${payBtn}</td>
+            `;
+            rows.appendChild(tr);
+          });
+        } catch (e) {
+          console.warn("Could not load business invoices:", e);
+        }
       }
 
       async function saveProfileSettings() {

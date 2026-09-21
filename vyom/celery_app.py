@@ -75,4 +75,23 @@ celery_app.conf.beat_schedule = {
         "task": "vyom.billing.suspend_overdue_business_invoices",
         "schedule": 24 * 60 * 60,
     },
+    "send-business-renewal-reminders-daily": {
+        "task": "vyom.billing.send_business_renewal_reminders",
+        "schedule": 24 * 60 * 60,
+    },
+    "cleanup-idempotency-keys-daily": {
+        "task": "vyom.billing.cleanup_idempotency_keys",
+        "schedule": 24 * 60 * 60,
+    },
+    # Reconciliation self-healing checks -- run more often than the daily
+    # jobs above since their whole point is to catch a missed webhook
+    # promptly, not just eventually.
+    "reconcile-pending-business-subscriptions": {
+        "task": "vyom.billing.reconcile_pending_business_subscriptions",
+        "schedule": 30 * 60,
+    },
+    "reconcile-pending-business-invoices": {
+        "task": "vyom.billing.reconcile_pending_business_invoices",
+        "schedule": 30 * 60,
+    },
 }

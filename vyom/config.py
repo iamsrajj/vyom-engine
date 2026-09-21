@@ -216,5 +216,25 @@ class Settings(BaseSettings):
     # Partner API platform (see vyom/api_auth.py, vyom/api/partner_farms.py)
     api_rate_limit_per_minute: int = 60
 
+    # GST verification (see vyom/gst_verification.py) -- gstinapi.in by
+    # default (100 free lookups/month, no card required at signup); the
+    # adapter is isolated to one module so swapping providers later is a
+    # one-file change. Sign up at https://www.gstinapi.in/register for a key.
+    gst_verification_api_key: str = ""
+    gst_verification_base_url: str = "https://gstinapi.in/v1"
+
+    # Business email verification (see vyom/api/business_onboarding.py) --
+    # a business account's business_email must NOT be on this list, so a
+    # personal Gmail/Yahoo/etc. address can't be used to satisfy the
+    # requirement. Comma-separated in .env; kept as a setting so it can be
+    # tightened/loosened without a code change.
+    free_email_domains: str = (
+        "gmail.com,googlemail.com,yahoo.com,yahoo.co.in,outlook.com,hotmail.com,"
+        "live.com,msn.com,icloud.com,me.com,aol.com,protonmail.com,proton.me,"
+        "rediffmail.com,yandex.com,mail.com,gmx.com"
+    )
+    business_email_otp_ttl_minutes: int = 10
+    business_email_otp_max_attempts: int = 5
+
 
 settings = Settings()
