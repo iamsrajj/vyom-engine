@@ -600,6 +600,7 @@ def verify_farm_plan_payment(farm_id: uuid.UUID, payload: PlanVerifyRequest,
     return {"status": "activated", "expires_at": plan.expires_at}
 
 
+@router.get("", response_model=list[FarmOut])
 def list_farms(include_drafts: bool = False, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     """Always scoped to the authenticated caller's own farms (security fix:
     this used to take an arbitrary `user_id` query param with no check that

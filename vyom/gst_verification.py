@@ -79,7 +79,8 @@ def verify_gstin(gstin: str) -> GstinLookupResult:
         raise GstVerificationError(
             "Could not verify that GSTIN right now. Please try again shortly.")
 
-    data = resp.json()
+    envelope = resp.json()
+    data = envelope.get("data") or {}
     status = data.get("status", "Unknown")
     if status != "Active":
         raise GstVerificationError(
