@@ -2951,6 +2951,46 @@
                   style="flex: 1"
                 />
               </div>
+              <label
+                style="
+                  display: flex;
+                  align-items: flex-start;
+                  gap: 8px;
+                  font-weight: 400;
+                  font-size: 12.5px;
+                  color: var(--text-dim);
+                  margin: 4px 0 2px;
+                  cursor: pointer;
+                "
+              >
+                <input
+                  type="checkbox"
+                  id="signup-accept-legal"
+                  style="width: 15px; height: 15px; margin-top: 1px; flex: none"
+                  onchange="
+                    document.getElementById('signup-error').style.display =
+                      'none'
+                  "
+                />
+                <span>
+                  I agree to the
+                  <a
+                    href="/legal/terms-and-conditions.html"
+                    target="_blank"
+                    rel="noopener"
+                    onclick="event.stopPropagation()"
+                    >Terms &amp; Conditions</a
+                  >
+                  and
+                  <a
+                    href="/legal/privacy-policy.html"
+                    target="_blank"
+                    rel="noopener"
+                    onclick="event.stopPropagation()"
+                    >Privacy Policy</a
+                  >
+                </span>
+              </label>
               <div id="signup-error" class="login-error"></div>
               <button
                 class="btn btn-primary login-submit"
@@ -3255,16 +3295,6 @@
       </header>
 
       <nav id="nav-sidebar">
-        <button
-          class="btn btn-primary"
-          style="margin-bottom: 14px"
-          onclick="
-            switchPage('myfields');
-            openDrawFieldModal();
-          "
-        >
-          + Add New Field
-        </button>
         <div
           class="nav-item active"
           data-page="overview"
@@ -4829,36 +4859,15 @@
                   <button
                     class="btn btn-sm"
                     style="width: auto"
-                    onclick="generateApiCredential()"
+                    onclick="openGenerateKeyModal()"
                   >
                     + Generate new key
                   </button>
                 </div>
-                <table
-                  style="
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 13px;
-                  "
-                >
-                  <thead>
-                    <tr
-                      style="
-                        text-align: left;
-                        color: var(--text-dim);
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                      "
-                    >
-                      <th style="padding: 6px 0">API Key</th>
-                      <th>Label</th>
-                      <th>Status</th>
-                      <th>Last used</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="api-credentials-rows"></tbody>
-                </table>
+                <div
+                  id="api-credentials-rows"
+                  style="display: grid; gap: 10px"
+                ></div>
                 <p
                   id="api-credentials-empty"
                   style="color: var(--text-dim); font-size: 13px; display: none"
@@ -4922,6 +4931,32 @@
                 </p>
               </div>
             </div>
+
+            <!-- ================= Legal ================= -->
+            <div
+              style="
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px 18px;
+                justify-content: center;
+                margin: 24px 0 4px;
+                font-size: 12.5px;
+                color: var(--text-dim);
+              "
+            >
+              <a href="/legal/terms-and-conditions.html" target="_blank"
+                >Terms &amp; Conditions</a
+              >
+              <a href="/legal/privacy-policy.html" target="_blank"
+                >Privacy Policy</a
+              >
+              <a href="/legal/refund-policy.html" target="_blank"
+                >Refund Policy</a
+              >
+              <a href="/legal/billing-terms.html" target="_blank"
+                >Billing Terms</a
+              >
+            </div>
           </div>
         </div>
       </div>
@@ -4954,25 +4989,66 @@
     #app's display:none is ever lifted -- the FAQ and Contact Us form are
     both meant to be reachable by someone who isn't signed in yet. -->
     <div class="modal-overlay" id="recharge-modal" style="display: none">
-      <div class="modal-card" style="width: 440px">
-        <div class="modal-header">
-          <h2>Recharge to continue</h2>
-          <button class="icon-btn" onclick="closeRechargeModal()">✕</button>
+      <div class="modal-card" style="width: 460px; padding: 28px 26px">
+        <div style="text-align: center; margin-bottom: 18px">
+          <div
+            style="
+              width: 52px;
+              height: 52px;
+              border-radius: 50%;
+              background: rgba(230, 160, 30, 0.12);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin: 0 auto 12px;
+            "
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="26"
+              height="26"
+              stroke="#e6a01e"
+              stroke-width="2"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="3" y="11" width="18" height="10" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h2 style="margin: 0 0 6px">Recharge to continue</h2>
+          <p
+            id="recharge-modal-message"
+            style="
+              color: var(--text-dim);
+              font-size: 13.5px;
+              margin: 0;
+              line-height: 1.5;
+            "
+          ></p>
         </div>
-        <p
-          id="recharge-modal-message"
-          style="color: var(--text-muted); font-size: 13.5px"
-        ></p>
 
-        <label>Plan</label>
-        <div id="recharge-plan-options" style="display: grid; gap: 8px">
+        <label
+          style="
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-dim);
+          "
+          >Choose a plan</label
+        >
+        <div
+          id="recharge-plan-options"
+          style="display: grid; gap: 10px; margin-top: 6px"
+        >
           <label
             class="plan-tier-option"
             style="
               display: flex;
               align-items: center;
               gap: 8px;
-              padding: 8px 10px;
+              padding: 12px 14px;
               border: 1px solid var(--line);
               border-radius: 9px;
               cursor: pointer;
@@ -4993,7 +5069,7 @@
               display: flex;
               align-items: center;
               gap: 8px;
-              padding: 8px 10px;
+              padding: 12px 14px;
               border: 1px solid var(--line);
               border-radius: 9px;
               cursor: pointer;
@@ -5015,7 +5091,7 @@
               display: flex;
               align-items: center;
               gap: 8px;
-              padding: 8px 10px;
+              padding: 12px 14px;
               border: 1px solid var(--line);
               border-radius: 9px;
               cursor: pointer;
@@ -5055,16 +5131,152 @@
           style="margin-top: 10px; font-size: 13px"
         ></div>
 
-        <div class="btn-row" style="margin-top: 16px">
-          <button class="btn" onclick="closeRechargeModal()">Cancel</button>
+        <button
+          class="btn btn-primary"
+          id="recharge-pay-btn"
+          style="margin-top: 20px; width: 100%; padding: 12px"
+          onclick="payRecharge()"
+        >
+          Recharge now
+        </button>
+        <p
+          style="
+            text-align: center;
+            font-size: 11.5px;
+            color: var(--text-dim);
+            margin: 12px 0 0;
+          "
+        >
+          This field's data stays locked until an active plan is applied.
+        </p>
+      </div>
+    </div>
+
+    <!-- ================= Generate API key modal ================= -->
+    <div class="modal-overlay" id="generate-key-modal" style="display: none">
+      <div class="modal-card" style="width: 400px; padding: 26px">
+        <div class="modal-header" style="margin-bottom: 4px">
+          <h3 style="margin: 0">Generate new key</h3>
+          <button class="icon-btn" onclick="closeGenerateKeyModal()">✕</button>
+        </div>
+        <p style="color: var(--text-dim); font-size: 13px; margin: 0 0 14px">
+          Optionally label this key so you can tell it apart later (e.g.
+          "Production", "Test").
+        </p>
+        <label>Label (optional)</label>
+        <input
+          type="text"
+          id="generate-key-label"
+          placeholder="e.g. Production"
+        />
+        <div class="btn-row" style="margin-top: 18px">
+          <button class="btn" onclick="closeGenerateKeyModal()">Cancel</button>
           <button
             class="btn btn-primary"
-            id="recharge-pay-btn"
-            onclick="payRecharge()"
+            id="generate-key-submit-btn"
+            onclick="generateApiCredential()"
           >
-            Recharge now
+            Generate key
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- ================= New key result modal ================= -->
+    <div class="modal-overlay" id="key-result-modal" style="display: none">
+      <div class="modal-card" style="width: 460px; padding: 26px">
+        <div class="modal-header" style="margin-bottom: 4px">
+          <h3 style="margin: 0">Save your API credentials</h3>
+        </div>
+        <p style="color: var(--text-dim); font-size: 13px; margin: 0 0 16px">
+          The secret is shown only this one time -- copy both now. You won't be
+          able to view the secret again after closing this window.
+        </p>
+
+        <label
+          style="
+            font-size: 11.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+          "
+          >API Key</label
+        >
+        <div
+          class="card"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+          "
+        >
+          <span
+            id="key-result-api-key"
+            class="mono"
+            style="font-size: 13px; word-break: break-all"
+          ></span>
+          <button
+            class="btn btn-sm"
+            style="width: auto; flex: none"
+            onclick="
+              copyToClipboard(
+                document.getElementById('key-result-api-key').textContent,
+                this,
+              )
+            "
+          >
+            Copy
+          </button>
+        </div>
+
+        <label
+          style="
+            font-size: 11.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+          "
+          >API Secret</label
+        >
+        <div
+          class="card"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+          "
+        >
+          <span
+            id="key-result-api-secret"
+            class="mono"
+            style="font-size: 13px; word-break: break-all"
+          ></span>
+          <button
+            class="btn btn-sm"
+            style="width: auto; flex: none"
+            onclick="
+              copyToClipboard(
+                document.getElementById('key-result-api-secret').textContent,
+                this,
+              )
+            "
+          >
+            Copy
+          </button>
+        </div>
+
+        <button
+          class="btn btn-primary"
+          style="margin-top: 20px; width: 100%"
+          onclick="
+            document.getElementById('key-result-modal').style.display = 'none'
+          "
+        >
+          I've saved these -- Close
+        </button>
       </div>
     </div>
 
@@ -5590,6 +5802,13 @@
             setFieldError(
               errElId,
               "Please fill in organization, designation, and address first.",
+            );
+            return;
+          }
+          if (!document.getElementById("signup-accept-legal").checked) {
+            setFieldError(
+              errElId,
+              "Please accept the Terms & Conditions and Privacy Policy to continue.",
             );
             return;
           }
@@ -9702,39 +9921,96 @@
           document.getElementById("api-credentials-empty").style.display =
             creds.length ? "none" : "block";
           creds.forEach((c) => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-              <td class="mono" style="padding: 6px 0">${c.api_key}</td>
-              <td>${c.label || "--"}</td>
-              <td>${c.status}</td>
-              <td>${c.last_used_at ? new Date(c.last_used_at).toLocaleDateString() : "Never"}</td>
-              <td>${c.status === "active" ? `<button class="btn btn-sm" onclick="revokeApiCredential('${c.id}')">Revoke</button>` : ""}</td>
+            const card = document.createElement("div");
+            card.className = "card";
+            card.style.cssText =
+              "padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;";
+            const statusColor =
+              c.status === "active"
+                ? "var(--canopy-bright)"
+                : "var(--text-dim)";
+            card.innerHTML = `
+              <div style="min-width: 220px">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 3px">
+                  <span class="mono" style="font-size: 13px">${c.api_key}</span>
+                  <button
+                    class="icon-btn"
+                    style="width: 22px; height: 22px"
+                    title="Copy API key"
+                    onclick="copyToClipboard('${c.api_key}', this)"
+                  >
+                    <svg viewBox="0 0 24 24" width="13" height="13" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-dim)">
+                  ${c.label || "Unlabelled"} &middot;
+                  <span style="color: ${statusColor}">${c.status}</span> &middot;
+                  Last used: ${c.last_used_at ? new Date(c.last_used_at).toLocaleDateString() : "Never"}
+                </div>
+              </div>
+              ${
+                c.status === "active"
+                  ? `<button class="btn btn-sm" style="width: auto; flex: none" onclick="revokeApiCredential('${c.id}')">Revoke</button>`
+                  : ""
+              }
             `;
-            rows.appendChild(tr);
+            rows.appendChild(card);
           });
         } catch (e) {
           console.warn("Could not load API credentials:", e);
         }
       }
 
+      function copyToClipboard(text, btnEl) {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            if (!btnEl) return;
+            const original = btnEl.innerHTML;
+            btnEl.innerHTML = "&#10003;";
+            setTimeout(() => (btnEl.innerHTML = original), 1200);
+          })
+          .catch(() =>
+            showToast("Could not copy -- please select and copy manually."),
+          );
+      }
+
+      function openGenerateKeyModal() {
+        document.getElementById("generate-key-label").value = "";
+        document.getElementById("generate-key-modal").style.display = "flex";
+      }
+
+      function closeGenerateKeyModal() {
+        document.getElementById("generate-key-modal").style.display = "none";
+      }
+
       async function generateApiCredential() {
-        const label = prompt(
-          "Optional label for this key (e.g. 'Production'):",
-          "",
-        );
+        const label = document
+          .getElementById("generate-key-label")
+          .value.trim();
+        const btn = document.getElementById("generate-key-submit-btn");
+        btn.disabled = true;
         try {
           const cred = await api("/business/api-credentials", {
             method: "POST",
             body: JSON.stringify({ label: label || null }),
           });
+          closeGenerateKeyModal();
           // Shown exactly once -- the backend never stores or re-displays
           // the raw secret again after this (see ApiCredential in models.py).
-          alert(
-            `Save these now -- the secret is shown only this one time:\n\nAPI Key: ${cred.api_key}\nAPI Secret: ${cred.api_secret}`,
-          );
+          document.getElementById("key-result-api-key").textContent =
+            cred.api_key;
+          document.getElementById("key-result-api-secret").textContent =
+            cred.api_secret;
+          document.getElementById("key-result-modal").style.display = "flex";
           loadApiCredentials();
         } catch (e) {
           showToast("Could not generate key: " + e.message);
+        } finally {
+          btn.disabled = false;
         }
       }
 
