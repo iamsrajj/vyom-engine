@@ -202,7 +202,16 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual
 
             try:
                 farm = db.get(Polygon, uuid.UUID(farm_id))
-                if farm is not None:
+                # Drafts and prewarm seeds are never shown to the farmer
+                # (see list_farms' include_drafts filter) -- notifying about
+                # one is confusing since it references a "field" they can't
+                # see or recognize (e.g. the cold-start placeholder created
+                # the instant a farmer places the first point while drawing
+                # a new field -- see createDraftFarmFromPoint() in
+                # web/index.html). Gap-fill interpolation above still runs
+                # normally so the data is ready the moment the draft is
+                # promoted to a real farm; only the notification is skipped.
+                if farm is not None and not farm.is_draft and not farm.is_prewarm_seed:
                     notify_farm_data_update(
                         db, farm, platform, had_data_before=had_data_before)
             except Exception:  # noqa: BLE001 -- a notification failure must never
@@ -217,7 +226,7 @@ def fill_gaps_callback(results: list, farm_id: str, platform: str, notify_manual
             # roughly every 6h for every farm with nothing new to report.
             try:
                 farm = db.get(Polygon, uuid.UUID(farm_id))
-                if farm is not None:
+                if farm is not None and not farm.is_draft and not farm.is_prewarm_seed:
                     notify_refresh_complete(db, farm)
             except Exception:  # noqa: BLE001
                 logger.exception(
