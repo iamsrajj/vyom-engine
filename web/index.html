@@ -835,6 +835,24 @@
         box-shadow: var(--shadow-sm);
       }
 
+      /* ---- Settings: legal footer ---- */
+      .legal-footer-link {
+        color: var(--text-dim);
+        text-decoration: none;
+        padding: 4px 10px;
+        border-radius: 6px;
+        transition:
+          color 0.15s,
+          background 0.15s;
+      }
+      .legal-footer-link:hover {
+        color: var(--canopy-bright);
+        background: var(--bg-deep);
+      }
+      .legal-footer-sep {
+        color: var(--line);
+      }
+
       /* ---- Pricing page ---- */
       .pricing-feature-list {
         list-style: none;
@@ -3450,6 +3468,21 @@
         <div class="nav-divider"></div>
         <div
           class="nav-item"
+          data-page="billing"
+          onclick="switchPage('billing')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <line x1="2" y1="10" x2="22" y2="10" />
+          </svg>
+          Billing
+        </div>
+        <div
+          class="nav-item"
           data-page="settings"
           onclick="switchPage('settings')"
         >
@@ -4988,36 +5021,10 @@
               <div class="card" style="padding: 24px 26px">
                 <div
                   style="
-                    display: grid;
-                    grid-template-columns: auto 1fr;
-                    column-gap: 10px;
-                    row-gap: 10px;
-                    font-size: 14px;
-                    margin-bottom: 18px;
-                  "
-                >
-                  <span style="color: var(--text-dim)">Status</span
-                  ><span id="biz-status-value"></span>
-                  <span style="color: var(--text-dim)">Company</span
-                  ><span id="biz-company-name"></span>
-                  <span style="color: var(--text-dim)">Registered address</span
-                  ><span id="biz-company-address"></span>
-                  <span style="color: var(--text-dim)">GSTIN</span
-                  ><span id="biz-company-gstin" class="mono"></span>
-                  <span style="color: var(--text-dim)">Business email</span
-                  ><span id="biz-company-email"></span>
-                  <span style="color: var(--text-dim)">Wallet balance</span
-                  ><span id="biz-wallet-balance" class="mono"></span>
-                </div>
-
-                <div
-                  style="
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin: 18px 0 10px;
-                    padding-top: 14px;
-                    border-top: 1px solid var(--line);
+                    margin-bottom: 10px;
                   "
                 >
                   <h4 style="margin: 0">API Credentials</h4>
@@ -5039,30 +5046,6 @@
                 >
                   No API keys yet.
                 </p>
-                <div style="display: flex; gap: 10px; margin-top: 12px">
-                  <a
-                    href="/developers/docs"
-                    target="_blank"
-                    class="btn btn-sm"
-                    style="
-                      width: auto;
-                      text-decoration: none;
-                      text-align: center;
-                    "
-                    >API docs</a
-                  >
-                  <a
-                    href="/developers/playground"
-                    target="_blank"
-                    class="btn btn-sm"
-                    style="
-                      width: auto;
-                      text-decoration: none;
-                      text-align: center;
-                    "
-                    >API playground</a
-                  >
-                </div>
 
                 <div
                   style="
@@ -5106,6 +5089,72 @@
                   No invoices yet.
                 </p>
               </div>
+
+              <!-- ================= Developer resources ================= -->
+              <div class="card" style="padding: 22px 26px; margin-top: 20px">
+                <h4 style="margin: 0 0 4px">Developer resources</h4>
+                <p
+                  style="
+                    color: var(--text-dim);
+                    font-size: 13px;
+                    margin: 0 0 16px;
+                  "
+                >
+                  Reference docs for every endpoint, plus a live playground to
+                  try calls with your own key and secret.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                  <a
+                    href="/developers/docs"
+                    target="_blank"
+                    rel="noopener"
+                    class="btn"
+                    style="
+                      width: auto;
+                      text-decoration: none;
+                      text-align: center;
+                    "
+                    >API docs</a
+                  >
+                  <a
+                    href="/developers/playground"
+                    target="_blank"
+                    rel="noopener"
+                    class="btn btn-primary"
+                    style="
+                      width: auto;
+                      text-decoration: none;
+                      text-align: center;
+                    "
+                    >Open Playground</a
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-billing" style="display: none">
+          <div class="page-scroll">
+            <div class="page-header">
+              <h1>Billing</h1>
+              <p>
+                Every payment made from this account -- farm plans and, for
+                business accounts, the annual maintenance fee and API invoices.
+                Download or email yourself a copy of any paid invoice.
+              </p>
+            </div>
+            <div class="card" style="padding: 22px">
+              <div
+                id="billing-payments-rows"
+                style="display: grid; gap: 10px"
+              ></div>
+              <p
+                id="billing-payments-empty"
+                style="color: var(--text-dim); font-size: 13px; display: none"
+              >
+                No payments yet.
+              </p>
             </div>
           </div>
         </div>
@@ -5283,32 +5332,6 @@
               </div>
             </div>
 
-            <!-- ================= Billing ================= -->
-            <div class="card" style="padding: 22px; margin-top: 20px">
-              <h3 style="margin: 0 0 4px">Billing</h3>
-              <p
-                style="
-                  color: var(--text-dim);
-                  font-size: 13px;
-                  margin: 0 0 16px;
-                "
-              >
-                Every payment made from this account -- farm plans and, for
-                business accounts, the annual maintenance fee and API invoices.
-                Download or email yourself a copy of any invoice.
-              </p>
-              <div
-                id="billing-payments-rows"
-                style="display: grid; gap: 10px"
-              ></div>
-              <p
-                id="billing-payments-empty"
-                style="color: var(--text-dim); font-size: 13px; display: none"
-              >
-                No payments yet.
-              </p>
-            </div>
-
             <!-- ================= Business Account ================= -->
             <div id="business-account-settings-card" style="display: none">
               <div class="card" style="padding: 22px; margin-top: 20px">
@@ -5322,15 +5345,13 @@
                   "
                 >
                   <h3 style="margin: 0 0 6px">Business Account</h3>
-                  <a
-                    href="#"
-                    style="font-size: 12.5px"
-                    onclick="
-                      switchPage('api');
-                      return false;
-                    "
-                    >Manage business account &amp; API keys &rarr;</a
+                  <button
+                    class="btn btn-sm"
+                    style="width: auto"
+                    onclick="switchPage('api')"
                   >
+                    Manage business account &amp; API keys &rarr;
+                  </button>
                 </div>
                 <div
                   style="
@@ -5358,23 +5379,44 @@
               style="
                 display: flex;
                 flex-wrap: wrap;
-                gap: 6px 18px;
+                align-items: center;
                 justify-content: center;
-                margin: 24px 0 4px;
+                gap: 4px;
+                margin: 28px 0 4px;
+                padding-top: 18px;
+                border-top: 1px solid var(--line);
                 font-size: 12.5px;
-                color: var(--text-dim);
               "
             >
-              <a href="/legal/terms-and-conditions.html" target="_blank"
+              <a
+                href="/legal/terms-and-conditions.html"
+                target="_blank"
+                rel="noopener"
+                class="legal-footer-link"
                 >Terms &amp; Conditions</a
               >
-              <a href="/legal/privacy-policy.html" target="_blank"
+              <span class="legal-footer-sep">&middot;</span>
+              <a
+                href="/legal/privacy-policy.html"
+                target="_blank"
+                rel="noopener"
+                class="legal-footer-link"
                 >Privacy Policy</a
               >
-              <a href="/legal/refund-policy.html" target="_blank"
+              <span class="legal-footer-sep">&middot;</span>
+              <a
+                href="/legal/refund-policy.html"
+                target="_blank"
+                rel="noopener"
+                class="legal-footer-link"
                 >Refund Policy</a
               >
-              <a href="/legal/billing-terms.html" target="_blank"
+              <span class="legal-footer-sep">&middot;</span>
+              <a
+                href="/legal/billing-terms.html"
+                target="_blank"
+                rel="noopener"
+                class="legal-footer-link"
                 >Billing Terms</a
               >
             </div>
@@ -10208,20 +10250,6 @@
           settingsCard.style.display = isActiveBusiness ? "block" : "none";
 
         if (isActiveBusiness) {
-          document.getElementById("biz-status-value").textContent =
-            info.business_expires_at
-              ? `Active until ${new Date(info.business_expires_at).toLocaleDateString()}`
-              : "Active";
-          document.getElementById("biz-company-name").textContent =
-            info.company_legal_name || "--";
-          document.getElementById("biz-company-address").textContent =
-            info.company_registered_address || "--";
-          document.getElementById("biz-company-gstin").textContent =
-            info.gstin || "--";
-          document.getElementById("biz-company-email").textContent =
-            info.business_email || "--";
-          document.getElementById("biz-wallet-balance").textContent =
-            `₹${((info.wallet_balance_paise || 0) / 100).toFixed(2)}`;
           loadApiCredentials();
           loadBusinessInvoices();
 
@@ -10497,16 +10525,12 @@
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             });
-            card.innerHTML = `
-              <div style="min-width: 240px">
-                <div style="font-size: 13.5px; font-weight: 500; margin-bottom: 2px">${p.description}</div>
-                <div style="font-size: 12px; color: var(--text-dim)">
-                  ${p.invoice_number} &middot; ${dateStr} &middot;
-                  <span style="color: ${statusColors[p.status] || "var(--text-dim)"}">${p.status}</span>
-                </div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 14px; flex: none">
-                <div style="font-weight: 600; font-size: 14px">&#8377;${amount}</div>
+            // Only a completed payment actually has a real invoice --
+            // "created" (checkout not finished) and "failed" have nothing
+            // to download or email.
+            const isPaid = p.status === "paid";
+            const actionsHtml = isPaid
+              ? `
                 <button
                   class="icon-btn"
                   title="Download invoice"
@@ -10528,6 +10552,19 @@
                     <path d="M22 6 12 13 2 6"/>
                   </svg>
                 </button>
+              `
+              : "";
+            card.innerHTML = `
+              <div style="min-width: 240px">
+                <div style="font-size: 13.5px; font-weight: 500; margin-bottom: 2px">${p.description}</div>
+                <div style="font-size: 12px; color: var(--text-dim)">
+                  ${p.invoice_number} &middot; ${dateStr} &middot;
+                  <span style="color: ${statusColors[p.status] || "var(--text-dim)"}">${p.status}</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px; flex: none">
+                <div style="font-weight: 600; font-size: 14px">&#8377;${amount}</div>
+                ${actionsHtml}
               </div>
             `;
             rows.appendChild(card);

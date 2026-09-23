@@ -23,4 +23,13 @@ def partner_docs():
         openapi_url="/developers/openapi.json",
         title="Vyom Engine Partner API -- Docs",
         swagger_favicon_url="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png",
+        # Hides the auto-generated "Schemas" section at the bottom (every
+        # request/response model, including internal ones like CouponIn/
+        # ContactRequest that a business integrator never touches directly --
+        # they're only listed because *some* partner endpoint references
+        # them). The parameter list stays visible in each endpoint anyway,
+        # which is what an integrator actually needs. -1 hides the section
+        # entirely rather than just collapsing it (0 would still show empty
+        # headers for every schema).
+        swagger_ui_parameters={"defaultModelsExpandDepth": -1},
     )

@@ -376,11 +376,23 @@ def _find_record_or_404(db: Session, user: User, payment_type: str, payment_id: 
     return record
 
 
+def _require_paid(record) -> None:
+    # A "created" (abandoned checkout) or "failed" payment never completed,
+    # so there's no real invoice to hand out for it -- the frontend already
+    # hides the download/email buttons for these (see loadBillingPayments
+    # in web/index.html), this is the server-side backstop against someone
+    # hitting the endpoint directly with a non-paid id.
+    if record.status != "paid":
+        raise HTTPException(
+            400, f"This payment is '{record.status}', not paid -- there's no invoice to send yet.")
+
+
 @router.get("/payments/{payment_type}/{payment_id}/invoice.pdf")
 def download_payment_invoice(payment_type: str, payment_id: str,
                              user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
     user = _get_user(db, user_id)
     record = _find_record_or_404(db, user, payment_type, payment_id)
+    _require_paid(record)
     pdf_bytes = invoicing.build_invoice_pdf_for_record(db, user, record)
     return Response(
         content=pdf_bytes, media_type="application/pdf",
@@ -394,6 +406,7 @@ def email_payment_invoice(payment_type: str, payment_id: str,
                           user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
     user = _get_user(db, user_id)
     record = _find_record_or_404(db, user, payment_type, payment_id)
+    _require_paid(record)
     try:
         invoicing.email_invoice_to_user(db, user, record)
     except EmailSendError as exc:
