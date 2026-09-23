@@ -200,6 +200,13 @@ class Settings(BaseSettings):
     gst_percent: float = 18.0
     gst_number: str = ""  # NovosEdge's GSTIN, shown on invoices
 
+    # Issuer details shown on every generated invoice PDF (vyom/invoice_pdf.py) --
+    # kept as settings rather than hardcoded so they can change without a
+    # code deploy. Defaults match the entity NovosEdge actually filed under.
+    platform_legal_name: str = "NovosEdge Private Limited"
+    platform_registered_address: str = "BM-110, 2nd floor, room no 1, Kamla Nagar, Bhopal, Madhya Pradesh, India"
+    platform_invoice_email: str = "support@agridoot.com"
+
     # Individual farm plans (see vyom/farm_pricing.py). Per-acre, GST-
     # exclusive, in paise -- kept as settings rather than hardcoded so
     # prices can change without a code deploy.

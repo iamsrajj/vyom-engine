@@ -9,6 +9,7 @@ change only has to happen in one place.
 """
 import logging
 import smtplib
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -27,9 +28,12 @@ class EmailSendError(Exception):
     logged (notifications.py's email sends are best-effort, see there)."""
 
 
-def send_email(to, subject: str, html_body: str, text_fallback: str) -> None:
-    """to: a single address or a list of addresses. Raises EmailSendError on
-    any failure (missing config or an SMTP error) -- callers decide how to
+def send_email(to, subject: str, html_body: str, text_fallback: str,
+               attachments: list[tuple[str, bytes, str]] | None = None) -> None:
+    """to: a single address or a list of addresses. attachments: optional
+    list of (filename, content_bytes, mime_type) tuples -- used by
+    vyom/invoicing.py to attach invoice PDFs. Raises EmailSendError on any
+    failure (missing config or an SMTP error) -- callers decide how to
     handle that."""
     if not settings.smtp_username or not settings.smtp_app_password:
         raise EmailSendError(
@@ -39,12 +43,21 @@ def send_email(to, subject: str, html_body: str, text_fallback: str) -> None:
     if not recipients:
         raise EmailSendError("No recipient address given")
 
-    msg = MIMEMultipart("alternative")
+    msg = MIMEMultipart("mixed")
     msg["Subject"] = subject
     msg["From"] = f"Vyom Engine <{settings.smtp_username}>"
     msg["To"] = ", ".join(recipients)
-    msg.attach(MIMEText(text_fallback, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(text_fallback, "plain", "utf-8"))
+    body.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(body)
+
+    for filename, content, mime_type in attachments or []:
+        maintype, _, subtype = mime_type.partition("/")
+        part = MIMEApplication(content, _subtype=subtype or "octet-stream")
+        part.add_header("Content-Disposition", "attachment", filename=filename)
+        msg.attach(part)
 
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:

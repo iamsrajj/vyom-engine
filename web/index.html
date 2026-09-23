@@ -835,6 +835,80 @@
         box-shadow: var(--shadow-sm);
       }
 
+      /* ---- Pricing page ---- */
+      .pricing-feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 14px 0 0;
+        display: grid;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+      .pricing-feature-list li {
+        padding-left: 20px;
+        position: relative;
+        line-height: 1.4;
+      }
+      .pricing-feature-list li::before {
+        content: "\2713";
+        position: absolute;
+        left: 0;
+        color: var(--canopy-bright);
+        font-weight: 700;
+      }
+
+      /* ---- Business upgrade stepper ---- */
+      .biz-step-dot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        opacity: 0.45;
+      }
+      .biz-step-dot.active,
+      .biz-step-dot.done {
+        opacity: 1;
+      }
+      .biz-step-num {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        background: var(--bg-deep);
+        border: 1.5px solid var(--line);
+        color: var(--text-dim);
+      }
+      .biz-step-dot.active .biz-step-num {
+        border-color: var(--canopy);
+        color: var(--canopy-bright);
+      }
+      .biz-step-dot.done .biz-step-num {
+        background: var(--canopy);
+        border-color: var(--canopy);
+        color: #fff;
+      }
+      .biz-step-label {
+        font-size: 11px;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .biz-step-dot.active .biz-step-label {
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .biz-step-connector {
+        flex: 1;
+        height: 1.5px;
+        background: var(--line);
+        margin-bottom: 18px;
+      }
+
       select,
       input[type="text"],
       input[type="password"] {
@@ -3349,6 +3423,33 @@
         <div class="nav-divider"></div>
         <div
           class="nav-item"
+          data-page="pricing"
+          onclick="switchPage('pricing')"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+            />
+          </svg>
+          Pricing
+        </div>
+        <div class="nav-item" data-page="api" onclick="switchPage('api')">
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M6 9l-4 3 4 3M18 9l4 3-4 3M14.5 4l-5 16" />
+          </svg>
+          API
+        </div>
+        <div class="nav-divider"></div>
+        <div
+          class="nav-item"
           data-page="settings"
           onclick="switchPage('settings')"
         >
@@ -4515,6 +4616,500 @@
           </div>
         </div>
 
+        <div class="page-view" id="page-pricing" style="display: none">
+          <div class="page-scroll">
+            <div class="page-header">
+              <h1>Pricing</h1>
+              <p>
+                Simple, competitive pricing for the full satellite-monitoring
+                stack. Prices are exclusive of GST.
+              </p>
+            </div>
+
+            <!-- Individual plans -->
+            <h3 style="margin: 0 0 4px">Individual farm plans</h3>
+            <p
+              style="
+                color: var(--text-dim);
+                font-size: 13.5px;
+                margin: 0 0 14px;
+              "
+            >
+              Billed once per farm at creation, per acre. Covers everything a
+              single field needs.
+            </p>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 16px;
+                margin-bottom: 30px;
+              "
+            >
+              <div class="card" style="padding: 22px">
+                <div
+                  style="
+                    color: var(--text-dim);
+                    font-size: 12.5px;
+                    text-transform: uppercase;
+                  "
+                >
+                  3 months
+                </div>
+                <div style="font-size: 28px; font-weight: 700; margin: 6px 0">
+                  &#8377;85<span
+                    style="
+                      font-size: 14px;
+                      font-weight: 400;
+                      color: var(--text-dim);
+                    "
+                    >/acre</span
+                  >
+                </div>
+                <ul class="pricing-feature-list">
+                  <li>All satellite indices (NDVI, NDRE, MSAVI2 &amp; more)</li>
+                  <li>Hyperlocal weather data</li>
+                  <li>Gyan AI expanded access</li>
+                  <li>Farm-based dynamic advisory</li>
+                </ul>
+              </div>
+              <div
+                class="card"
+                style="padding: 22px; border-color: var(--canopy)"
+              >
+                <div
+                  style="
+                    color: var(--canopy-bright);
+                    font-size: 12.5px;
+                    text-transform: uppercase;
+                    font-weight: 600;
+                  "
+                >
+                  6 months &middot; Most popular
+                </div>
+                <div style="font-size: 28px; font-weight: 700; margin: 6px 0">
+                  &#8377;155<span
+                    style="
+                      font-size: 14px;
+                      font-weight: 400;
+                      color: var(--text-dim);
+                    "
+                    >/acre</span
+                  >
+                </div>
+                <ul class="pricing-feature-list">
+                  <li>All satellite indices (NDVI, NDRE, MSAVI2 &amp; more)</li>
+                  <li>Hyperlocal weather data</li>
+                  <li>Gyan AI expanded access</li>
+                  <li>Farm-based dynamic advisory</li>
+                </ul>
+              </div>
+              <div class="card" style="padding: 22px">
+                <div
+                  style="
+                    color: var(--text-dim);
+                    font-size: 12.5px;
+                    text-transform: uppercase;
+                  "
+                >
+                  12 months
+                </div>
+                <div style="font-size: 28px; font-weight: 700; margin: 6px 0">
+                  &#8377;295<span
+                    style="
+                      font-size: 14px;
+                      font-weight: 400;
+                      color: var(--text-dim);
+                    "
+                    >/acre</span
+                  >
+                </div>
+                <ul class="pricing-feature-list">
+                  <li>All satellite indices (NDVI, NDRE, MSAVI2 &amp; more)</li>
+                  <li>Hyperlocal weather data</li>
+                  <li>Gyan AI expanded access</li>
+                  <li>Farm-based dynamic advisory</li>
+                  <li>Best per-month value</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Business account -->
+            <h3 style="margin: 0 0 4px">Business account</h3>
+            <p
+              style="
+                color: var(--text-dim);
+                font-size: 13.5px;
+                margin: 0 0 14px;
+              "
+            >
+              For organizations that want programmatic access across many farms.
+            </p>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 16px;
+                margin-bottom: 30px;
+              "
+            >
+              <div class="card" style="padding: 22px">
+                <div
+                  style="
+                    color: var(--text-dim);
+                    font-size: 12.5px;
+                    text-transform: uppercase;
+                  "
+                >
+                  Annual maintenance
+                </div>
+                <div style="font-size: 28px; font-weight: 700; margin: 6px 0">
+                  &#8377;999<span
+                    style="
+                      font-size: 14px;
+                      font-weight: 400;
+                      color: var(--text-dim);
+                    "
+                    >/year</span
+                  >
+                </div>
+                <ul class="pricing-feature-list">
+                  <li>Generate and manage API keys</li>
+                  <li>Create/update/fetch farms programmatically</li>
+                  <li>API docs + interactive playground</li>
+                  <li>Rate-limited, secure, built to never fail</li>
+                </ul>
+              </div>
+              <div class="card" style="padding: 22px">
+                <div
+                  style="
+                    color: var(--text-dim);
+                    font-size: 12.5px;
+                    text-transform: uppercase;
+                  "
+                >
+                  API-created farms
+                </div>
+                <div style="font-size: 28px; font-weight: 700; margin: 6px 0">
+                  &#8377;55<span
+                    style="
+                      font-size: 14px;
+                      font-weight: 400;
+                      color: var(--text-dim);
+                    "
+                    >/acre/year</span
+                  >
+                </div>
+                <ul class="pricing-feature-list">
+                  <li>Satellite indices for farms you create via API</li>
+                  <li>Billed monthly in arrears, invoice emailed</li>
+                  <li>15-day window to pay before restriction</li>
+                  <li>
+                    Covers indices only -- add weather/advisory per farm from
+                    the dashboard
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <button
+              class="btn btn-primary"
+              style="width: auto"
+              onclick="switchPage('api')"
+            >
+              Get started with a Business Account
+            </button>
+          </div>
+        </div>
+
+        <div class="page-view" id="page-api" style="display: none">
+          <div class="page-scroll">
+            <div class="page-header">
+              <h1>API &amp; Business Account</h1>
+              <p>
+                Get an API to create, update, and fetch your farms' satellite
+                indices programmatically.
+              </p>
+            </div>
+            <div id="business-upgrade-flow" style="display: none">
+              <div class="card" style="padding: 24px 26px">
+                <!-- Stepper header -->
+                <div
+                  id="biz-stepper"
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    margin-bottom: 22px;
+                  "
+                >
+                  <div class="biz-step-dot" data-step="1">
+                    <span class="biz-step-num">1</span>
+                    <span class="biz-step-label">Verify GST</span>
+                  </div>
+                  <div class="biz-step-connector"></div>
+                  <div class="biz-step-dot" data-step="2">
+                    <span class="biz-step-num">2</span>
+                    <span class="biz-step-label">Business email</span>
+                  </div>
+                  <div class="biz-step-connector"></div>
+                  <div class="biz-step-dot" data-step="3">
+                    <span class="biz-step-num">3</span>
+                    <span class="biz-step-label">Payment</span>
+                  </div>
+                </div>
+
+                <div id="biz-step-gst">
+                  <label>GSTIN</label>
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="biz-gstin-input"
+                      placeholder="e.g. 23AAJCN0421G1ZZ"
+                      style="flex: 1; text-transform: uppercase"
+                      oninput="updateBizStepButtons()"
+                    />
+                    <button
+                      class="btn btn-primary"
+                      style="width: auto"
+                      onclick="verifyBusinessGst()"
+                      id="biz-verify-gst-btn"
+                      disabled
+                    >
+                      Verify GST
+                    </button>
+                  </div>
+                  <p
+                    id="biz-gst-status"
+                    style="font-size: 12.5px; margin-top: 6px"
+                  ></p>
+                </div>
+
+                <div
+                  id="biz-step-email"
+                  style="
+                    display: none;
+                    margin-top: 18px;
+                    padding-top: 18px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <label
+                    >Business email
+                    <span style="font-weight: 400; color: var(--text-dim)"
+                      >(not Gmail/Yahoo/Outlook, and different from your login
+                      email)</span
+                    ></label
+                  >
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="biz-email-input"
+                      placeholder="finance@yourcompany.com"
+                      style="flex: 1"
+                      oninput="updateBizStepButtons()"
+                    />
+                    <button
+                      class="btn"
+                      style="width: auto"
+                      onclick="startBusinessEmailVerification()"
+                      id="biz-send-code-btn"
+                      disabled
+                    >
+                      Send code
+                    </button>
+                  </div>
+                  <div
+                    id="biz-email-otp-row"
+                    style="display: none; margin-top: 10px"
+                  >
+                    <label>Verification code</label>
+                    <div style="display: flex; gap: 8px">
+                      <input
+                        type="text"
+                        id="biz-email-otp-input"
+                        placeholder="6-digit code"
+                        style="flex: 1"
+                        maxlength="6"
+                        oninput="updateBizStepButtons()"
+                      />
+                      <button
+                        class="btn btn-primary"
+                        style="width: auto"
+                        onclick="verifyBusinessEmailOtp()"
+                        id="biz-verify-otp-btn"
+                        disabled
+                      >
+                        Verify code
+                      </button>
+                    </div>
+                  </div>
+                  <p
+                    id="biz-email-status"
+                    style="font-size: 12.5px; margin-top: 6px"
+                  ></p>
+                </div>
+
+                <div
+                  id="biz-step-pay"
+                  style="
+                    display: none;
+                    margin-top: 18px;
+                    padding-top: 18px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <p style="font-size: 13.5px">
+                    Verified! Upgrading costs
+                    <strong>&#8377;999 + GST / year</strong>.
+                  </p>
+                  <label>Coupon code (optional)</label>
+                  <div style="display: flex; gap: 8px; margin-bottom: 10px">
+                    <input
+                      type="text"
+                      id="biz-upgrade-coupon"
+                      placeholder="e.g. SAVE15"
+                      style="flex: 1"
+                    />
+                  </div>
+                  <button
+                    class="btn btn-primary"
+                    style="width: auto"
+                    onclick="payBusinessUpgrade()"
+                    id="biz-pay-btn"
+                  >
+                    Pay &amp; upgrade to Business
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- State: already business -->
+            <div id="business-active-panel" style="display: none">
+              <div class="card" style="padding: 24px 26px">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: auto 1fr;
+                    column-gap: 10px;
+                    row-gap: 10px;
+                    font-size: 14px;
+                    margin-bottom: 18px;
+                  "
+                >
+                  <span style="color: var(--text-dim)">Status</span
+                  ><span id="biz-status-value"></span>
+                  <span style="color: var(--text-dim)">Company</span
+                  ><span id="biz-company-name"></span>
+                  <span style="color: var(--text-dim)">Registered address</span
+                  ><span id="biz-company-address"></span>
+                  <span style="color: var(--text-dim)">GSTIN</span
+                  ><span id="biz-company-gstin" class="mono"></span>
+                  <span style="color: var(--text-dim)">Business email</span
+                  ><span id="biz-company-email"></span>
+                  <span style="color: var(--text-dim)">Wallet balance</span
+                  ><span id="biz-wallet-balance" class="mono"></span>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin: 18px 0 10px;
+                    padding-top: 14px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <h4 style="margin: 0">API Credentials</h4>
+                  <button
+                    class="btn btn-sm"
+                    style="width: auto"
+                    onclick="openGenerateKeyModal()"
+                  >
+                    + Generate new key
+                  </button>
+                </div>
+                <div
+                  id="api-credentials-rows"
+                  style="display: grid; gap: 10px"
+                ></div>
+                <p
+                  id="api-credentials-empty"
+                  style="color: var(--text-dim); font-size: 13px; display: none"
+                >
+                  No API keys yet.
+                </p>
+                <div style="display: flex; gap: 10px; margin-top: 12px">
+                  <a
+                    href="/developers/docs"
+                    target="_blank"
+                    class="btn btn-sm"
+                    style="
+                      width: auto;
+                      text-decoration: none;
+                      text-align: center;
+                    "
+                    >API docs</a
+                  >
+                  <a
+                    href="/developers/playground"
+                    target="_blank"
+                    class="btn btn-sm"
+                    style="
+                      width: auto;
+                      text-decoration: none;
+                      text-align: center;
+                    "
+                    >API playground</a
+                  >
+                </div>
+
+                <div
+                  style="
+                    margin: 22px 0 10px;
+                    padding-top: 14px;
+                    border-top: 1px solid var(--line);
+                  "
+                >
+                  <h4 style="margin: 0 0 10px">Invoices</h4>
+                </div>
+                <table
+                  style="
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                  "
+                >
+                  <thead>
+                    <tr
+                      style="
+                        text-align: left;
+                        color: var(--text-dim);
+                        font-size: 11.5px;
+                        text-transform: uppercase;
+                      "
+                    >
+                      <th style="padding: 6px 0">Month</th>
+                      <th>Area</th>
+                      <th>Total</th>
+                      <th>Due</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="business-invoices-rows"></tbody>
+                </table>
+                <p
+                  id="business-invoices-empty"
+                  style="color: var(--text-dim); font-size: 13px; display: none"
+                >
+                  No invoices yet.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="page-view" id="page-settings" style="display: none">
           <div class="page-scroll">
             <div class="page-header">
@@ -4688,9 +5283,9 @@
               </div>
             </div>
 
-            <!-- ================= Business Account ================= -->
+            <!-- ================= Billing ================= -->
             <div class="card" style="padding: 22px; margin-top: 20px">
-              <h3 style="margin: 0 0 6px">Business Account</h3>
+              <h3 style="margin: 0 0 4px">Billing</h3>
               <p
                 style="
                   color: var(--text-dim);
@@ -4698,129 +5293,45 @@
                   margin: 0 0 16px;
                 "
               >
-                Get an API to create, update, and fetch your farms' satellite
-                indices programmatically.
+                Every payment made from this account -- farm plans and, for
+                business accounts, the annual maintenance fee and API invoices.
+                Download or email yourself a copy of any invoice.
               </p>
+              <div
+                id="billing-payments-rows"
+                style="display: grid; gap: 10px"
+              ></div>
+              <p
+                id="billing-payments-empty"
+                style="color: var(--text-dim); font-size: 13px; display: none"
+              >
+                No payments yet.
+              </p>
+            </div>
 
-              <!-- State: not yet a business account -->
-              <div id="business-upgrade-flow" style="display: none">
-                <div id="biz-step-gst">
-                  <label>GSTIN</label>
-                  <div style="display: flex; gap: 8px">
-                    <input
-                      type="text"
-                      id="biz-gstin-input"
-                      placeholder="e.g. 23AAJCN0421G1ZZ"
-                      style="flex: 1; text-transform: uppercase"
-                    />
-                    <button
-                      class="btn btn-primary"
-                      style="width: auto"
-                      onclick="verifyBusinessGst()"
-                    >
-                      Verify GST
-                    </button>
-                  </div>
-                  <p
-                    id="biz-gst-status"
-                    style="font-size: 12.5px; margin-top: 6px"
-                  ></p>
-                </div>
-
+            <!-- ================= Business Account ================= -->
+            <div id="business-account-settings-card" style="display: none">
+              <div class="card" style="padding: 22px; margin-top: 20px">
                 <div
-                  id="biz-step-email"
                   style="
-                    display: none;
-                    margin-top: 18px;
-                    padding-top: 18px;
-                    border-top: 1px solid var(--line);
+                    display: flex;
+                    align-items: baseline;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 8px;
                   "
                 >
-                  <label
-                    >Business email
-                    <span style="font-weight: 400; color: var(--text-dim)"
-                      >(not Gmail/Yahoo/Outlook, and different from your login
-                      email)</span
-                    ></label
+                  <h3 style="margin: 0 0 6px">Business Account</h3>
+                  <a
+                    href="#"
+                    style="font-size: 12.5px"
+                    onclick="
+                      switchPage('api');
+                      return false;
+                    "
+                    >Manage business account &amp; API keys &rarr;</a
                   >
-                  <div style="display: flex; gap: 8px">
-                    <input
-                      type="text"
-                      id="biz-email-input"
-                      placeholder="finance@yourcompany.com"
-                      style="flex: 1"
-                    />
-                    <button
-                      class="btn"
-                      style="width: auto"
-                      onclick="startBusinessEmailVerification()"
-                    >
-                      Send code
-                    </button>
-                  </div>
-                  <div
-                    id="biz-email-otp-row"
-                    style="display: none; margin-top: 10px"
-                  >
-                    <label>Verification code</label>
-                    <div style="display: flex; gap: 8px">
-                      <input
-                        type="text"
-                        id="biz-email-otp-input"
-                        placeholder="6-digit code"
-                        style="flex: 1"
-                        maxlength="6"
-                      />
-                      <button
-                        class="btn btn-primary"
-                        style="width: auto"
-                        onclick="verifyBusinessEmailOtp()"
-                      >
-                        Verify code
-                      </button>
-                    </div>
-                  </div>
-                  <p
-                    id="biz-email-status"
-                    style="font-size: 12.5px; margin-top: 6px"
-                  ></p>
                 </div>
-
-                <div
-                  id="biz-step-pay"
-                  style="
-                    display: none;
-                    margin-top: 18px;
-                    padding-top: 18px;
-                    border-top: 1px solid var(--line);
-                  "
-                >
-                  <p style="font-size: 13.5px">
-                    Verified! Upgrading costs
-                    <strong>₹999 + GST / year</strong>.
-                  </p>
-                  <label>Coupon code (optional)</label>
-                  <div style="display: flex; gap: 8px; margin-bottom: 10px">
-                    <input
-                      type="text"
-                      id="biz-upgrade-coupon"
-                      placeholder="e.g. SAVE15"
-                      style="flex: 1"
-                    />
-                  </div>
-                  <button
-                    class="btn btn-primary"
-                    style="width: auto"
-                    onclick="payBusinessUpgrade()"
-                    id="biz-pay-btn"
-                  >
-                    Pay &amp; upgrade to Business
-                  </button>
-                </div>
-              </div>
-
-              <!-- State: already business -->
-              <div id="business-active-panel" style="display: none">
                 <div
                   style="
                     display: grid;
@@ -4828,107 +5339,17 @@
                     column-gap: 10px;
                     row-gap: 10px;
                     font-size: 14px;
-                    margin-bottom: 18px;
                   "
                 >
-                  <span style="color: var(--text-dim)">Status</span
-                  ><span id="biz-status-value"></span>
                   <span style="color: var(--text-dim)">Company</span
-                  ><span id="biz-company-name"></span>
+                  ><span id="biz-settings-company-name"></span>
                   <span style="color: var(--text-dim)">Registered address</span
-                  ><span id="biz-company-address"></span>
+                  ><span id="biz-settings-company-address"></span>
                   <span style="color: var(--text-dim)">GSTIN</span
-                  ><span id="biz-company-gstin" class="mono"></span>
-                  <span style="color: var(--text-dim)">Business email</span
-                  ><span id="biz-company-email"></span>
-                  <span style="color: var(--text-dim)">Wallet balance</span
-                  ><span id="biz-wallet-balance" class="mono"></span>
+                  ><span id="biz-settings-company-gstin" class="mono"></span>
+                  <span style="color: var(--text-dim)">Company email</span
+                  ><span id="biz-settings-company-email"></span>
                 </div>
-
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin: 18px 0 10px;
-                    padding-top: 14px;
-                    border-top: 1px solid var(--line);
-                  "
-                >
-                  <h4 style="margin: 0">API Credentials</h4>
-                  <button
-                    class="btn btn-sm"
-                    style="width: auto"
-                    onclick="openGenerateKeyModal()"
-                  >
-                    + Generate new key
-                  </button>
-                </div>
-                <div
-                  id="api-credentials-rows"
-                  style="display: grid; gap: 10px"
-                ></div>
-                <p
-                  id="api-credentials-empty"
-                  style="color: var(--text-dim); font-size: 13px; display: none"
-                >
-                  No API keys yet.
-                </p>
-                <p
-                  style="
-                    font-size: 12px;
-                    color: var(--text-dim);
-                    margin-top: 8px;
-                  "
-                >
-                  <a href="/developers/docs" target="_blank">API docs</a>
-                  &middot;
-                  <a href="/developers/playground" target="_blank"
-                    >API playground</a
-                  >
-                </p>
-
-                <div
-                  style="
-                    margin: 22px 0 10px;
-                    padding-top: 14px;
-                    border-top: 1px solid var(--line);
-                  "
-                >
-                  <h4 style="margin: 0 0 10px">Invoices</h4>
-                </div>
-                <table
-                  style="
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 13px;
-                  "
-                >
-                  <thead>
-                    <tr
-                      style="
-                        text-align: left;
-                        color: var(--text-dim);
-                        font-size: 11.5px;
-                        text-transform: uppercase;
-                      "
-                    >
-                      <th style="padding: 6px 0">Month</th>
-                      <th>Area</th>
-                      <th>Total</th>
-                      <th>Due</th>
-                      <th>Status</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="business-invoices-rows"></tbody>
-                </table>
-                <p
-                  id="business-invoices-empty"
-                  style="color: var(--text-dim); font-size: 13px; display: none"
-                >
-                  No invoices yet.
-                </p>
               </div>
             </div>
 
@@ -9733,6 +10154,7 @@
             renderAccountSettings(info);
           if (typeof renderBusinessSection === "function")
             renderBusinessSection(info);
+          loadBillingPayments();
         } catch (e) {
           // Non-fatal -- keep whatever was already shown (session username,
           // default avatar). api() itself already handles a 401 by logging out.
@@ -9772,13 +10194,18 @@
       function renderBusinessSection(info) {
         const upgradeFlow = document.getElementById("business-upgrade-flow");
         const activePanel = document.getElementById("business-active-panel");
-        if (!upgradeFlow || !activePanel) return; // settings markup not mounted yet
+        const settingsCard = document.getElementById(
+          "business-account-settings-card",
+        );
+        if (!upgradeFlow || !activePanel) return; // API page markup not mounted yet
 
         const isActiveBusiness =
           info.account_type === "business" && info.business_status === "active";
 
         upgradeFlow.style.display = isActiveBusiness ? "none" : "block";
         activePanel.style.display = isActiveBusiness ? "block" : "none";
+        if (settingsCard)
+          settingsCard.style.display = isActiveBusiness ? "block" : "none";
 
         if (isActiveBusiness) {
           document.getElementById("biz-status-value").textContent =
@@ -9797,9 +10224,22 @@
             `₹${((info.wallet_balance_paise || 0) / 100).toFixed(2)}`;
           loadApiCredentials();
           loadBusinessInvoices();
+
+          if (settingsCard) {
+            document.getElementById("biz-settings-company-name").textContent =
+              info.company_legal_name || "--";
+            document.getElementById(
+              "biz-settings-company-address",
+            ).textContent = info.company_registered_address || "--";
+            document.getElementById("biz-settings-company-gstin").textContent =
+              info.gstin || "--";
+            document.getElementById("biz-settings-company-email").textContent =
+              info.business_email || "--";
+          }
         } else {
           // Reflect whatever verification has already been completed, so
-          // reopening Settings mid-flow doesn't make the farmer redo steps.
+          // reopening the API page mid-flow doesn't make the farmer redo
+          // steps.
           document.getElementById("biz-step-gst").style.display = "block";
           const gstDone = !!info.gst_verified_at;
           document.getElementById("biz-gst-status").textContent = gstDone
@@ -9814,7 +10254,45 @@
             : "";
           document.getElementById("biz-step-pay").style.display =
             gstDone && emailDone ? "block" : "none";
+
+          setBizStepperState(gstDone, emailDone);
+          updateBizStepButtons();
         }
+      }
+
+      // Drives the visual stepper at the top of the upgrade flow -- a step
+      // is "done" (filled) once its own verification is complete, "active"
+      // (highlighted) as the current step, dim otherwise.
+      function setBizStepperState(gstDone, emailDone) {
+        const dots = document.querySelectorAll(".biz-step-dot");
+        if (!dots.length) return;
+        const state = [gstDone, emailDone, false]; // step 3 (pay) is never "done" here -- a successful payment flips isActiveBusiness instead
+        dots.forEach((dot, i) => {
+          const done = state[i];
+          const active = !done && (i === 0 || state[i - 1]);
+          dot.classList.toggle("done", done);
+          dot.classList.toggle("active", active);
+        });
+      }
+
+      // Point 1 of the dashboard-restructure spec: each step's button stays
+      // disabled until that step's required input is actually filled in,
+      // rather than letting a click on an empty field hit the API.
+      function updateBizStepButtons() {
+        const gstin = document.getElementById("biz-gstin-input");
+        const gstBtn = document.getElementById("biz-verify-gst-btn");
+        if (gstin && gstBtn) gstBtn.disabled = gstin.value.trim().length !== 15;
+
+        const email = document.getElementById("biz-email-input");
+        const sendBtn = document.getElementById("biz-send-code-btn");
+        if (email && sendBtn)
+          sendBtn.disabled = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+            email.value.trim(),
+          );
+
+        const otp = document.getElementById("biz-email-otp-input");
+        const otpBtn = document.getElementById("biz-verify-otp-btn");
+        if (otp && otpBtn) otpBtn.disabled = otp.value.trim().length !== 6;
       }
 
       async function verifyBusinessGst() {
@@ -9985,6 +10463,116 @@
 
       function closeGenerateKeyModal() {
         document.getElementById("generate-key-modal").style.display = "none";
+      }
+
+      // ================= Billing: unified payment history =================
+      // Works for both individual and business accounts (point 6 of the
+      // monetization spec) -- backed by GET /billing/payments, which
+      // normalizes across BusinessSubscription/FarmPlan/BusinessApiInvoice
+      // (see vyom/invoicing.py).
+      async function loadBillingPayments() {
+        try {
+          const payments = await api("/billing/payments");
+          const rows = document.getElementById("billing-payments-rows");
+          rows.innerHTML = "";
+          document.getElementById("billing-payments-empty").style.display =
+            payments.length ? "none" : "block";
+
+          const statusColors = {
+            paid: "var(--canopy-bright)",
+            active: "var(--canopy-bright)",
+            created: "var(--text-dim)",
+            pending: "var(--text-dim)",
+            failed: "#d9534f",
+            overdue: "#d9534f",
+          };
+
+          payments.forEach((p) => {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.style.cssText =
+              "padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;";
+            const dateStr = new Date(p.date).toLocaleDateString();
+            const amount = (p.total_paise / 100).toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+            card.innerHTML = `
+              <div style="min-width: 240px">
+                <div style="font-size: 13.5px; font-weight: 500; margin-bottom: 2px">${p.description}</div>
+                <div style="font-size: 12px; color: var(--text-dim)">
+                  ${p.invoice_number} &middot; ${dateStr} &middot;
+                  <span style="color: ${statusColors[p.status] || "var(--text-dim)"}">${p.status}</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px; flex: none">
+                <div style="font-weight: 600; font-size: 14px">&#8377;${amount}</div>
+                <button
+                  class="icon-btn"
+                  title="Download invoice"
+                  onclick="downloadInvoice('${p.type}', '${p.id}', '${p.invoice_number}')"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
+                <button
+                  class="icon-btn"
+                  title="Email invoice to me"
+                  onclick="emailInvoice('${p.type}', '${p.id}', this)"
+                >
+                  <svg viewBox="0 0 24 24" width="15" height="15" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16v16H4z"/>
+                    <path d="M22 6 12 13 2 6"/>
+                  </svg>
+                </button>
+              </div>
+            `;
+            rows.appendChild(card);
+          });
+        } catch (e) {
+          console.warn("Could not load billing payments:", e);
+        }
+      }
+
+      async function downloadInvoice(type, id, invoiceNumber) {
+        const session = getSession();
+        if (!session) return;
+        try {
+          const res = await fetch(
+            `${API_BASE}/billing/payments/${type}/${id}/invoice.pdf`,
+            { headers: { Authorization: `Bearer ${session.token}` } },
+          );
+          if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${invoiceNumber}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          showToast("Could not download invoice: " + e.message);
+        }
+      }
+
+      async function emailInvoice(type, id, btnEl) {
+        const original = btnEl.innerHTML;
+        btnEl.disabled = true;
+        try {
+          await api(`/billing/payments/${type}/${id}/email-invoice`, {
+            method: "POST",
+          });
+          showToast("Invoice emailed to your account email.");
+        } catch (e) {
+          showToast("Could not email invoice: " + e.message);
+        } finally {
+          btnEl.disabled = false;
+        }
       }
 
       async function generateApiCredential() {

@@ -79,6 +79,16 @@ def verify_gst(payload: VerifyGstRequest, current_user: str = Depends(require_au
     except GstVerificationError as exc:
         raise HTTPException(400, str(exc))
 
+    existing = db.execute(
+        select(User).where(
+            User.gstin == result.gstin, User.gst_verified_at.is_not(None),
+            User.id != user.id,
+        )
+    ).scalars().first()
+    if existing is not None:
+        raise HTTPException(
+            409, "This GSTIN is already registered with a different account.")
+
     user.gstin = result.gstin
     user.company_legal_name = result.legal_name
     user.company_registered_address = result.address
@@ -122,6 +132,16 @@ def start_business_email_verification(payload: StartBusinessEmailRequest,
     if user.email and email == user.email.strip().lower():
         raise HTTPException(
             400, "Your business email must be different from your account's login email.")
+    existing = db.execute(
+        select(User).where(
+            User.business_email == email, User.business_email_verified_at.is_not(
+                None),
+            User.id != user.id,
+        )
+    ).scalars().first()
+    if existing is not None:
+        raise HTTPException(
+            409, "This business email is already registered with a different account.")
 
     otp = f"{secrets.randbelow(1_000_000):06d}"
     expires_at = datetime.now(timezone.utc) + \

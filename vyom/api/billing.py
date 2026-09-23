@@ -12,6 +12,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,8 +21,10 @@ from vyom.auth import require_auth, require_error_panel_access
 from vyom.config import settings
 from vyom.coupons import CartContext, CouponError, redeem_coupon, list_public_coupons, validate_coupon
 from vyom.db import get_db
+from vyom.email_utils import EmailSendError
 from vyom.error_log import log_error
 from vyom.gst import total_with_gst
+from vyom import invoicing
 from vyom.models import BusinessSubscription, Coupon, User
 from vyom import razorpay_client, wallet
 
@@ -170,6 +173,8 @@ def _activate_business_subscription(db: Session, *, sub: BusinessSubscription, u
     if sub.status == "paid":
         return  # already activated by the other path (verify vs webhook race)
 
+    was_active_before = user.business_status == "active"
+
     sub.razorpay_payment_id = razorpay_payment_id
     sub.razorpay_signature = razorpay_signature
     sub.status = "paid"
@@ -201,6 +206,17 @@ def _activate_business_subscription(db: Session, *, sub: BusinessSubscription, u
                                "coupon_code": coupon_code})
 
     db.commit()
+
+    # Best-effort: a failed welcome/renewal email must never undo or block
+    # an already-successful payment (see send_business_welcome_email's
+    # docstring) -- it catches EmailSendError itself and logs, but guard
+    # against any other unexpected exception here too for the same reason.
+    try:
+        invoicing.send_business_welcome_email(
+            db, user, sub, is_renewal=was_active_before)
+    except Exception:  # noqa: BLE001 -- see comment above
+        logger.exception(
+            "Unexpected error sending business welcome/renewal email")
 
 
 @router.post("/webhooks/razorpay", include_in_schema=False)
@@ -314,6 +330,75 @@ async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
             db.commit()
 
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Unified payment history + invoice download/email -- point 6 of the
+# monetization spec. Works for BOTH individual and business accounts,
+# across all three payment ledgers (BusinessSubscription, FarmPlan,
+# BusinessApiInvoice) -- see vyom/invoicing.py for how each is normalized.
+# ---------------------------------------------------------------------------
+
+class PaymentOut(BaseModel):
+    type: str
+    id: str
+    invoice_number: str
+    description: str
+    date: datetime
+    base_paise: int
+    gst_paise: int
+    discount_paise: int
+    total_paise: int
+    status: str
+    payment_ref: Optional[str]
+
+
+@router.get("/payments", response_model=list[PaymentOut])
+def list_payments(user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    user = _get_user(db, user_id)
+    return [
+        PaymentOut(
+            type=r.type, id=r.id, invoice_number=r.invoice_number, description=r.description,
+            date=r.date, base_paise=r.base_paise, gst_paise=r.gst_paise,
+            discount_paise=r.discount_paise, total_paise=r.total_paise, status=r.status,
+            payment_ref=r.payment_ref,
+        )
+        for r in invoicing.list_payments_for_user(db, user)
+    ]
+
+
+def _find_record_or_404(db: Session, user: User, payment_type: str, payment_id: str):
+    all_records = invoicing.list_payments_for_user(db, user)
+    record = next((r for r in all_records if r.type ==
+                  payment_type and r.id == payment_id), None)
+    if record is None:
+        raise HTTPException(404, "Payment not found")
+    return record
+
+
+@router.get("/payments/{payment_type}/{payment_id}/invoice.pdf")
+def download_payment_invoice(payment_type: str, payment_id: str,
+                             user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    user = _get_user(db, user_id)
+    record = _find_record_or_404(db, user, payment_type, payment_id)
+    pdf_bytes = invoicing.build_invoice_pdf_for_record(db, user, record)
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{record.invoice_number}.pdf"'},
+    )
+
+
+@router.post("/payments/{payment_type}/{payment_id}/email-invoice")
+def email_payment_invoice(payment_type: str, payment_id: str,
+                          user_id: str = Depends(require_auth), db: Session = Depends(get_db)):
+    user = _get_user(db, user_id)
+    record = _find_record_or_404(db, user, payment_type, payment_id)
+    try:
+        invoicing.email_invoice_to_user(db, user, record)
+    except EmailSendError as exc:
+        raise HTTPException(502, str(exc))
+    return {"status": "sent"}
 
 
 # ---------------------------------------------------------------------------
