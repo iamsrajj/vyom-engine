@@ -835,6 +835,42 @@
         box-shadow: var(--shadow-sm);
       }
 
+      /* ---- Price breakdown preview (recharge modal, draw-field modal, business upgrade) ---- */
+      .price-preview-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-top: 10px;
+        background: var(--bg-deep);
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+      }
+      .price-preview-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .price-preview-row--dim {
+        color: var(--text-dim);
+      }
+      .price-preview-row--discount {
+        color: var(--canopy-bright);
+      }
+      .price-preview-row--total {
+        font-weight: 700;
+        font-size: 15px;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+      .price-preview-card--error {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--danger);
+        border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+      }
+
       /* ---- Settings: legal footer ---- */
       .legal-footer-link {
         color: var(--text-dim);
@@ -4079,7 +4115,6 @@
 
                   <div
                     id="plan-price-preview"
-                    class="mono"
                     style="
                       margin-top: 10px;
                       font-size: 13px;
@@ -4991,22 +5026,29 @@
                     border-top: 1px solid var(--line);
                   "
                 >
-                  <p style="font-size: 13.5px">
-                    Verified! Upgrading costs
-                    <strong>&#8377;999 + GST / year</strong>.
+                  <p style="font-size: 13.5px; margin: 0 0 14px">
+                    Verified! You're ready to upgrade to a Business Account.
                   </p>
                   <label>Coupon code (optional)</label>
-                  <div style="display: flex; gap: 8px; margin-bottom: 10px">
+                  <div style="display: flex; gap: 8px">
                     <input
                       type="text"
                       id="biz-upgrade-coupon"
                       placeholder="e.g. SAVE15"
                       style="flex: 1"
                     />
+                    <button
+                      class="btn btn-sm"
+                      style="width: auto"
+                      onclick="updateBizUpgradePricePreview()"
+                    >
+                      Apply
+                    </button>
                   </div>
+                  <div id="biz-upgrade-price-preview"></div>
                   <button
                     class="btn btn-primary"
-                    style="width: auto"
+                    style="width: 100%; margin-top: 16px"
                     onclick="payBusinessUpgrade()"
                     id="biz-pay-btn"
                   >
@@ -5590,7 +5632,6 @@
 
         <div
           id="recharge-price-preview"
-          class="mono"
           style="margin-top: 10px; font-size: 13px"
         ></div>
 
@@ -6542,7 +6583,29 @@
           err.planCode = detail.code;
           throw err;
         }
-        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+        if (!res.ok) {
+          // FastAPI's error shape is {"detail": "..."} for our own
+          // HTTPException calls, or {"detail": [{"msg": ..., "loc": ...}]}
+          // for its automatic 422 validation errors -- either way, surface
+          // just the human-readable message, never the raw status+JSON
+          // blob (that used to leak straight into toasts/inline errors as
+          // e.g. `400 {"detail":"Invalid coupon code."}`).
+          let detail = null;
+          try {
+            detail = (await res.json()).detail;
+          } catch (e) {
+            /* not JSON -- fall through to the generic message below */
+          }
+          let message;
+          if (typeof detail === "string") {
+            message = detail;
+          } else if (Array.isArray(detail) && detail.length) {
+            message = detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+          } else {
+            message = `Something went wrong (error ${res.status}). Please try again.`;
+          }
+          throw new Error(message);
+        }
         return res.json();
       }
 
@@ -6792,6 +6855,10 @@
         individual_6m: 155,
         individual_12m: 295,
       };
+      // Same "preview only" caveat as PLAN_RATES_PER_ACRE above -- the
+      // authoritative amount is settings.business_maintenance_fee_paise in
+      // vyom/config.py.
+      const BUSINESS_MAINTENANCE_FEE_PAISE = 99900;
 
       function getSelectedPlanType(radioName) {
         const el = document.querySelector(`input[name="${radioName}"]:checked`);
@@ -6810,6 +6877,25 @@
       ) {
         const rate = PLAN_RATES_PER_ACRE[planType];
         const basePaise = Math.round(acres * rate * 100);
+        const quote = await _quoteWithCoupon(
+          basePaise,
+          couponCode,
+          planType,
+          productForCoupon,
+        );
+        return { ...quote, acres, rate };
+      }
+
+      // Shared by both per-acre plans (computePricePreview) and flat fees
+      // (the business account's fixed annual maintenance) -- everything
+      // past "what's the base amount" (coupon lookup + GST + total) is
+      // identical either way.
+      async function _quoteWithCoupon(
+        basePaise,
+        couponCode,
+        planType,
+        productForCoupon,
+      ) {
         let discountPaise = 0;
         let couponError = null;
         if (couponCode) {
@@ -6825,32 +6911,76 @@
             });
             discountPaise = result.discount_paise || 0;
           } catch (e) {
-            couponError = e.message.replace(/^\d+:\s*/, "");
+            couponError = e.message;
           }
         }
         const gstPaise = Math.round((basePaise - discountPaise) * 0.18);
         const totalPaise = basePaise - discountPaise + gstPaise;
-        return {
-          acres,
-          rate,
+        return { basePaise, discountPaise, gstPaise, totalPaise, couponError };
+      }
+
+      async function computeFlatPricePreview(
+        basePaise,
+        couponCode,
+        planType,
+        productForCoupon,
+        baseLabel,
+      ) {
+        const quote = await _quoteWithCoupon(
           basePaise,
-          discountPaise,
-          gstPaise,
-          totalPaise,
-          couponError,
-        };
+          couponCode,
+          planType,
+          productForCoupon,
+        );
+        return { ...quote, baseLabel };
       }
 
       function renderPricePreview(el, quote) {
         if (quote.couponError) {
-          el.innerHTML = `<span style="color: var(--danger)">Coupon: ${quote.couponError}</span>`;
+          el.innerHTML = `
+            <div class="price-preview-card price-preview-card--error">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke-linecap="round" stroke-linejoin="round" style="flex: none">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>${quote.couponError}</span>
+            </div>
+          `;
           return;
         }
+        const rupees = (paise) =>
+          (paise / 100).toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        const baseLabel =
+          quote.acres != null
+            ? `${quote.acres.toFixed(2)} acre &times; &#8377;${quote.rate}/acre`
+            : quote.baseLabel || "Subtotal";
         el.innerHTML = `
-          ${quote.acres.toFixed(2)} acre &times; ₹${quote.rate}/acre = ₹${(quote.basePaise / 100).toFixed(2)}<br/>
-          ${quote.discountPaise ? `Coupon discount: -₹${(quote.discountPaise / 100).toFixed(2)}<br/>` : ""}
-          GST (18%): ₹${(quote.gstPaise / 100).toFixed(2)}<br/>
-          <strong>Total: ₹${(quote.totalPaise / 100).toFixed(2)}</strong>
+          <div class="price-preview-card">
+            <div class="price-preview-row price-preview-row--dim">
+              <span>${baseLabel}</span>
+              <span>&#8377;${rupees(quote.basePaise)}</span>
+            </div>
+            ${
+              quote.discountPaise
+                ? `<div class="price-preview-row price-preview-row--discount">
+                    <span>Coupon discount</span>
+                    <span>&minus;&#8377;${rupees(quote.discountPaise)}</span>
+                  </div>`
+                : ""
+            }
+            <div class="price-preview-row price-preview-row--dim">
+              <span>GST (18%)</span>
+              <span>&#8377;${rupees(quote.gstPaise)}</span>
+            </div>
+            <div class="price-preview-row price-preview-row--total">
+              <span>Total</span>
+              <span>&#8377;${rupees(quote.totalPaise)}</span>
+            </div>
+          </div>
         `;
       }
 
@@ -6931,8 +7061,13 @@
         document.getElementById("recharge-modal-message").textContent =
           message || `"${farmName}" needs an active plan to show its data.`;
         document.getElementById("recharge-coupon").value = "";
-        document.getElementById("recharge-price-preview").textContent = "";
+        document.getElementById("recharge-price-preview").innerHTML = "";
         document.getElementById("recharge-modal").style.display = "flex";
+        // The 6-month radio is checked by default in the markup, but a
+        // radio that's already checked never fires "change" -- so without
+        // this the price preview (and the Pay button's amount) stayed
+        // blank until the farmer switched to a *different* plan first.
+        updateRechargePricePreview();
       }
 
       function closeRechargeModal() {
@@ -6944,7 +7079,7 @@
         const preview = document.getElementById("recharge-price-preview");
         const farm = farms.find((f) => f.id === rechargeTargetFarmId);
         if (!farm || farm.area_acre == null) {
-          preview.textContent = "";
+          preview.innerHTML = "";
           return;
         }
         const planType = getSelectedPlanType("recharge_plan_tier");
@@ -6958,6 +7093,17 @@
           "vyom_individual_farm",
         );
         renderPricePreview(preview, quote);
+        // Point 5 of the dashboard-polish spec: the button itself should
+        // say what pressing it actually charges, not a generic label.
+        const btn = document.getElementById("recharge-pay-btn");
+        if (!btn.disabled) {
+          btn.textContent = quote.couponError
+            ? "Recharge now"
+            : `Pay \u20b9${(quote.totalPaise / 100).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`;
+        }
       }
 
       async function payRecharge() {
@@ -7010,7 +7156,7 @@
           showToast("Payment not completed: " + e.message);
         } finally {
           btn.disabled = false;
-          btn.textContent = "Recharge now";
+          updateRechargePricePreview(); // restores the "Pay ₹X" label
         }
       }
 
@@ -10282,6 +10428,7 @@
             : "";
           document.getElementById("biz-step-pay").style.display =
             gstDone && emailDone ? "block" : "none";
+          if (gstDone && emailDone) updateBizUpgradePricePreview();
 
           setBizStepperState(gstDone, emailDone);
           updateBizStepButtons();
@@ -10339,7 +10486,7 @@
           await refreshAccountInfo();
         } catch (e) {
           statusEl.style.color = "var(--danger)";
-          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+          statusEl.textContent = e.message;
         }
       }
 
@@ -10358,7 +10505,7 @@
           document.getElementById("biz-email-otp-row").style.display = "block";
         } catch (e) {
           statusEl.style.color = "var(--danger)";
-          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+          statusEl.textContent = e.message;
         }
       }
 
@@ -10375,10 +10522,35 @@
           statusEl.style.color = "var(--canopy)";
           statusEl.textContent = `Verified: ${email}`;
           document.getElementById("biz-step-pay").style.display = "block";
+          updateBizUpgradePricePreview(); // show the price immediately, don't wait for a coupon click
           await refreshAccountInfo();
         } catch (e) {
           statusEl.style.color = "var(--danger)";
-          statusEl.textContent = e.message.replace(/^\d+:\s*/, "");
+          statusEl.textContent = e.message;
+        }
+      }
+
+      async function updateBizUpgradePricePreview() {
+        const preview = document.getElementById("biz-upgrade-price-preview");
+        const couponCode = document
+          .getElementById("biz-upgrade-coupon")
+          .value.trim();
+        const quote = await computeFlatPricePreview(
+          BUSINESS_MAINTENANCE_FEE_PAISE,
+          couponCode,
+          "business_maintenance",
+          "vyom_business",
+          "Business Account -- Annual Maintenance",
+        );
+        renderPricePreview(preview, quote);
+        const btn = document.getElementById("biz-pay-btn");
+        if (!btn.disabled) {
+          btn.textContent = quote.couponError
+            ? "Pay & upgrade to Business"
+            : `Pay \u20b9${(quote.totalPaise / 100).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })} & upgrade to Business`;
         }
       }
 
@@ -10414,7 +10586,7 @@
           showToast("Upgrade not completed: " + e.message);
         } finally {
           btn.disabled = false;
-          btn.textContent = "Pay & upgrade to Business";
+          updateBizUpgradePricePreview(); // restores the "Pay ₹X & upgrade" label
         }
       }
 
