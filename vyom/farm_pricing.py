@@ -208,11 +208,14 @@ def _activate_plan(db: Session, *, plan: FarmPlan, farm: Polygon, razorpay_payme
     if plan.status == "active":
         return
 
+    is_upgrade = plan.upgraded_from_plan_id is not None
     now = datetime.now(timezone.utc)
     plan.razorpay_payment_id = razorpay_payment_id
     plan.status = "active"
     plan.starts_at = now
     plan.expires_at = now + timedelta(days=plan.duration_days)
+
+    user = db.get(User, plan.user_id)
 
     if plan.upgraded_from_plan_id is not None:
         old_plan = db.get(FarmPlan, plan.upgraded_from_plan_id)
@@ -220,7 +223,6 @@ def _activate_plan(db: Session, *, plan: FarmPlan, farm: Polygon, razorpay_payme
             old_plan.status = "upgraded"
 
     if coupon_code and plan.coupon_id is not None:
-        user = db.get(User, plan.user_id)
         cart = CartContext(order_amount_paise=plan.base_paise, plan_type=plan.plan_type,
                            product="vyom_individual_farm", user_created_at=user.created_at)
         try:
@@ -234,7 +236,19 @@ def _activate_plan(db: Session, *, plan: FarmPlan, farm: Polygon, razorpay_payme
             log_error("farm_pricing", f"Coupon redemption failed post-payment: {exc}",
                       context={"plan_id": str(plan.id), "coupon_code": coupon_code})
 
-    db.flush()
+    db.commit()
+
+    # Best-effort, same reasoning as send_business_welcome_email: a failed
+    # confirmation email must never undo or block a payment that already
+    # succeeded. This previously didn't exist at all for individual farm
+    # plans (only the business-subscription path sent anything).
+    try:
+        from vyom import invoicing
+        invoicing.send_farm_plan_confirmation_email(
+            db, user, plan, farm, is_upgrade=is_upgrade)
+    except Exception:  # noqa: BLE001 -- see comment above
+        logger.exception(
+            "Unexpected error sending farm plan confirmation email")
 
 
 def activate_plan_from_webhook(db: Session, *, plan: FarmPlan, farm: Polygon, razorpay_payment_id: str) -> None:

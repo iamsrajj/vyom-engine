@@ -350,6 +350,7 @@ class PaymentOut(BaseModel):
     discount_paise: int
     total_paise: int
     status: str
+    is_paid: bool
     payment_ref: Optional[str]
 
 
@@ -361,7 +362,7 @@ def list_payments(user_id: str = Depends(require_auth), db: Session = Depends(ge
             type=r.type, id=r.id, invoice_number=r.invoice_number, description=r.description,
             date=r.date, base_paise=r.base_paise, gst_paise=r.gst_paise,
             discount_paise=r.discount_paise, total_paise=r.total_paise, status=r.status,
-            payment_ref=r.payment_ref,
+            is_paid=r.is_paid, payment_ref=r.payment_ref,
         )
         for r in invoicing.list_payments_for_user(db, user)
     ]
@@ -381,8 +382,10 @@ def _require_paid(record) -> None:
     # so there's no real invoice to hand out for it -- the frontend already
     # hides the download/email buttons for these (see loadBillingPayments
     # in web/index.html), this is the server-side backstop against someone
-    # hitting the endpoint directly with a non-paid id.
-    if record.status != "paid":
+    # hitting the endpoint directly with a non-paid id. record.is_paid (see
+    # invoicing._is_paid_status) accounts for FarmPlan spelling success as
+    # "active"/"upgraded" rather than literally "paid".
+    if not record.is_paid:
         raise HTTPException(
             400, f"This payment is '{record.status}', not paid -- there's no invoice to send yet.")
 

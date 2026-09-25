@@ -43,11 +43,45 @@ class PaymentRecord:
     discount_paise: int
     total_paise: int
     status: str
+    is_paid: bool  # see _is_paid_status() -- each ledger spells "succeeded" differently
     payment_ref: Optional[str] = None
 
 
 def _invoice_number(prefix: str, created_at: datetime, short_id: str) -> str:
     return f"{prefix}-{created_at.strftime('%Y%m')}-{short_id[:8].upper()}"
+
+
+def _is_paid_status(payment_type: PaymentType, status: str) -> bool:
+    """Whether a payment actually succeeded -- i.e. whether a real invoice
+    exists for it and download/email should be offered. NOT the same as
+    status == "paid" literally: FarmPlan uses "active" (currently in
+    effect) and "upgraded" (succeeded, but later superseded by a fresh
+    plan) for what BusinessSubscription/BusinessApiInvoice both just call
+    "paid". Getting this wrong previously meant a genuinely successful
+    farm-plan payment (status "active") was treated as unpaid and never
+    showed its download/email buttons.
+    """
+    if payment_type == "farm_plan":
+        return status in ("active", "upgraded")
+    return status == "paid"
+
+
+def _farm_plan_record(plan: FarmPlan, farm_name: str) -> PaymentRecord:
+    plan_label = {
+        "individual_3m": "3-month", "individual_6m": "6-month", "individual_12m": "12-month",
+    }.get(plan.plan_type, plan.plan_type)
+    return PaymentRecord(
+        type="farm_plan", id=str(plan.id),
+        invoice_number=_invoice_number("FRM", plan.created_at, str(plan.id)),
+        description=f"Vyom Engine Farm Plan ({plan_label}) -- {farm_name}",
+        date=plan.created_at, base_paise=plan.base_paise, gst_paise=plan.gst_paise,
+        discount_paise=plan.discount_paise +
+        plan.proration_credit_paise + plan.wallet_applied_paise,
+        total_paise=plan.base_paise + plan.gst_paise - plan.discount_paise
+        - plan.proration_credit_paise - plan.wallet_applied_paise,
+        status=plan.status, is_paid=_is_paid_status("farm_plan", plan.status),
+        payment_ref=plan.razorpay_payment_id,
+    )
 
 
 def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
@@ -71,6 +105,7 @@ def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
             description="Vyom Engine Business Account -- Annual Maintenance",
             date=s.created_at, base_paise=s.amount_paise, gst_paise=s.gst_paise,
             discount_paise=0, total_paise=s.total_paise, status=s.status,
+            is_paid=_is_paid_status("business_subscription", s.status),
             payment_ref=s.razorpay_payment_id,
         ))
 
@@ -81,19 +116,7 @@ def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
     for p in plans:
         farm = db.get(Polygon, p.farm_id)
         farm_name = farm.name if farm and farm.name else "Field"
-        plan_label = {
-            "individual_3m": "3-month", "individual_6m": "6-month", "individual_12m": "12-month",
-        }.get(p.plan_type, p.plan_type)
-        out.append(PaymentRecord(
-            type="farm_plan", id=str(p.id),
-            invoice_number=_invoice_number("FRM", p.created_at, str(p.id)),
-            description=f"Vyom Engine Farm Plan ({plan_label}) -- {farm_name}",
-            date=p.created_at, base_paise=p.base_paise, gst_paise=p.gst_paise,
-            discount_paise=p.discount_paise + p.proration_credit_paise + p.wallet_applied_paise,
-            total_paise=p.base_paise + p.gst_paise - p.discount_paise
-            - p.proration_credit_paise - p.wallet_applied_paise,
-            status=p.status, payment_ref=p.razorpay_payment_id,
-        ))
+        out.append(_farm_plan_record(p, farm_name))
 
     api_invoices = db.execute(
         select(BusinessApiInvoice).where(BusinessApiInvoice.user_id == user.id)
@@ -107,6 +130,7 @@ def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
             f"{inv.billing_month.strftime('%B %Y')} ({float(inv.total_area_acre):.2f} acre)",
             date=inv.issued_at, base_paise=inv.base_paise, gst_paise=inv.gst_paise,
             discount_paise=0, total_paise=inv.total_paise, status=inv.status,
+            is_paid=_is_paid_status("business_api_invoice", inv.status),
             payment_ref=inv.razorpay_payment_id,
         ))
 
@@ -218,6 +242,7 @@ def send_business_welcome_email(db: Session, user: User, sub: BusinessSubscripti
         description="Vyom Engine Business Account -- Annual Maintenance",
         date=sub.created_at, base_paise=sub.amount_paise, gst_paise=sub.gst_paise,
         discount_paise=0, total_paise=sub.total_paise, status=sub.status,
+        is_paid=_is_paid_status("business_subscription", sub.status),
         payment_ref=sub.razorpay_payment_id,
     )
     pdf_bytes = build_invoice_pdf_for_record(db, user, record)
@@ -258,3 +283,50 @@ def send_business_welcome_email(db: Session, user: User, sub: BusinessSubscripti
     except EmailSendError as exc:
         logger.error(
             "Failed to send business welcome/renewal email to %s: %s", recipients, exc)
+
+
+def send_farm_plan_confirmation_email(db: Session, user: User, plan: FarmPlan, farm: Polygon, *,
+                                      is_upgrade: bool) -> None:
+    """Fired right after an individual farm plan payment activates (see
+    _activate_plan in vyom/farm_pricing.py) -- the equivalent of
+    send_business_welcome_email above, but for the far more common
+    individual per-acre purchase, which previously sent no confirmation at
+    all. Best-effort: caught and logged here, never raised, so a failed
+    email can never roll back or block a payment that already succeeded.
+    """
+    farm_name = farm.name or "your field"
+    record = _farm_plan_record(plan, farm_name)
+    pdf_bytes = build_invoice_pdf_for_record(db, user, record)
+
+    if not user.email:
+        logger.warning(
+            "Farm plan confirmation email skipped for user %s -- no email on file", user.id)
+        return
+
+    heading = f"Plan {'upgraded' if is_upgrade else 'activated'} for {farm_name}"
+    intro = (
+        f"Your {record.description.split(' -- ')[0].replace('Vyom Engine ', '')} for "
+        f"<b>{farm_name}</b> is now active"
+        + (f", through {plan.expires_at.strftime('%d %b %Y')}" if plan.expires_at else "")
+        + "."
+    )
+    html = render_email(
+        preheader=heading,
+        heading=heading,
+        body_html=(
+            f"<p>{intro}</p>"
+            f"<p>Your invoice ({record.invoice_number}) is attached as a PDF.</p>"
+        ),
+    )
+    try:
+        send_email(
+            to=[user.email],
+            subject=f"Vyom Engine -- {heading}",
+            html_body=html,
+            text_fallback=intro,
+            attachments=[(f"{record.invoice_number}.pdf",
+                          pdf_bytes, "application/pdf")],
+        )
+    except EmailSendError as exc:
+        logger.error(
+            "Failed to send farm plan confirmation email to %s: %s", user.email, exc)

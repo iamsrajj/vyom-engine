@@ -286,6 +286,24 @@
         color: var(--text-primary);
         font-weight: 600;
       }
+      .fc-badge {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
+      }
+      .fc-badge--expired {
+        background: rgba(220, 38, 38, 0.12);
+        color: var(--danger);
+      }
+      .fc-badge--api {
+        background: rgba(59, 130, 246, 0.14);
+        color: #3b82f6;
+      }
 
       .empty-page {
         display: flex;
@@ -1961,6 +1979,14 @@
         border-radius: 20px;
         padding: 2px 9px;
       }
+      .fo-status-badge--locked {
+        background: rgba(220, 38, 38, 0.12);
+        color: var(--danger);
+      }
+      .fo-status-badge--none {
+        background: var(--bg-deep);
+        color: var(--text-dim);
+      }
       .fo-location {
         font-size: 11.5px;
         color: var(--text-dim);
@@ -3501,6 +3527,22 @@
           </svg>
           API
         </div>
+        <a
+          class="nav-item"
+          href="/developers/playground"
+          target="_blank"
+          rel="noopener"
+          style="text-decoration: none"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          Playground
+        </a>
         <div class="nav-divider"></div>
         <div
           class="nav-item"
@@ -4197,7 +4239,9 @@
                 <div class="fo-left">
                   <div class="fo-name-row">
                     <div id="selected-farm-name" class="display"></div>
-                    <span class="fo-status-badge">Active</span>
+                    <span class="fo-status-badge" id="fo-status-badge"
+                      >Active</span
+                    >
                   </div>
                   <div class="fo-location">
                     <svg
@@ -4240,6 +4284,10 @@
                   <div class="fo-stat">
                     <div class="fo-sval" id="detail-crop-age">&ndash;</div>
                     <div class="fo-slabel">Crop age</div>
+                  </div>
+                  <div class="fo-stat">
+                    <div class="fo-sval" id="detail-plan">&ndash;</div>
+                    <div class="fo-slabel">Plan</div>
                   </div>
                   <div class="fo-actions">
                     <button
@@ -5475,7 +5523,7 @@
               >AgriDoot</a
             ></span
           >
-          <a href="#" onclick="return false;">Docs</a>
+          <a href="/developers/docs" target="_blank" rel="noopener">Docs</a>
           <a
             href="#"
             onclick="
@@ -7321,7 +7369,7 @@
             ],
             [
               "Do I need to pay to use Vyom Engine?",
-              "Contact AgriDoot support for current pricing and plan details.",
+              "Each field runs on a paid plan (from \u20b985/acre for 3 months) covering all satellite indices, weather, Gyan AI, and advisory -- see the Pricing page in the sidebar for full details.",
             ],
             [
               "Can I use the dashboard without internet?",
@@ -7671,6 +7719,63 @@
             [
               "Will I be notified of major outages or maintenance?",
               "Check AgriDoot's official channels for maintenance announcements.",
+            ],
+          ],
+        },
+        {
+          section: "Billing & Business Account",
+          qas: [
+            [
+              'Why is a field showing "Recharge to continue"?',
+              "That field's plan has expired or was never purchased -- pick a plan (3/6/12 months) and pay to unlock its map, indices, and trend data again. Other fields on your account are unaffected.",
+            ],
+            [
+              "What's included in a farm plan?",
+              "All satellite indices, hyperlocal weather data, Gyan AI expanded access, and farm-based dynamic advisory for that one field, for the plan's duration.",
+            ],
+            [
+              "Where can I see current pricing?",
+              "The Pricing page in the sidebar lists individual farm plans, the Business Account fee, and per-acre API pricing, with GST shown separately.",
+            ],
+            [
+              "Where do I see everything I've paid for?",
+              "The Billing page in the sidebar lists every payment on your account -- farm plans, and for Business Accounts, the annual fee and API invoices.",
+            ],
+            [
+              "Why can't I download or email an invoice for one of my payments?",
+              'Download and email are only available once a payment has actually succeeded. A payment still shows as "created" if checkout was never completed, or "failed" if it didn\'t go through -- in either case there\'s no real invoice yet.',
+            ],
+            [
+              "I completed a payment, but do I still get an email about it?",
+              "Yes -- a confirmation email with the invoice attached as a PDF is sent automatically to your account email once a farm plan or Business Account payment succeeds.",
+            ],
+            [
+              "What is a Business Account for?",
+              "It gives you an API to create, update, and fetch your farms' satellite indices programmatically, plus API docs and a live playground -- useful if you manage many farms from your own system rather than this dashboard.",
+            ],
+            [
+              "How do I upgrade to a Business Account?",
+              "Open the API page in the sidebar and follow the three steps: verify your company's GSTIN, verify a business email address, then pay the annual fee.",
+            ],
+            [
+              "Why does my business email need to be different from my login email?",
+              "It's used as a separate, verifiable point of contact for the company account -- Gmail/Yahoo/Outlook-type addresses aren't accepted for this specifically.",
+            ],
+            [
+              "Why was my GSTIN or business email rejected during upgrade?",
+              'Each GSTIN and business email can only be verified against one account. If you see "already registered with a different account," that GSTIN or email is already in use elsewhere -- contact support if you believe that\'s a mistake.',
+            ],
+            [
+              "How does billing work for farms created through the API?",
+              "API-created farms are billed separately from the dashboard's per-farm plans -- per acre, per year, invoiced monthly in arrears with a 15-day window to pay. They cover satellite indices only, not weather or advisory.",
+            ],
+            [
+              "Do coupon codes work on both farm plans and the Business Account fee?",
+              'Yes -- enter a coupon code wherever you see a "Coupon code (optional)" field, and the price breakdown updates immediately, including for the Business Account upgrade.',
+            ],
+            [
+              "What happens if my coupon code doesn't work?",
+              "You'll see the specific reason (expired, already used, not valid for this plan, etc.) right below the coupon field -- fix the code or continue without it.",
             ],
           ],
         },
@@ -8617,13 +8722,17 @@
       function fieldCardHtml(farm) {
         const area =
           farm.area_acre != null ? `${farm.area_acre.toFixed(2)} ac` : "\u2013";
+        const badges = `
+          ${farm.plan_status === "expired" ? '<span class="fc-badge fc-badge--expired">EXPIRED</span>' : ""}
+          ${farm.created_via === "api" ? '<span class="fc-badge fc-badge--api">API</span>' : ""}
+        `;
         return `
     <div class="field-card" onclick="openFieldFromCard('${farm.id}')">
       <div class="fc-thumb">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
       </div>
       <div class="fc-body">
-        <div class="fc-name">${escapeHtml(farm.name) || "Unnamed field"}</div>
+        <div class="fc-name">${escapeHtml(farm.name) || "Unnamed field"}${badges}</div>
         <div class="fc-crop">${escapeHtml(farm.crop_type) || "Crop not set"}</div>
         <div class="fc-meta">
           <span>${farm.sowing_date ? new Date(farm.sowing_date).toLocaleDateString() : "No sowing date"}</span>
@@ -9398,6 +9507,45 @@
       function populateFarmDetails(farm) {
         document.getElementById("selected-farm-name").textContent =
           farm.name || "Unnamed field";
+
+        const badgeEl = document.getElementById("fo-status-badge");
+        badgeEl.classList.remove(
+          "fo-status-badge--locked",
+          "fo-status-badge--none",
+        );
+        if (farm.plan_status === "active") {
+          badgeEl.textContent = "Active";
+        } else if (farm.plan_status === "expired") {
+          badgeEl.textContent = "Expired";
+          badgeEl.classList.add("fo-status-badge--locked");
+        } else if (farm.plan_locked) {
+          badgeEl.textContent = "Locked";
+          badgeEl.classList.add("fo-status-badge--locked");
+        } else if (farm.created_via === "api") {
+          // API-created farms are never gated by a FarmPlan at all (see
+          // FarmOut.plan_status docstring in vyom/api/farms.py) -- "Active"
+          // would be misleading since there's no such concept for them.
+          badgeEl.textContent = "API";
+          badgeEl.classList.add("fo-status-badge--none");
+        } else {
+          badgeEl.textContent = "No plan";
+          badgeEl.classList.add("fo-status-badge--none");
+        }
+
+        const planEl = document.getElementById("detail-plan");
+        if (farm.plan_status && farm.plan_expires_at) {
+          const dateStr = new Date(farm.plan_expires_at).toLocaleDateString();
+          planEl.textContent =
+            farm.plan_status === "active"
+              ? `Active \u00b7 until ${dateStr}`
+              : farm.plan_status === "expired"
+                ? `Expired ${dateStr}`
+                : farm.plan_status;
+        } else {
+          planEl.textContent =
+            farm.created_via === "api" ? "N/A (API farm)" : "Not purchased";
+        }
+        planEl.classList.toggle("empty", !farm.plan_status);
 
         const cropEl = document.getElementById("detail-crop");
         cropEl.textContent = farm.crop_type || "Not set";
@@ -10681,6 +10829,7 @@
           const statusColors = {
             paid: "var(--canopy-bright)",
             active: "var(--canopy-bright)",
+            upgraded: "var(--canopy-bright)",
             created: "var(--text-dim)",
             pending: "var(--text-dim)",
             failed: "#d9534f",
@@ -10697,10 +10846,11 @@
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             });
-            // Only a completed payment actually has a real invoice --
-            // "created" (checkout not finished) and "failed" have nothing
-            // to download or email.
-            const isPaid = p.status === "paid";
+            // Only a completed payment actually has a real invoice -- note
+            // this is is_paid from the API, not a literal status check:
+            // FarmPlan spells success as "active"/"upgraded" rather than
+            // "paid" (see vyom/invoicing.py's _is_paid_status).
+            const isPaid = p.is_paid;
             const actionsHtml = isPaid
               ? `
                 <button

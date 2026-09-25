@@ -201,6 +201,16 @@ class FarmOut(BaseModel):
     # on every read via vyom/farm_pricing.py's is_farm_locked(), never
     # cached, since payment can complete at any moment via webhook.
     plan_locked: bool
+    # The most recent FarmPlan's raw status ("created"/"active"/"expired"/
+    # "upgraded"/"failed"), regardless of whether it's the one currently
+    # unlocking the farm -- None only for an API-created farm (never has a
+    # FarmPlan at all) or a farm with literally no purchase attempt yet.
+    # Deliberately a SEPARATE lookup from is_farm_locked()'s plan (which
+    # only ever returns a status=="active" row): once the daily expiry job
+    # flips a lapsed plan's status to "expired", is_farm_locked's query
+    # excludes it entirely, which was silently blanking plan_expires_at
+    # right when a farmer most needed to see it.
+    plan_status: Optional[str]
     plan_expires_at: Optional[datetime]
 
     class Config:
@@ -238,10 +248,15 @@ def _geodesic_area_ha(geom_shape) -> float:
 
 def _to_farm_out(db: Session, farm: Polygon) -> FarmOut:
     from vyom import farm_pricing
+    from vyom.models import FarmPlan
     area_ha = float(farm.area_ha) if farm.area_ha is not None else None
     crop_age_days = (date_cls.today() -
                      farm.sowing_date).days if farm.sowing_date else None
-    locked, plan = farm_pricing.is_farm_locked(db, farm)
+    locked, _ = farm_pricing.is_farm_locked(db, farm)
+    latest_plan = db.execute(
+        select(FarmPlan).where(FarmPlan.farm_id == farm.id)
+        .order_by(FarmPlan.created_at.desc())
+    ).scalars().first()
     return FarmOut(
         id=farm.id,
         name=farm.name,
@@ -260,7 +275,8 @@ def _to_farm_out(db: Session, farm: Polygon) -> FarmOut:
         created_via=farm.created_via,
         feature_tier=farm.feature_tier,
         plan_locked=locked,
-        plan_expires_at=plan.expires_at if plan else None,
+        plan_status=latest_plan.status if latest_plan else None,
+        plan_expires_at=latest_plan.expires_at if latest_plan else None,
     )
 
 

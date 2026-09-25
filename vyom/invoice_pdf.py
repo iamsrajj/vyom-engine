@@ -13,11 +13,12 @@ from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
+import requests
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable,
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT
@@ -27,6 +28,30 @@ from vyom.config import settings
 _CANOPY = colors.HexColor("#3d7d49")
 _TEXT_DIM = colors.HexColor("#6b756b")
 _LINE = colors.HexColor("#e3e8e3")
+
+# Same logo used in vyom/email_utils.py's HTML emails, reused here for
+# visual consistency across every AgriDoot-branded document.
+_LOGO_URL = "https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+# Fetched once per process and cached -- invoices can be generated
+# repeatedly (every Billing page load re-downloads its own PDF on click),
+# and there's no reason to hit AgriDoot's image host every single time.
+# None means "not fetched yet"; False means "fetch failed, don't retry
+# this process" (the missing custom-port cert or a network hiccup isn't
+# going to fix itself mid-process, and a logo is cosmetic -- worth failing
+# quietly rather than slowing down or breaking invoice generation).
+_logo_cache: bytes | None | bool = None
+
+
+def _fetch_logo_bytes() -> bytes | None:
+    global _logo_cache
+    if _logo_cache is None:
+        try:
+            resp = requests.get(_LOGO_URL, timeout=5)
+            resp.raise_for_status()
+            _logo_cache = resp.content
+        except requests.RequestException:
+            _logo_cache = False
+    return _logo_cache or None
 
 
 def _rupees(paise: int) -> str:
@@ -67,7 +92,24 @@ def generate_invoice_pdf(
 
     story = []
 
-    # -- Header: issuer + invoice meta side by side --
+    logo_bytes = _fetch_logo_bytes()
+    if logo_bytes:
+        logo_img = Image(BytesIO(logo_bytes), width=13 * mm, height=13 * mm)
+        title_tbl = Table(
+            [[logo_img, Paragraph("Vyom Engine", h1)]],
+            colWidths=[16 * mm, 100 * mm],
+        )
+        title_tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(title_tbl)
+    else:
+        story.append(Paragraph("Vyom Engine", h1))
+    story.append(
+        Paragraph("by AgriDoot &middot; Earth Observatory", small_dim))
+
+    # -- Header block: issuer + invoice meta side by side --
     issuer_html = (
         f"<b>{settings.platform_legal_name}</b><br/>"
         f"{settings.platform_registered_address}<br/>"
@@ -86,9 +128,6 @@ def generate_invoice_pdf(
         colWidths=[100 * mm, 70 * mm],
     )
     header_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    story.append(Paragraph("Vyom Engine", h1))
-    story.append(
-        Paragraph("by AgriDoot &middot; Earth Observatory", small_dim))
     story.append(Spacer(1, 10 * mm))
     story.append(header_tbl)
     story.append(Spacer(1, 6 * mm))
