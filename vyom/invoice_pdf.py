@@ -27,6 +27,7 @@ from vyom.config import settings
 
 _CANOPY = colors.HexColor("#3d7d49")
 _TEXT_DIM = colors.HexColor("#6b756b")
+_TEXT_DIM_HEX = "#6b756b"
 _LINE = colors.HexColor("#e3e8e3")
 
 # Same logo used in vyom/email_utils.py's HTML emails, reused here for
@@ -93,21 +94,32 @@ def generate_invoice_pdf(
     story = []
 
     logo_bytes = _fetch_logo_bytes()
+    title_stack = Table(
+        [[Paragraph("Vyom Engine", h1)],
+         [Paragraph("by AgriDoot &middot; Earth Observatory", small_dim)]],
+        colWidths=[100 * mm],
+    )
+    title_stack.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 1), (0, 1), 2),
+    ]))
     if logo_bytes:
-        logo_img = Image(BytesIO(logo_bytes), width=13 * mm, height=13 * mm)
-        title_tbl = Table(
-            [[logo_img, Paragraph("Vyom Engine", h1)]],
-            colWidths=[16 * mm, 100 * mm],
+        logo_img = Image(BytesIO(logo_bytes), width=15 * mm, height=15 * mm)
+        title_row = Table(
+            [[logo_img, title_stack]],
+            colWidths=[18 * mm, 100 * mm],
         )
-        title_tbl.setStyle(TableStyle([
+        title_row.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
         ]))
-        story.append(title_tbl)
+        story.append(title_row)
     else:
-        story.append(Paragraph("Vyom Engine", h1))
-    story.append(
-        Paragraph("by AgriDoot &middot; Earth Observatory", small_dim))
+        story.append(title_stack)
 
     # -- Header block: issuer + invoice meta side by side --
     issuer_html = (
@@ -146,12 +158,24 @@ def generate_invoice_pdf(
     story.append(Spacer(1, 8 * mm))
 
     # -- Line items --
+    # Each item's description can carry an optional dim "detail" sub-line
+    # (e.g. "1.85 acre x Rs. 85.00/acre") showing how its amount was
+    # actually calculated, not just the final number.
     rows = [["Description", "Amount"]]
     for item in line_items:
-        rows.append([item["description"], _rupees(item["amount_paise"])])
+        desc_html = item["description"]
+        if item.get("detail"):
+            desc_html += f'<br/><font size="8.5" color="{_TEXT_DIM_HEX}">{item["detail"]}</font>'
+        rows.append([Paragraph(desc_html, normal),
+                    _rupees(item["amount_paise"])])
     if discount_paise:
-        rows.append(["Discount / coupon", f"- {_rupees(discount_paise)}"])
-    rows.append(["Subtotal", _rupees(base_paise)])
+        rows.append(["Coupon discount", f"- {_rupees(discount_paise)}"])
+    # A "Subtotal" row would just repeat the one line item's amount above
+    # when there's only one -- only show it when it's actually summing
+    # something (more than one item, or a discount was applied so the
+    # pre-GST/post-discount figure isn't shown anywhere else).
+    if len(line_items) > 1 or discount_paise:
+        rows.append(["Subtotal", _rupees(base_paise - discount_paise)])
     rows.append([f"GST ({settings.gst_percent:g}%)", _rupees(gst_paise)])
     rows.append(["Total", _rupees(total_paise)])
 

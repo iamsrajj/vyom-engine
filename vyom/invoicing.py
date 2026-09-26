@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Literal, Optional
 
 from sqlalchemy import select
@@ -45,6 +46,10 @@ class PaymentRecord:
     status: str
     is_paid: bool  # see _is_paid_status() -- each ledger spells "succeeded" differently
     payment_ref: Optional[str] = None
+    # Dim sub-line shown under the description on the invoice PDF, e.g.
+    # "1.85 acre x Rs. 85.00/acre" -- None for a flat fee (business
+    # subscription) where there's no quantity to break down.
+    detail: Optional[str] = None
 
 
 def _invoice_number(prefix: str, created_at: datetime, short_id: str) -> str:
@@ -70,10 +75,12 @@ def _farm_plan_record(plan: FarmPlan, farm_name: str) -> PaymentRecord:
     plan_label = {
         "individual_3m": "3-month", "individual_6m": "6-month", "individual_12m": "12-month",
     }.get(plan.plan_type, plan.plan_type)
+    rate_rupees = Decimal(plan.rate_per_acre_paise) / 100
     return PaymentRecord(
         type="farm_plan", id=str(plan.id),
         invoice_number=_invoice_number("FRM", plan.created_at, str(plan.id)),
         description=f"Vyom Engine Farm Plan ({plan_label}) -- {farm_name}",
+        detail=f"{plan.area_acre_snapshot:.2f} acre x Rs. {rate_rupees:.2f}/acre",
         date=plan.created_at, base_paise=plan.base_paise, gst_paise=plan.gst_paise,
         discount_paise=plan.discount_paise +
         plan.proration_credit_paise + plan.wallet_applied_paise,
@@ -123,11 +130,13 @@ def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
         .order_by(BusinessApiInvoice.issued_at.desc())
     ).scalars().all()
     for inv in api_invoices:
+        rate_rupees = Decimal(inv.rate_per_acre_paise) / 100
         out.append(PaymentRecord(
             type="business_api_invoice", id=str(inv.id),
             invoice_number=_invoice_number("API", inv.issued_at, str(inv.id)),
             description=f"Vyom Engine Business API -- farms created in "
-            f"{inv.billing_month.strftime('%B %Y')} ({float(inv.total_area_acre):.2f} acre)",
+            f"{inv.billing_month.strftime('%B %Y')}",
+            detail=f"{float(inv.total_area_acre):.2f} acre x Rs. {rate_rupees:.2f}/acre",
             date=inv.issued_at, base_paise=inv.base_paise, gst_paise=inv.gst_paise,
             discount_paise=0, total_paise=inv.total_paise, status=inv.status,
             is_paid=_is_paid_status("business_api_invoice", inv.status),
@@ -181,8 +190,11 @@ def build_invoice_pdf_for_record(db: Session, user: User, record: PaymentRecord)
     return generate_invoice_pdf(
         invoice_number=record.invoice_number,
         issued_at=record.date,
-        line_items=[{"description": record.description,
-                     "amount_paise": record.base_paise}],
+        line_items=[{
+            "description": record.description,
+            "detail": record.detail,
+            "amount_paise": record.base_paise,
+        }],
         base_paise=record.base_paise, gst_paise=record.gst_paise,
         total_paise=record.total_paise, discount_paise=record.discount_paise,
         payment_ref=record.payment_ref,

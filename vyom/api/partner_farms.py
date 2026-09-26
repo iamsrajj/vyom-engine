@@ -250,29 +250,74 @@ class IndexReading(BaseModel):
     cloud_pct: Optional[float]
 
 
-@router.get("/{farm_id}/indices", response_model=Envelope[list[IndexReading]])
-def get_partner_farm_latest_indices(
-    farm_id: uuid.UUID, ctx: BusinessApiContext = Depends(require_business_api_auth),
+class AvailableDate(BaseModel):
+    date: date_cls
+
+
+@router.get("/{farm_id}/available-dates", response_model=Envelope[list[AvailableDate]])
+def get_partner_farm_available_dates(
+    farm_id: uuid.UUID, metric: str = "NDVI_mean",
+    ctx: BusinessApiContext = Depends(require_business_api_auth),
     db: Session = Depends(get_db),
 ):
-    """Latest REAL satellite reading (no interpolated/provisional fallback
-    -- kept simple for a v1 partner contract) for every index this
-    deployment computes, for this farm."""
+    """Every date this farm has a real (non-null) satellite reading for the
+    given metric, newest first -- pass one of these as `date` to
+    /{farm_id}/indices, or use them to page through /{farm_id}/timeseries'
+    full history. `metric` matches the same values /timeseries accepts
+    (e.g. NDVI_mean, NDRE_mean) -- see /{farm_id}/indices' response for the
+    full list this deployment computes for a given farm.
+    """
+    farm = _get_owned_api_farm(db, farm_id, ctx)
+    rows = db.execute(
+        select(ZonalStat.acquisition_date)
+        .where(ZonalStat.polygon_id == farm.id, ZonalStat.metric == metric,
+               ZonalStat.value.isnot(None))
+        .order_by(ZonalStat.acquisition_date.desc())
+    ).scalars().all()
+    data = [AvailableDate(date=d.date() if isinstance(
+        d, datetime) else d) for d in rows]
+    return Envelope(data=data, meta=_build_meta(db, ctx))
+
+
+@router.get("/{farm_id}/indices", response_model=Envelope[list[IndexReading]])
+def get_partner_farm_latest_indices(
+    farm_id: uuid.UUID, date: Optional[date_cls] = None,
+    ctx: BusinessApiContext = Depends(require_business_api_auth),
+    db: Session = Depends(get_db),
+):
+    """Every index this deployment computes, for this farm, on ONE
+    acquisition date. Without `date`, returns each index's most recent
+    REAL reading (no interpolated/provisional fallback -- kept simple for
+    a v1 partner contract), same as before this parameter existed. With
+    `date` (get one from /{farm_id}/available-dates), returns that exact
+    date's readings instead -- an index with no reading on that date is
+    simply omitted from the response, not returned as null, since unlike
+    the dashboard's own /farms/{id}/latest this contract has no
+    interpolated-fallback concept to fall back to.
+    """
     farm = _get_owned_api_farm(db, farm_id, ctx)
 
-    subq = (
-        select(ZonalStat.metric, func.max(
-            ZonalStat.acquisition_date).label("max_date"))
-        .where(ZonalStat.polygon_id == farm.id, ZonalStat.value.isnot(None))
-        .group_by(ZonalStat.metric)
-        .subquery()
-    )
-    rows = db.execute(
-        select(ZonalStat).join(
-            subq, (ZonalStat.metric == subq.c.metric) &
-            (ZonalStat.acquisition_date == subq.c.max_date))
-        .where(ZonalStat.polygon_id == farm.id)
-    ).scalars().all()
+    if date is not None:
+        rows = db.execute(
+            select(ZonalStat).where(
+                ZonalStat.polygon_id == farm.id, ZonalStat.value.isnot(None),
+                func.date(ZonalStat.acquisition_date) == date,
+            )
+        ).scalars().all()
+    else:
+        subq = (
+            select(ZonalStat.metric, func.max(
+                ZonalStat.acquisition_date).label("max_date"))
+            .where(ZonalStat.polygon_id == farm.id, ZonalStat.value.isnot(None))
+            .group_by(ZonalStat.metric)
+            .subquery()
+        )
+        rows = db.execute(
+            select(ZonalStat).join(
+                subq, (ZonalStat.metric == subq.c.metric) &
+                (ZonalStat.acquisition_date == subq.c.max_date))
+            .where(ZonalStat.polygon_id == farm.id)
+        ).scalars().all()
 
     data = [IndexReading(metric=r.metric, acquisition_date=r.acquisition_date,
                          value=float(r.value) if r.value is not None else None,

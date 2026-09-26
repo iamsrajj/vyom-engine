@@ -5269,52 +5269,19 @@
               <div class="card" style="padding: 22px">
                 <h3 style="margin: 0 0 18px">Profile Information</h3>
                 <div style="display: flex; gap: 18px; margin-bottom: 4px">
-                  <div style="position: relative; flex: none">
-                    <img
-                      id="settings-avatar"
-                      src=""
-                      alt=""
-                      style="
-                        width: 72px;
-                        height: 72px;
-                        border-radius: 50%;
-                        object-fit: cover;
-                        border: 2px solid var(--border);
-                      "
-                    />
-                    <button
-                      class="icon-btn"
-                      style="
-                        position: absolute;
-                        bottom: -2px;
-                        right: -2px;
-                        width: 26px;
-                        height: 26px;
-                        background: var(--canopy);
-                        border-radius: 50%;
-                      "
-                      onclick="
-                        showHonestPlaceholder('Changing your profile photo')
-                      "
-                      aria-label="Change photo"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        stroke="#0f1b14"
-                        fill="none"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        width="14"
-                        height="14"
-                      >
-                        <path
-                          d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-                        />
-                        <circle cx="12" cy="13" r="4" />
-                      </svg>
-                    </button>
-                  </div>
+                  <img
+                    id="settings-avatar"
+                    src=""
+                    alt=""
+                    style="
+                      width: 72px;
+                      height: 72px;
+                      border-radius: 50%;
+                      object-fit: cover;
+                      border: 2px solid var(--border);
+                      flex: none;
+                    "
+                  />
                   <div style="flex: 1; display: grid; gap: 12px">
                     <div>
                       <label style="font-size: 12px; color: var(--text-dim)"
@@ -7377,7 +7344,7 @@
             ],
             [
               "How do I change my name or profile photo?",
-              "Go to Settings to update your profile details.",
+              "Your name can be updated in Settings. Your profile photo comes from your linked Google account and isn't independently editable yet.",
             ],
             [
               "What data does AgriDoot store about me?",
