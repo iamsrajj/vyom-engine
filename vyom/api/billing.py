@@ -111,15 +111,16 @@ def create_business_upgrade_order(payload: UpgradeRequest, user_id: str = Depend
             502, "Could not create payment order. Please try again.")
 
     sub = BusinessSubscription(
-        user_id=user.id, amount_paise=base_paise - discount_paise, gst_paise=gst_paise,
-        total_paise=total_paise, razorpay_order_id=order["id"], status="created",
+        user_id=user.id, amount_paise=base_paise, discount_paise=discount_paise,
+        gst_paise=gst_paise, total_paise=total_paise, razorpay_order_id=order[
+            "id"], status="created",
     )
     db.add(sub)
     db.commit()
 
     return UpgradeOrderOut(
         razorpay_order_id=order["id"], razorpay_key_id=settings.razorpay_key_id,
-        amount_paise=total_paise, base_paise=base_paise - discount_paise,
+        amount_paise=total_paise, base_paise=base_paise,
         gst_paise=gst_paise, discount_paise=discount_paise,
     )
 

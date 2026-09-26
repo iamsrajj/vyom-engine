@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from vyom.api.farms import _backfill_and_dispatch_refresh, _geodesic_area_ha
 from vyom.api_auth import ApiV1Error, BusinessApiContext, require_business_api_auth
+from vyom.config import settings
 from vyom.db import get_db
 from vyom.geometry_utils import sanitize_polygon_geojson
 from vyom.idempotency import check_and_replay, store_result
@@ -236,6 +237,28 @@ def list_partner_farms(ctx: BusinessApiContext = Depends(require_business_api_au
     return Envelope(data=[_to_partner_farm_out(f) for f in farms], meta=_build_meta(db, ctx))
 
 
+class SupportedIndicesOut(BaseModel):
+    S2: list[str]
+    S1: list[str]
+
+
+@router.get("/indices", response_model=Envelope[SupportedIndicesOut])
+def get_supported_indices(ctx: BusinessApiContext = Depends(require_business_api_auth),
+                          db: Session = Depends(get_db)):
+    """Every index this deployment computes, per satellite platform -- the
+    partner-API equivalent of the dashboard's own GET /farms/available-indices
+    (see vyom/api/farms.py). Same underlying config (settings.s2_indices/
+    s1_indices), so this and the dashboard's index picker never drift apart.
+    Registered before /{farm_id} below so "indices" is never swallowed as a
+    farm_id path value.
+    """
+    return Envelope(
+        data=SupportedIndicesOut(
+            S2=settings.s2_indices, S1=settings.s1_indices),
+        meta=_build_meta(db, ctx),
+    )
+
+
 @router.get("/{farm_id}", response_model=Envelope[PartnerFarmOut])
 def get_partner_farm(farm_id: uuid.UUID, ctx: BusinessApiContext = Depends(require_business_api_auth),
                      db: Session = Depends(get_db)):
@@ -329,15 +352,22 @@ def get_partner_farm_latest_indices(
 @router.get("/{farm_id}/timeseries", response_model=Envelope[list[IndexReading]])
 def get_partner_farm_timeseries(
     farm_id: uuid.UUID, metric: str = "NDVI_mean",
+    start_date: Optional[date_cls] = None, end_date: Optional[date_cls] = None,
     ctx: BusinessApiContext = Depends(require_business_api_auth),
     db: Session = Depends(get_db),
 ):
+    """Full history by default. Pass start_date and/or end_date (get real
+    values from /{farm_id}/available-dates) to narrow to a specific window
+    instead -- both bounds are inclusive."""
     farm = _get_owned_api_farm(db, farm_id, ctx)
-    rows = db.execute(
-        select(ZonalStat).where(ZonalStat.polygon_id ==
-                                farm.id, ZonalStat.metric == metric)
-        .order_by(ZonalStat.acquisition_date)
-    ).scalars().all()
+    stmt = select(ZonalStat).where(ZonalStat.polygon_id ==
+                                   farm.id, ZonalStat.metric == metric)
+    if start_date is not None:
+        stmt = stmt.where(func.date(ZonalStat.acquisition_date) >= start_date)
+    if end_date is not None:
+        stmt = stmt.where(func.date(ZonalStat.acquisition_date) <= end_date)
+    rows = db.execute(stmt.order_by(
+        ZonalStat.acquisition_date)).scalars().all()
     data = [IndexReading(metric=r.metric, acquisition_date=r.acquisition_date,
                          value=float(r.value) if r.value is not None else None,
                          cloud_pct=float(r.cloud_pct) if r.cloud_pct is not None else None)

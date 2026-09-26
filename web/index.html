@@ -300,6 +300,10 @@
         background: rgba(220, 38, 38, 0.12);
         color: var(--danger);
       }
+      .fc-badge--no-plan {
+        background: var(--bg-deep);
+        color: var(--text-dim);
+      }
       .fc-badge--api {
         background: rgba(59, 130, 246, 0.14);
         color: #3b82f6;
@@ -8691,6 +8695,13 @@
           farm.area_acre != null ? `${farm.area_acre.toFixed(2)} ac` : "\u2013";
         const badges = `
           ${farm.plan_status === "expired" ? '<span class="fc-badge fc-badge--expired">EXPIRED</span>' : ""}
+          ${
+            farm.plan_locked &&
+            farm.created_via !== "api" &&
+            farm.plan_status !== "expired"
+              ? '<span class="fc-badge fc-badge--no-plan">NO PLAN</span>'
+              : ""
+          }
           ${farm.created_via === "api" ? '<span class="fc-badge fc-badge--api">API</span>' : ""}
         `;
         return `

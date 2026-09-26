@@ -111,7 +111,7 @@ def list_payments_for_user(db: Session, user: User) -> list[PaymentRecord]:
             invoice_number=_invoice_number("BIZ", s.created_at, str(s.id)),
             description="Vyom Engine Business Account -- Annual Maintenance",
             date=s.created_at, base_paise=s.amount_paise, gst_paise=s.gst_paise,
-            discount_paise=0, total_paise=s.total_paise, status=s.status,
+            discount_paise=s.discount_paise, total_paise=s.total_paise, status=s.status,
             is_paid=_is_paid_status("business_subscription", s.status),
             payment_ref=s.razorpay_payment_id,
         ))
@@ -253,7 +253,7 @@ def send_business_welcome_email(db: Session, user: User, sub: BusinessSubscripti
         invoice_number=_invoice_number("BIZ", sub.created_at, str(sub.id)),
         description="Vyom Engine Business Account -- Annual Maintenance",
         date=sub.created_at, base_paise=sub.amount_paise, gst_paise=sub.gst_paise,
-        discount_paise=0, total_paise=sub.total_paise, status=sub.status,
+        discount_paise=sub.discount_paise, total_paise=sub.total_paise, status=sub.status,
         is_paid=_is_paid_status("business_subscription", sub.status),
         payment_ref=sub.razorpay_payment_id,
     )

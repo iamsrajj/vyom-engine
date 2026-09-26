@@ -295,8 +295,39 @@
             value="NDVI_mean"
           />
           <p class="hint">
-            e.g. NDVI_mean, NDRE_mean, RVI_mean -- see /farms/available-indices
-            for the full list.
+            e.g. NDVI_mean, NDRE_mean, RVI_mean -- see GET /api/v1/farms/indices
+            for the full list this deployment computes.
+          </p>
+        </div>
+
+        <div id="dateRow" style="display: none">
+          <label>Date <span style="font-weight: 400">(optional)</span></label>
+          <input class="code" id="date" type="date" />
+          <p class="hint">
+            Leave blank for each index's latest reading, or pick a date from GET
+            /api/v1/farms/{farm_id}/available-dates.
+          </p>
+        </div>
+
+        <div id="dateRangeRow" style="display: none">
+          <div class="row">
+            <div>
+              <label
+                >Start date
+                <span style="font-weight: 400">(optional)</span></label
+              >
+              <input class="code" id="startDate" type="date" />
+            </div>
+            <div>
+              <label
+                >End date
+                <span style="font-weight: 400">(optional)</span></label
+              >
+              <input class="code" id="endDate" type="date" />
+            </div>
+          </div>
+          <p class="hint">
+            Leave both blank for full history. Both bounds are inclusive.
           </p>
         </div>
 
@@ -408,11 +439,22 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
           defaultBody: { crop_type: "rice", sowing_date: "2026-11-15" },
         },
         get_indices: {
-          label: "GET /api/v1/farms/{farm_id}/indices -- Latest indices",
+          label:
+            "GET /api/v1/farms/{farm_id}/indices -- Indices (latest or specific date)",
           method: "GET",
           path: "/api/v1/farms/{farm_id}/indices",
           needsFarmId: true,
           needsMetric: false,
+          needsDate: true,
+          needsBody: false,
+        },
+        get_available_dates: {
+          label:
+            "GET /api/v1/farms/{farm_id}/available-dates -- Available dates",
+          method: "GET",
+          path: "/api/v1/farms/{farm_id}/available-dates",
+          needsFarmId: true,
+          needsMetric: true,
           needsBody: false,
         },
         get_timeseries: {
@@ -421,6 +463,15 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
           path: "/api/v1/farms/{farm_id}/timeseries",
           needsFarmId: true,
           needsMetric: true,
+          needsDateRange: true,
+          needsBody: false,
+        },
+        get_supported_indices: {
+          label: "GET /api/v1/farms/indices -- Supported indices list",
+          method: "GET",
+          path: "/api/v1/farms/indices",
+          needsFarmId: false,
+          needsMetric: false,
           needsBody: false,
         },
       };
@@ -442,6 +493,8 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
         const cfg = currentConfig();
         $("farmIdRow").style.display = cfg.needsFarmId ? "block" : "none";
         $("metricRow").style.display = cfg.needsMetric ? "block" : "none";
+        $("dateRow").style.display = cfg.needsDate ? "block" : "none";
+        $("dateRangeRow").style.display = cfg.needsDateRange ? "block" : "none";
         $("bodyRow").style.display = cfg.needsBody ? "block" : "none";
         if (cfg.needsBody && cfg.defaultBody && !$("requestBody").value) {
           $("requestBody").value = JSON.stringify(cfg.defaultBody, null, 2);
@@ -467,10 +520,17 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
             "{farm_id}",
             encodeURIComponent($("farmId").value.trim()),
           );
+
+        const qs = new URLSearchParams();
         if (cfg.needsMetric)
-          path +=
-            "?metric=" +
-            encodeURIComponent($("metric").value.trim() || "NDVI_mean");
+          qs.set("metric", $("metric").value.trim() || "NDVI_mean");
+        if (cfg.needsDate && $("date").value) qs.set("date", $("date").value);
+        if (cfg.needsDateRange) {
+          if ($("startDate").value) qs.set("start_date", $("startDate").value);
+          if ($("endDate").value) qs.set("end_date", $("endDate").value);
+        }
+        const qsString = qs.toString();
+        if (qsString) path += "?" + qsString;
 
         const headers = {
           "X-Api-Key": $("apiKey").value.trim(),

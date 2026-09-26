@@ -523,7 +523,9 @@ class BusinessSubscription(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey(
         "users.id", ondelete="CASCADE"), nullable=False)
 
-    amount_paise = Column(Integer, nullable=False)      # base, pre-GST
+    # base, pre-GST, pre-discount
+    amount_paise = Column(Integer, nullable=False)
+    discount_paise = Column(Integer, nullable=False, server_default="0")
     gst_paise = Column(Integer, nullable=False, server_default="0")
     # amount + gst, what Razorpay actually charged
     total_paise = Column(Integer, nullable=False)
