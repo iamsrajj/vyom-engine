@@ -2509,6 +2509,127 @@
         padding: 16px 18px 20px;
         overflow-y: auto;
       }
+
+      /* ---------- "Draw new field" step wizard ---------- */
+      .wizard-progress {
+        display: flex;
+        align-items: flex-start;
+        padding: 14px 18px 0;
+        flex-shrink: 0;
+      }
+      .wizard-progress-step {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        position: relative;
+        min-width: 0;
+      }
+      .wizard-progress-step:not(:first-child)::before {
+        content: "";
+        position: absolute;
+        top: 13px;
+        right: 50%;
+        width: 100%;
+        height: 2px;
+        background: var(--line);
+        z-index: 0;
+      }
+      .wizard-progress-step.is-complete:not(:first-child)::before,
+      .wizard-progress-step.is-active:not(:first-child)::before {
+        background: var(--canopy);
+      }
+      .wizard-progress-dot {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: 2px solid var(--line);
+        background: var(--bg-panel);
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: "Space Grotesk", sans-serif;
+        position: relative;
+        z-index: 1;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          color 0.15s;
+      }
+      .wizard-progress-step.is-active .wizard-progress-dot {
+        border-color: var(--canopy);
+        color: var(--canopy);
+        background: var(--bg-panel);
+      }
+      .wizard-progress-step.is-complete .wizard-progress-dot {
+        border-color: var(--canopy);
+        background: var(--canopy);
+        color: #0f1b14;
+      }
+      .wizard-progress-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        text-align: center;
+        white-space: nowrap;
+      }
+      .wizard-progress-step.is-active .wizard-progress-label {
+        color: var(--text-primary);
+      }
+      .wizard-progress-step.is-complete .wizard-progress-label {
+        color: var(--canopy);
+      }
+      .wizard-step-title {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        margin: 4px 0 12px;
+      }
+      .wizard-step-subtitle {
+        font-size: 12.5px;
+        color: var(--text-dim);
+        margin: -8px 0 14px;
+      }
+      .wizard-complete-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.12);
+        color: var(--canopy);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 8px auto 16px;
+      }
+      .wizard-complete-icon svg {
+        width: 28px;
+        height: 28px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2.4;
+      }
+      .wizard-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+      }
+      .wizard-summary-row:last-child {
+        border-bottom: none;
+      }
+      .wizard-summary-row .label {
+        color: var(--text-dim);
+      }
+      .wizard-summary-row .value {
+        font-weight: 600;
+        text-align: right;
+      }
       .help-modal-card {
         max-width: 860px;
         width: 92vw;
@@ -3879,7 +4000,7 @@
         <div class="modal-overlay" id="draw-field-modal" style="display: none">
           <div class="modal-card">
             <div class="modal-header">
-              <h3>Draw new field</h3>
+              <h3 id="wizard-header-title">Draw new field</h3>
               <button
                 class="icon-btn"
                 onclick="closeDrawFieldModal()"
@@ -3894,175 +4015,236 @@
                 </svg>
               </button>
             </div>
-            <div class="modal-body">
-              <div
-                class="header-search"
-                id="modal-search-wrap"
-                style="width: 100%; margin-bottom: 10px; position: relative"
-              >
-                <input
-                  id="modal-location-search"
-                  type="text"
-                  placeholder="Address, place, or lat, lon (e.g. 23.28, 77.30)"
-                  oninput="onSearchInput()"
-                  style="width: 100%"
-                />
-                <div class="search-inline-btns">
-                  <button
-                    type="button"
-                    class="clear-btn"
-                    onclick="clearSearch()"
-                    title="Clear"
-                  >
-                    &times;
-                  </button>
-                  <button
-                    type="button"
-                    class="go-btn"
-                    onclick="searchLocation()"
-                  >
-                    Go
-                  </button>
-                </div>
-              </div>
-              <div id="draw-map-slot" class="draw-map-slot">
-                <div
-                  id="drawing-badge"
-                  class="drawing-badge"
-                  style="display: none"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
-                  Drawing
-                </div>
-              </div>
 
-              <div class="card" style="margin-top: 12px">
-                <button
-                  class="btn btn-primary"
-                  id="draw-start-btn"
-                  onclick="startDrawing()"
+            <div class="wizard-progress" id="wizard-progress">
+              <div class="wizard-progress-step" data-wizard-step="1">
+                <div class="wizard-progress-dot">1</div>
+                <div class="wizard-progress-label">Draw</div>
+              </div>
+              <div class="wizard-progress-step" data-wizard-step="2">
+                <div class="wizard-progress-dot">2</div>
+                <div class="wizard-progress-label">Details</div>
+              </div>
+              <div class="wizard-progress-step" data-wizard-step="3">
+                <div class="wizard-progress-dot">3</div>
+                <div class="wizard-progress-label">Payment</div>
+              </div>
+              <div class="wizard-progress-step" data-wizard-step="4">
+                <div class="wizard-progress-dot">4</div>
+                <div class="wizard-progress-label">Done</div>
+              </div>
+            </div>
+
+            <div class="modal-body">
+              <!-- ========== Step 1: draw the boundary ========== -->
+              <div id="wizard-step-1" class="wizard-step">
+                <div
+                  class="header-search"
+                  id="modal-search-wrap"
+                  style="width: 100%; margin-bottom: 10px; position: relative"
                 >
-                  Start drawing
-                </button>
-                <div id="draw-active-controls" style="display: none">
+                  <input
+                    id="modal-location-search"
+                    type="text"
+                    placeholder="Address, place, or lat, lon (e.g. 23.28, 77.30)"
+                    oninput="onSearchInput()"
+                    style="width: 100%"
+                  />
+                  <div class="search-inline-btns">
+                    <button
+                      type="button"
+                      class="clear-btn"
+                      onclick="clearSearch()"
+                      title="Clear"
+                    >
+                      &times;
+                    </button>
+                    <button
+                      type="button"
+                      class="go-btn"
+                      onclick="searchLocation()"
+                    >
+                      Go
+                    </button>
+                  </div>
+                </div>
+                <div id="draw-map-slot" class="draw-map-slot">
                   <div
-                    class="empty-state"
-                    style="
-                      padding-top: 0;
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                    "
+                    id="drawing-badge"
+                    class="drawing-badge"
+                    style="display: none"
                   >
                     <svg
                       viewBox="0 0 24 24"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                      style="
-                        width: 15px;
-                        height: 15px;
-                        flex-shrink: 0;
-                        stroke: currentColor;
-                        fill: none;
-                        stroke-width: 2;
-                      "
                     >
                       <path d="M12 20h9" />
                       <path
                         d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"
                       />
                     </svg>
-                    Click points on the map to trace the field boundary, then
-                    Finish.
+                    Drawing
                   </div>
-                  <div class="btn-row" style="margin-top: 8px">
-                    <button class="btn" onclick="cancelDrawing()">
-                      Cancel
-                    </button>
-                    <button class="btn btn-primary" onclick="finishDrawing()">
-                      Finish shape
-                    </button>
+                </div>
+
+                <div class="card" style="margin-top: 12px">
+                  <button
+                    class="btn btn-primary"
+                    id="draw-start-btn"
+                    onclick="startDrawing()"
+                  >
+                    Start drawing
+                  </button>
+                  <div id="draw-active-controls" style="display: none">
+                    <div
+                      class="empty-state"
+                      style="
+                        padding-top: 0;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                      "
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        style="
+                          width: 15px;
+                          height: 15px;
+                          flex-shrink: 0;
+                          stroke: currentColor;
+                          fill: none;
+                          stroke-width: 2;
+                        "
+                      >
+                        <path d="M12 20h9" />
+                        <path
+                          d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"
+                        />
+                      </svg>
+                      Click points on the map to trace the field boundary, then
+                      Finish.
+                    </div>
+                    <div class="btn-row" style="margin-top: 8px">
+                      <button class="btn" onclick="cancelDrawing()">
+                        Cancel
+                      </button>
+                      <button class="btn btn-primary" onclick="finishDrawing()">
+                        Finish shape
+                      </button>
+                    </div>
                   </div>
+                  <div
+                    id="new-farm-area-banner"
+                    class="area-banner"
+                    style="display: none; margin-top: 10px"
+                  ></div>
+                </div>
+
+                <div class="btn-row" style="margin-top: 14px">
+                  <button class="btn" onclick="cancelDraft()">Discard</button>
+                  <button
+                    class="btn btn-primary"
+                    id="wizard-step1-next-btn"
+                    onclick="wizardGoToStep(2)"
+                    disabled
+                  >
+                    Next: Field details
+                  </button>
                 </div>
               </div>
 
-              <div
-                id="create-form"
-                class="card"
-                style="display: none; margin-top: 12px"
-              >
-                <div class="panel-label">Field details</div>
+              <!-- ========== Steps 2-4 live inside #create-form, which
+                   finishDrawing()/cancelDraft()/wizardShowComplete()/
+                   selectFarm() show/hide as a single unit -- which of the
+                   three sub-steps is visible inside it is managed
+                   separately by wizardGoToStep(). ========== -->
+              <div id="create-form" style="display: none">
+                <!-- ========== Step 2: field details ========== -->
+                <div id="wizard-step-2" class="wizard-step">
+                  <div class="wizard-step-subtitle">
+                    Tell us a bit about this field -- crop and soil help tune
+                    the advisory, but both are optional.
+                  </div>
 
-                <div
-                  id="new-farm-area-banner"
-                  class="area-banner"
-                  style="display: none"
-                ></div>
-
-                <label>Name</label>
-                <input
-                  type="text"
-                  id="new-farm-name"
-                  placeholder="e.g. North block, Rampur"
-                />
-
-                <label>Location</label>
-                <div
-                  id="new-farm-location"
-                  class="location-display empty"
-                ></div>
-
-                <label>Crop (optional)</label>
-                <div
-                  class="picker-field"
-                  id="new-farm-crop-field"
-                  onclick="openCropPicker()"
-                >
-                  <span id="new-farm-crop-label" class="picker-placeholder"
-                    >Select crop</span
-                  >
-                </div>
-
-                <label>Soil (optional)</label>
-                <div
-                  class="picker-field"
-                  id="new-farm-soil-field"
-                  onclick="openSoilPicker()"
-                >
-                  <span id="new-farm-soil-label" class="picker-placeholder"
-                    >Select soil</span
-                  >
-                </div>
-
-                <label>Sowing date (optional)</label>
-                <div style="display: flex; align-items: center; gap: 10px">
+                  <label>Name</label>
                   <input
-                    type="date"
-                    id="new-farm-sowing-date"
-                    oninput="onNewFarmSowingDateInput()"
-                    style="flex: 1"
+                    type="text"
+                    id="new-farm-name"
+                    placeholder="e.g. North block, Rampur"
                   />
-                  <span
-                    id="new-farm-crop-age"
-                    class="mono"
-                    style="color: var(--text-dim); font-size: 12.5px"
-                  ></span>
+
+                  <label>Location</label>
+                  <div
+                    id="new-farm-location"
+                    class="location-display empty"
+                  ></div>
+
+                  <label>Crop (optional)</label>
+                  <div
+                    class="picker-field"
+                    id="new-farm-crop-field"
+                    onclick="openCropPicker()"
+                  >
+                    <span id="new-farm-crop-label" class="picker-placeholder"
+                      >Select crop</span
+                    >
+                  </div>
+
+                  <label>Soil (optional)</label>
+                  <div
+                    class="picker-field"
+                    id="new-farm-soil-field"
+                    onclick="openSoilPicker()"
+                  >
+                    <span id="new-farm-soil-label" class="picker-placeholder"
+                      >Select soil</span
+                    >
+                  </div>
+
+                  <label>Sowing date (optional)</label>
+                  <div style="display: flex; align-items: center; gap: 10px">
+                    <input
+                      type="date"
+                      id="new-farm-sowing-date"
+                      oninput="onNewFarmSowingDateInput()"
+                      style="flex: 1"
+                    />
+                    <span
+                      id="new-farm-crop-age"
+                      class="mono"
+                      style="color: var(--text-dim); font-size: 12.5px"
+                    ></span>
+                  </div>
+
+                  <div class="btn-row" style="margin-top: 16px">
+                    <button class="btn" onclick="wizardGoToStep(1)">
+                      Back
+                    </button>
+                    <button
+                      class="btn btn-primary"
+                      onclick="wizardValidateStep2AndContinue()"
+                    >
+                      Next: Payment
+                    </button>
+                  </div>
                 </div>
 
+                <!-- ========== Step 3: plan + payment ========== -->
                 <div
-                  style="
-                    border-top: 1px solid var(--line);
-                    margin: 16px 0 12px;
-                    padding-top: 12px;
-                  "
+                  id="wizard-step-3"
+                  class="wizard-step"
+                  style="display: none"
                 >
+                  <div class="wizard-step-subtitle">
+                    Pick a plan for
+                    <strong id="wizard-step3-farm-name"></strong>
+                    -- indices, weather, and advisory unlock as soon as payment
+                    completes.
+                  </div>
+
                   <label>Plan</label>
                   <div id="plan-tier-options" style="display: grid; gap: 8px">
                     <label
@@ -4167,19 +4349,82 @@
                       color: var(--text-primary);
                     "
                   ></div>
+
+                  <div class="btn-row" style="margin-top: 16px">
+                    <button class="btn" onclick="wizardGoToStep(2)">
+                      Back
+                    </button>
+                    <button
+                      class="btn btn-primary"
+                      id="save-draft-btn"
+                      onclick="saveDraft()"
+                    >
+                      Save &amp; pay
+                    </button>
+                  </div>
                 </div>
 
-                <div class="btn-row" style="margin-top: 12px">
-                  <button class="btn" onclick="cancelDraft()">Discard</button>
-                  <button
-                    class="btn btn-primary"
-                    id="save-draft-btn"
-                    onclick="saveDraft()"
+                <!-- ========== Step 4: complete ========== -->
+                <div
+                  id="wizard-step-4"
+                  class="wizard-step"
+                  style="display: none; text-align: center"
+                >
+                  <div class="wizard-complete-icon">
+                    <svg viewBox="0 0 24 24">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </div>
+                  <div class="wizard-step-title" style="margin-bottom: 2px">
+                    <span id="wizard-complete-farm-name">Field</span> is saved
+                  </div>
+                  <p
+                    style="
+                      font-size: 13px;
+                      color: var(--text-dim);
+                      margin: 0 0 16px;
+                    "
+                    id="wizard-complete-subtext"
                   >
-                    Save &amp; pay
-                  </button>
+                    Fetching its satellite history now -- this can take up to
+                    12&ndash;18 hours.
+                  </p>
+
+                  <div
+                    class="card"
+                    style="text-align: left; margin-bottom: 16px"
+                  >
+                    <div class="wizard-summary-row">
+                      <span class="label">Field</span>
+                      <span class="value" id="wizard-summary-name"
+                        >&ndash;</span
+                      >
+                    </div>
+                    <div class="wizard-summary-row">
+                      <span class="label">Area</span>
+                      <span class="value" id="wizard-summary-area"
+                        >&ndash;</span
+                      >
+                    </div>
+                    <div class="wizard-summary-row">
+                      <span class="label">Plan</span>
+                      <span class="value" id="wizard-summary-plan"
+                        >&ndash;</span
+                      >
+                    </div>
+                  </div>
+
+                  <div class="btn-row">
+                    <button class="btn" onclick="wizardAddAnotherField()">
+                      Draw another field
+                    </button>
+                    <button class="btn btn-primary" onclick="wizardViewField()">
+                      View field
+                    </button>
+                  </div>
                 </div>
               </div>
+              <!-- /#create-form -->
             </div>
           </div>
         </div>
@@ -6833,8 +7078,10 @@
         draftGeoJSON = polygonToGeoJSON(draftPolygon);
         isDrawing = false;
         updateDrawUI();
-        document.getElementById("create-form").style.display = "block";
-        document.getElementById("new-farm-name").focus();
+        // Stays on step 1 (the wizard step, see wizardGoToStep()) so the
+        // farmer can see the area preview and drag vertices before
+        // deliberately choosing to continue -- doesn't auto-advance.
+        document.getElementById("wizard-step1-next-btn").disabled = false;
         showDraftAreaPreview();
         populateDraftLocation();
       }
@@ -8119,6 +8366,129 @@
         const saveBtn = document.getElementById("save-draft-btn");
         saveBtn.disabled = false;
         saveBtn.textContent = "Save & pay";
+        // Step 1's "Next" only enables once a shape actually exists --
+        // see finishDrawing() / wizardGoToStep().
+        const step1NextBtn = document.getElementById("wizard-step1-next-btn");
+        if (step1NextBtn) step1NextBtn.disabled = !draftGeoJSON;
+      }
+
+      // ================= "Draw new field" step wizard =================
+      // Steps: 1 Draw -> 2 Field details -> 3 Payment -> 4 Done. Step 1
+      // lives outside #create-form (it needs the shared #map visible);
+      // steps 2-4 live inside #create-form, which finishDrawing() enables
+      // access to but doesn't itself display until Next is clicked --
+      // see wizardGoToStep() below.
+      let wizardCurrentStep = 1;
+      let wizardSavedFarm = null;
+
+      const WIZARD_STEP_TITLES = {
+        1: "Draw new field",
+        2: "Field details",
+        3: "Choose a plan",
+        4: "Field saved",
+      };
+
+      function wizardGoToStep(step) {
+        wizardCurrentStep = step;
+        document.getElementById("wizard-step-1").style.display =
+          step === 1 ? "block" : "none";
+        document.getElementById("create-form").style.display =
+          step === 1 ? "none" : "block";
+        document.getElementById("wizard-step-2").style.display =
+          step === 2 ? "block" : "none";
+        document.getElementById("wizard-step-3").style.display =
+          step === 3 ? "block" : "none";
+        document.getElementById("wizard-step-4").style.display =
+          step === 4 ? "block" : "none";
+
+        document.getElementById("wizard-header-title").textContent =
+          WIZARD_STEP_TITLES[step] || "Draw new field";
+        document
+          .querySelectorAll("#wizard-progress .wizard-progress-step")
+          .forEach((el) => {
+            const s = parseInt(el.dataset.wizardStep, 10);
+            el.classList.remove("is-active", "is-complete");
+            if (s < step) el.classList.add("is-complete");
+            else if (s === step) el.classList.add("is-active");
+          });
+
+        if (step === 1) {
+          const step1NextBtn = document.getElementById("wizard-step1-next-btn");
+          if (step1NextBtn) step1NextBtn.disabled = !draftGeoJSON;
+          // The shared #map element was sitting inside a hidden ancestor
+          // while steps 2-4 were showing -- Google Maps needs a resize
+          // nudge once it's visible again, same pattern as
+          // openDrawFieldModal() uses on first open.
+          if (map)
+            setTimeout(() => google.maps.event.trigger(map, "resize"), 30);
+        } else if (step === 2) {
+          document.getElementById("new-farm-name").focus();
+        } else if (step === 3) {
+          document.getElementById("wizard-step3-farm-name").textContent =
+            document.getElementById("new-farm-name").value.trim() ||
+            "this field";
+          updatePlanPricePreview();
+        }
+      }
+
+      function wizardValidateStep2AndContinue() {
+        const name = document.getElementById("new-farm-name").value.trim();
+        if (!name) return showToast("Give the field a name first.");
+        wizardGoToStep(3);
+      }
+
+      // Called from saveDraft() on both its success-shaped exits (fully
+      // paid, and saved-but-payment-incomplete) -- shows step 4 instead of
+      // immediately closing the modal/navigating away, so the farmer sees
+      // a clear confirmation before choosing what to do next.
+      function wizardShowComplete(farm, paid) {
+        if (draftPolygon) draftPolygon.setMap(null);
+        draftPolygon = null;
+        draftGeoJSON = null;
+        draftFarmId = null;
+        wizardSavedFarm = farm;
+
+        document.getElementById("wizard-complete-farm-name").textContent =
+          farm.name;
+        document.getElementById("wizard-summary-name").textContent = farm.name;
+        document.getElementById("wizard-summary-area").textContent =
+          farm.area_acre != null ? fmtArea(farm.area_acre) : "\u2013";
+        const checkedPlan = document.querySelector(
+          'input[name="plan_tier"]:checked + span',
+        );
+        document.getElementById("wizard-summary-plan").textContent = checkedPlan
+          ? checkedPlan.textContent
+          : "\u2013";
+        document.getElementById("wizard-complete-subtext").textContent = paid
+          ? "Fetching its satellite history now \u2014 this can take up to 12\u201318 hours."
+          : `Payment wasn't completed \u2014 open "${farm.name}" any time to recharge and unlock its data.`;
+
+        wizardGoToStep(4);
+        // Refresh the farm list in the background (so it's already there
+        // when/if the farmer clicks "View field" or navigates away some
+        // other way) without navigating away from this success screen yet.
+        loadFarms();
+      }
+
+      function wizardViewField() {
+        const farm = wizardSavedFarm;
+        wizardSavedFarm = null;
+        document.getElementById("create-form").style.display = "none";
+        resetCreateForm();
+        closeDrawFieldModal(/* skipConfirm */ true);
+        if (farm) {
+          loadFarms().then(() => {
+            switchPage("imagery");
+            selectFarm(farm.id);
+          });
+        }
+      }
+
+      function wizardAddAnotherField() {
+        wizardSavedFarm = null;
+        document.getElementById("create-form").style.display = "none";
+        resetCreateForm();
+        wizardGoToStep(1);
       }
 
       function cancelDrawing() {
@@ -8658,6 +9028,7 @@
         document
           .getElementById("draw-map-slot")
           .appendChild(document.getElementById("map"));
+        wizardGoToStep(1);
         setTimeout(() => {
           google.maps.event.trigger(map, "resize");
           if (farms.length) {
@@ -9410,18 +9781,12 @@
                 }),
               });
             } catch (payErr) {
-              finishSaveDraftUI(farm);
-              showToast(
-                `"${farm.name}" is saved \u2014 payment wasn't completed, so open it any time to recharge and unlock its data.`,
-              );
+              wizardShowComplete(farm, /* paid */ false);
               return;
             }
           }
 
-          finishSaveDraftUI(farm);
-          showToast(
-            `Saved "${farm.name}" \u2014 fetching its satellite history now, this can take up to 12\u201318 hours.`,
-          );
+          wizardShowComplete(farm, /* paid */ true);
         } catch (e) {
           if (e.message !== "Not authenticated")
             showToast("Could not save field: " + e.message);
@@ -9430,24 +9795,6 @@
           saveBtn.disabled = false;
           saveBtn.textContent = "Save & pay";
         }
-      }
-
-      // Shared cleanup/navigation after a farm is successfully saved,
-      // whether or not its plan payment also completed in the same flow --
-      // factored out since saveDraft() has two success-shaped exits (fully
-      // paid, and saved-but-unpaid) that both need it.
-      function finishSaveDraftUI(farm) {
-        if (draftPolygon) draftPolygon.setMap(null);
-        draftPolygon = null;
-        draftGeoJSON = null;
-        draftFarmId = null;
-        document.getElementById("create-form").style.display = "none";
-        resetCreateForm();
-        closeDrawFieldModal(/* skipConfirm */ true);
-        loadFarms().then(() => {
-          switchPage("imagery");
-          selectFarm(farm.id);
-        });
       }
 
       async function deleteFarm() {

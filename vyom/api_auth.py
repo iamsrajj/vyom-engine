@@ -28,11 +28,13 @@ import hmac
 import logging
 import secrets
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+import jwt
 import redis
-from fastapi import Depends, Header, Request, Response
+from fastapi import Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -197,3 +199,68 @@ def require_business_api_auth(
 
     return BusinessApiContext(user=user, credential=credential,
                               warnings=_compute_warnings(db, user))
+
+
+# ---------------------------------------------------------------------------
+# Map-tile tokens -- point 5 of the monetization spec (plot indices on a
+# map via the partner API).
+#
+# Map tiles are loaded by every map library (Leaflet, Mapbox GL, Google
+# Maps' ImageMapType) as plain <img>-style requests, exactly like the
+# dashboard's own /tiles endpoint (see vyom/auth.py's module docstring for
+# why require_auth_query exists at all) -- an integrator's map widget has
+# no way to attach X-Api-Key/X-Api-Secret headers to those requests. So a
+# business calls GET /api/v1/farms/{farm_id}/map-layer once (normal header
+# auth) to get back a ready-to-use XYZ tile URL template with a signed,
+# short-lived token already embedded in it; the actual tile requests that
+# a map widget then fires need no headers at all.
+#
+# Deliberately a SEPARATE token type (typ="partner_map_tile") from both the
+# dashboard's session tokens and the registration token -- scoped to
+# exactly one farm_id + credential_id pair, so a leaked tile URL (e.g.
+# pasted into a public support ticket, or visible in a browser's network
+# tab on someone else's shared screen) only ever exposes that one farm's
+# imagery, never a way to call any other partner-API endpoint or a
+# different farm's tiles, and it self-expires instead of being a
+# standing credential.
+MAP_TILE_TOKEN_TTL_SECONDS = 24 * 3600
+
+
+def issue_map_tile_token(farm_id: uuid.UUID, credential_id: int) -> tuple[str, int]:
+    now = int(time.time())
+    expires_at = now + MAP_TILE_TOKEN_TTL_SECONDS
+    payload = {
+        "farm_id": str(farm_id), "cred_id": credential_id,
+        "iat": now, "exp": expires_at, "typ": "partner_map_tile",
+    }
+    token = jwt.encode(payload, settings.auth_secret_key, algorithm="HS256")
+    return token, expires_at
+
+
+@dataclass
+class MapTileTokenContext:
+    farm_id: uuid.UUID
+    credential_id: int
+
+
+def require_map_tile_token(
+    token: str = Query(...),
+) -> MapTileTokenContext:
+    """Verifies a token issued by issue_map_tile_token above. Raises a
+    plain HTTPException (not ApiV1Error) since this gate protects an
+    image-tile endpoint, not a JSON partner-API route -- a 401 with a PNG
+    content-type expectation just needs a normal status code, not the
+    {"error": {...}} envelope an integrator's JSON client would otherwise
+    have to special-case for one endpoint."""
+    try:
+        payload = jwt.decode(
+            token, settings.auth_secret_key, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            401, "Map tile token expired -- request a fresh one from GET /api/v1/farms/{farm_id}/map-layer")
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, "Invalid map tile token")
+    if payload.get("typ") != "partner_map_tile":
+        raise HTTPException(401, "Invalid map tile token")
+    return MapTileTokenContext(
+        farm_id=uuid.UUID(payload["farm_id"]), credential_id=payload["cred_id"])

@@ -34,7 +34,7 @@ from vyom.config import settings
 from vyom.db import get_db
 from vyom.geometry_utils import sanitize_polygon_geojson
 from vyom.idempotency import check_and_replay, store_result
-from vyom.models import Polygon, ZonalStat
+from vyom.models import InterpolatedStat, Polygon, ZonalStat
 from vyom.units import HA_TO_ACRE
 
 router = APIRouter(prefix="/api/v1/farms", tags=["partner-api"])
@@ -275,20 +275,41 @@ class IndexReading(BaseModel):
 
 class AvailableDate(BaseModel):
     date: date_cls
+    # "satellite" -- a real zonal_stats reading for this exact date.
+    # "interpolated" -- a real reading exists on both sides of this date;
+    #     linearly interpolated between them (see InterpolatedStat's
+    #     docstring in models.py).
+    # "provisional" -- only ONE real reading exists so far (the most recent
+    #     one); this date is a flat carry-forward of it, pending a second
+    #     real reading to confirm/replace it. Weaker than "interpolated" --
+    #     there's nothing on the far side to draw a line to yet.
+    # Always "satellite" unless include_interpolated=true was passed.
+    source: str = "satellite"
 
 
 @router.get("/{farm_id}/available-dates", response_model=Envelope[list[AvailableDate]])
 def get_partner_farm_available_dates(
-    farm_id: uuid.UUID, metric: str = "NDVI_mean",
+    farm_id: uuid.UUID, metric: str = "NDVI_mean", include_interpolated: bool = False,
     ctx: BusinessApiContext = Depends(require_business_api_auth),
     db: Session = Depends(get_db),
 ):
-    """Every date this farm has a real (non-null) satellite reading for the
-    given metric, newest first -- pass one of these as `date` to
-    /{farm_id}/indices, or use them to page through /{farm_id}/timeseries'
-    full history. `metric` matches the same values /timeseries accepts
-    (e.g. NDVI_mean, NDRE_mean) -- see /{farm_id}/indices' response for the
-    full list this deployment computes for a given farm.
+    """Every date this farm has a reading for the given metric, newest
+    first -- pass one of these as `date` to /{farm_id}/indices, or use them
+    to page through /{farm_id}/timeseries' full history. `metric` matches
+    the same values /timeseries accepts (e.g. NDVI_mean, NDRE_mean) -- see
+    /{farm_id}/indices' response for the full list this deployment
+    computes for a given farm.
+
+    By default only returns dates with a REAL satellite reading (every
+    entry's `source` is "satellite"). Pass include_interpolated=true to
+    also get gap-filled dates on this deployment's fixed interpolation
+    cadence (see InterpolatedStat in models.py) -- each entry's `source`
+    then tells you whether it's a real reading, a genuine two-sided
+    interpolation, or a one-sided provisional carry-forward, so you can
+    decide for yourself whether a "provisional" point is good enough for
+    your use case or whether to wait for a real/interpolated one. This
+    mirrors the dashboard's own available-dates endpoint (vyom/api/farms.py)
+    exactly, so the two never drift apart.
     """
     farm = _get_owned_api_farm(db, farm_id, ctx)
     rows = db.execute(
@@ -297,8 +318,21 @@ def get_partner_farm_available_dates(
                ZonalStat.value.isnot(None))
         .order_by(ZonalStat.acquisition_date.desc())
     ).scalars().all()
-    data = [AvailableDate(date=d.date() if isinstance(
-        d, datetime) else d) for d in rows]
+    data = [AvailableDate(date=d.date() if isinstance(d, datetime) else d,
+                          source="satellite") for d in rows]
+
+    if include_interpolated:
+        interp_rows = db.execute(
+            select(InterpolatedStat.date, InterpolatedStat.source)
+            .where(InterpolatedStat.polygon_id == farm.id,
+                   InterpolatedStat.metric == metric)
+            .order_by(InterpolatedStat.date.desc())
+        ).all()
+        for d, src in interp_rows:
+            data.append(AvailableDate(
+                date=d.date() if isinstance(d, datetime) else d, source=src))
+        data.sort(key=lambda row: row.date, reverse=True)
+
     return Envelope(data=data, meta=_build_meta(db, ctx))
 
 

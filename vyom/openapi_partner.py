@@ -23,7 +23,15 @@ def build_partner_openapi(app) -> dict:
             "All responses share one envelope: `{\"data\": ..., \"meta\": {...}}` on "
             "success, or `{\"error\": {\"code\", \"message\", \"retriable\"}}` on "
             "failure. See the Playground (/developers/playground.html) to try "
-            "requests against your own account."
+            "requests against your own account.\n\n"
+            "**Plotting indices on your own map**: GET /{farm_id}/map-layer "
+            "(normal header auth) returns a ready-to-use XYZ tile URL template "
+            "with a signed, short-lived token already embedded -- feed it "
+            "straight into Leaflet/Mapbox GL/Google Maps. The actual tile PNGs "
+            "at .../map/{platform}/{index}/{date}/{z}/{x}/{y}.png are loaded by "
+            "your map library itself and use that embedded ?token=, NOT "
+            "X-Api-Key/X-Api-Secret (map libraries can't attach custom headers "
+            "to tile requests)."
         ),
         routes=app.routes,
     )

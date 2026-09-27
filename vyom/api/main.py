@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from vyom.api import farms, tiles, auth as auth_api, errors as errors_api, prewarm as prewarm_api, reference as reference_api, contact as contact_api, notifications as notifications_api
 from vyom.api import billing as billing_api
-from vyom.api import business_api_credentials, partner_farms, developer_docs
+from vyom.api import business_api_credentials, partner_farms, partner_tiles, developer_docs
 from vyom.api import business_onboarding
 from vyom.api_auth import ApiV1Error
 from vyom.auth import require_auth, require_auth_query
@@ -88,6 +88,12 @@ app.include_router(business_onboarding.router,
 # different scheme from the dashboard session cookie/JWT every other
 # router above uses.
 app.include_router(partner_farms.router)
+# partner_tiles.router mixes BOTH the header-key/secret scheme (map-layer)
+# AND a third scheme, a short-lived signed ?token= (the actual tile PNGs) --
+# see vyom/api_auth.py's "Map-tile tokens" section for why the tile route
+# can't use X-Api-Key/X-Api-Secret at all. Neither route gets a
+# router-level dependency here; each declares its own via Depends(...).
+app.include_router(partner_tiles.router)
 # Public docs -- no auth dependency, same reasoning as the router comment
 # in developer_docs.py itself.
 app.include_router(developer_docs.router)

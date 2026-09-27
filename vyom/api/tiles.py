@@ -152,46 +152,25 @@ def _resolve_raster(db: Session, farm_id: uuid.UUID, date: Optional[str],
     return stored_path, "satellite"
 
 
-@router.get("/{farm_id}/{date}/{z}/{x}/{y}.png")
-def index_tile(
-    farm_id: uuid.UUID,
-    date: str,
-    z: int,
-    x: int,
-    y: int,
-    index: str = "NDVI",
-    platform: str = "S2",
-    include_interpolated: bool = False,
-    current_user: str = Depends(require_auth_query),
-    db: Session = Depends(get_db),
-):
-    """
-    date: an ISO acquisition date, or 'latest'.
-    index: any index name from GET /farms/available-indices (e.g. NDVI, NDMI,
-    NDRE, MSAVI2, SOC_VIS, RVI, VV_VH_RATIO).
-    platform: 'S2' or 'S1' -- must match which platform computed that index.
-    include_interpolated: when true and no real reading exists for the exact
-    date requested, falls back to a computed tile from interpolated_tiles
-    (see raster_interpolation.py) -- the response's X-Vyom-Data-Source header
-    always says which kind of tile was actually served ("satellite",
-    "interpolated", or "provisional"). Never assume a 200 response is a real
-    satellite reading without checking this header.
+def render_index_tile(
+    db: Session, farm: Polygon, date: str, z: int, x: int, y: int,
+    index: str, platform: str, include_interpolated: bool,
+) -> tuple[bytes, str]:
+    """Core tile-rendering logic, factored out so both the dashboard's
+    session-authenticated route below and the partner API's token-
+    authenticated route (vyom/api/partner_tiles.py) share exactly one
+    rendering path -- ownership/auth is each caller's own responsibility,
+    this function only resolves+renders the raster for an already-
+    authorized `farm`. Returns (png_bytes, source_label) where
+    source_label is "satellite" | "interpolated" | "provisional", same
+    contract as the X-Vyom-Data-Source header below.
     """
     index = index.upper()
     if index not in _INDEX_RENDER_CONFIG:
         raise HTTPException(400, f"Unknown index '{index}'")
 
-    farm = db.get(Polygon, farm_id)
-    # Security fix (BOLA): this used to return any farm's tiles to any
-    # authenticated caller with no ownership check at all -- same class of
-    # bug as farms.py's endpoints before that fix, see
-    # _get_owned_farm's docstring there for the reasoning (404, not 403,
-    # so a caller can't distinguish "no such farm" from "not yours").
-    if farm is None or farm.user_id != stable_owner_uuid(current_user):
-        raise HTTPException(404, "Farm not found")
-
     stored_path, source_label = _resolve_raster(
-        db, farm_id, date, platform, index, include_interpolated)
+        db, farm.id, date, platform, index, include_interpolated)
 
     cog_path = storage.open_for_read(stored_path)
     cfg = _INDEX_RENDER_CONFIG[index]
@@ -224,6 +203,53 @@ def index_tile(
         img.rescale(in_range=(cfg["range"],))
         content = img.render(
             img_format="PNG", colormap=default_cmaps.get(cfg["colormap"]))
+
+    return content, source_label
+
+
+def get_index_render_config() -> dict:
+    """Read-only accessor for _INDEX_RENDER_CONFIG -- used by
+    vyom/api/partner_tiles.py to build its map-layer legend response
+    without importing the private module-level dict directly."""
+    return _INDEX_RENDER_CONFIG
+
+
+@router.get("/{farm_id}/{date}/{z}/{x}/{y}.png")
+def index_tile(
+    farm_id: uuid.UUID,
+    date: str,
+    z: int,
+    x: int,
+    y: int,
+    index: str = "NDVI",
+    platform: str = "S2",
+    include_interpolated: bool = False,
+    current_user: str = Depends(require_auth_query),
+    db: Session = Depends(get_db),
+):
+    """
+    date: an ISO acquisition date, or 'latest'.
+    index: any index name from GET /farms/available-indices (e.g. NDVI, NDMI,
+    NDRE, MSAVI2, SOC_VIS, RVI, VV_VH_RATIO).
+    platform: 'S2' or 'S1' -- must match which platform computed that index.
+    include_interpolated: when true and no real reading exists for the exact
+    date requested, falls back to a computed tile from interpolated_tiles
+    (see raster_interpolation.py) -- the response's X-Vyom-Data-Source header
+    always says which kind of tile was actually served ("satellite",
+    "interpolated", or "provisional"). Never assume a 200 response is a real
+    satellite reading without checking this header.
+    """
+    farm = db.get(Polygon, farm_id)
+    # Security fix (BOLA): this used to return any farm's tiles to any
+    # authenticated caller with no ownership check at all -- same class of
+    # bug as farms.py's endpoints before that fix, see
+    # _get_owned_farm's docstring there for the reasoning (404, not 403,
+    # so a caller can't distinguish "no such farm" from "not yours").
+    if farm is None or farm.user_id != stable_owner_uuid(current_user):
+        raise HTTPException(404, "Farm not found")
+
+    content, source_label = render_index_tile(
+        db, farm, date, z, x, y, index, platform, include_interpolated)
 
     return Response(
         content=content, media_type="image/png",

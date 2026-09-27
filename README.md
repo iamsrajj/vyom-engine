@@ -1,239 +1,551 @@
-> **Update**: this now covers Sentinel-1 + Sentinel-2, six S2 indices (NDVI,
-> NDWI, NDMI, MSAVI2, NDRE, SOC_VIS) plus two S1 indices (RVI, VV_VH_RATIO),
-> pluggable storage (local disk or MinIO/S3), and a full web dashboard at
-> `web/index.html` — "Vyom Engine - By AgriDoot" — for drawing farms anywhere
-> in the world and viewing any index. See "Multi-index & Sentinel-1" and
-> "Production storage" sections below. The instructions below still apply for
-> initial setup; `deploy/README.md` has the systemd/nginx production path.
+# Vyom Engine
 
-# Vyom Engine — Phase 1 Slice: Ingestion + Processing + Farm Web Mapping
+Satellite farm-monitoring platform for AgriDoot. Vyom Engine watches a
+farmer's fields from space: it pulls Sentinel-1 (radar) and Sentinel-2
+(optical) imagery from the Copernicus Data Space Ecosystem (CDSE) for every
+registered farm polygon, computes vegetation/water/soil indices, and serves
+the results through a web dashboard, in-app notifications, and a monetized
+partner API that lets other businesses plot the same data on their own
+products.
 
-This is a working, runnable slice of the full Vyom Engine architecture, scoped to what
-you asked for first:
+> **If you only read one section**, read [Architecture at a glance](#architecture-at-a-glance)
+> and [Repository layout](#repository-layout) -- together they explain where
+> everything lives and how a request actually flows through the system.
 
-1. **Ingestion pipeline** — authenticate with Copernicus Data Space Ecosystem (CDSE),
-   discover Sentinel-2 products over your farm polygons, download them, dedupe them.
-2. **Processing pipeline** — cloud-mask, compute NDVI/NDWI, write Cloud-Optimized
-   GeoTIFFs, and compute per-farm zonal statistics.
-3. **Web mapping for farms** — a FastAPI service that lets you register farm
-   boundaries, trigger processing, pull NDVI time series, and view an on-the-fly
-   NDVI map tile for any farm in a browser/Leaflet map.
+---
 
-It follows the tile-first design principle from your doc: **a Sentinel-2 tile is
-downloaded and processed exactly once**, and zonal statistics are computed for every
-farm polygon intersecting that tile in a single pass — not once per farm.
+## Table of contents
 
-This is intentionally a Phase-1 **monolith** (per your own roadmap: "Monolith-leaning
-... split into microservices only once a specific component needs independent
-scaling"). Everything runs as one FastAPI app + one Celery worker/beat process.
+- [What this system actually does](#what-this-system-actually-does)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Repository layout](#repository-layout)
+- [Data model, in one paragraph](#data-model-in-one-paragraph)
+- [The imagery pipeline, end to end](#the-imagery-pipeline-end-to-end)
+- [Real vs. filled data: interpolation](#real-vs-filled-data-interpolation)
+- [Auth: three separate schemes](#auth-three-separate-schemes)
+- [Billing & monetization](#billing--monetization)
+- [The partner API](#the-partner-api)
+- [Local development setup](#local-development-setup)
+- [Configuration reference](#configuration-reference)
+- [Deployment](#deployment)
+- [Recurring gotchas](#recurring-gotchas)
+- [Where to look for X](#where-to-look-for-x)
 
-## What's NOT in this slice (by design, deferred to later phases)
+---
 
-- Sentinel-1/3/5P, DEM
-- MinIO / cloud object storage (raw + processed files go to local disk for now —
-  swapping to MinIO later is a config change in `vyom/storage.py`, not a rewrite)
-- Multi-tenancy, billing, auth/API keys
-- Microservices split, Kubernetes
-- ML inference
+## What this system actually does
 
-## Architecture (this slice)
+A farmer (or, via the partner API, another business on the farmer's behalf)
+draws a polygon around a field. From that point on, Vyom Engine:
+
+1. **Discovers** every Sentinel-1/Sentinel-2 scene from CDSE that covers that
+   polygon, going back as far as a year on first creation.
+2. **Downloads** the raw scene, then **processes** it: cloud-masks Sentinel-2,
+   reprojects Sentinel-1's ground-control-point radar geometry onto a clean
+   grid, and computes whichever indices are enabled (NDVI, NDRE, NDWI, NDMI,
+   MSAVI2, SOC_VIS, and ~25 more for S2; RVI and VV_VH_RATIO for S1 -- see
+   `vyom/processing/indices.py` and `sar_indices.py` for the full, current
+   list, since `S2_INDICES` is configurable per deployment).
+3. **Stores** a Cloud-Optimized GeoTIFF (COG) per scene/index in S3-compatible
+   object storage (Wasabi in production), and a per-farm scalar reading
+   (`ZonalStat`) for each index/date.
+4. **Serves** it back three ways: map tiles cropped to the farm's exact
+   polygon (not the shared processing bounding box -- see
+   [Recurring gotchas](#recurring-gotchas)), a time series per index, and
+   (new) the same tiles to partner-API integrators via a signed, header-free
+   token URL.
+5. **Bills** for it: farms are metered per acre on a fixed-term plan
+   (3/6/12 months), paid via wallet balance and/or Razorpay, with GST
+   invoicing; separately, businesses pay a maintenance fee + per-request
+   metering to use the partner API to manage farms on their own customers'
+   behalf.
+
+If a farm has no real satellite pass on the exact date you ask for, the
+system can optionally fill the gap -- see
+[Real vs. filled data](#real-vs-filled-data-interpolation). **Every** reading
+this system returns, in the dashboard or the partner API, is labelled with
+where it actually came from. Never assume a successful response is a real
+satellite reading without checking that label.
+
+---
+
+## Architecture at a glance
 
 ```
-Copernicus CDSE (OAuth2 / OData / STAC)
-        |
-        v
-auth_broker.py  -->  discovery.py  -->  catalog_products (Postgres)
-                                              |
-                                              v
-                                     download_manager.py
-                                              |
-                                              v
-                                     data/raw/<product>.zip
-                                              |
-                                              v
-                              processing/pipeline.py
-                    cloud_mask -> NDVI/NDWI -> COG -> zonal_stats
-                                              |
-                                              v
-                     data/processed/*.tif        zonal_stats (Postgres)
-                                              |
-                                              v
-                                    FastAPI: /farms, /tiles
-                                              |
-                                              v
-                                     Browser / Leaflet map
+                                   +--------------------------+
+                                   |   Copernicus Data Space  |
+                                   |   Ecosystem (CDSE)       |
+                                   +------------+-------------+
+                                                | OData / OAuth2
+                              discovery.py, download_manager.py,
+                              cdse_rate_limiter.py (Redis-leased
+                              concurrency + fairness + retry)
+                                                |
+                     +------------------------- v -------------------------+
+                     |                  Celery workers                     |
+                     |  queues: download/discover  |  process/stats        |
+                     |  tasks.py, billing_tasks.py, celery_app.py (beat)   |
+                     +-----------+---------------------------+-------------+
+                                 | raw .SAFE.zip               | COGs + stats
+                     +-----------v------------+     +----------v-------------+
+                     |  Object storage         |     |  PostgreSQL + PostGIS  |
+                     |  (Wasabi S3, or local   |     |  models.py (21 tables) |
+                     |  disk -- storage.py)    |     |                        |
+                     +-------------------------+     +-----------+------------+
+                                                                  |
+                                            +---------------------v---------------------+
+                                            |           FastAPI app (vyom/api/)          |
+                                            |  session-cookie routes | partner-API       |
+                                            |  (farms, tiles, auth,  | routes (API key/  |
+                                            |  billing, notifications| secret headers)   |
+                                            +--------+-------------------------+---------+
+                                                     |                         |
+                                    +-----------------v--------+   +-----------v-------------+
+                                    |  web/index.html           |   | Partner's own product   |
+                                    |  (farmer-facing dashboard |   | (via web/developers/    |
+                                    |  -- single-file SPA)      |   | playground.html to test)|
+                                    +---------------------------+   +-------------------------+
 ```
 
-## Setup
+**Backend**: a FastAPI monolith (`vyom/`) plus Celery workers for anything
+slow (CDSE discovery/download, raster processing, zonal stats, billing
+sweeps, email/notification fan-out). PostgreSQL with PostGIS handles both
+relational data (users, farms, invoices) and geometry (`Polygon.geom`).
 
-### 1. Requirements
+**Frontend**: no build step, no framework. `web/index.html` is a single
+~11,000-line file (vanilla JS, Google Maps JavaScript API, Chart.js) that IS
+the entire farmer-facing dashboard. `web/admin/*.html` and
+`web/developers/playground.html` are separate single-file pages for
+internal/admin and partner-developer use respectively.
 
-- Python 3.11+
-- PostgreSQL 14+ with PostGIS extension
-- GDAL system libraries (required by `rasterio`)
-- A Copernicus Data Space Ecosystem account (you have this already)
+**Two live "planes" through the same codebase**: the dashboard plane (a
+farmer's own session, cookie/JWT auth, one polygon at a time) and the
+partner-API plane (a business's API key/secret, potentially thousands of
+polygons, rate-limited and metered). They share the same underlying farm
+records, processing pipeline, and index math -- see `vyom/api/partner_farms.py`
+and `partner_tiles.py`, which deliberately reuse the dashboard's own
+query/rendering functions (`render_index_tile`, the available-dates source
+logic) rather than re-implementing them, specifically so the two surfaces
+can't drift apart.
+
+---
+
+## Repository layout
+
+```
+vyom/                        Python package -- all backend logic
+|-- api/                     FastAPI routers (one file per feature area)
+|   |-- main.py              App factory; every router gets mounted here
+|   |-- auth.py               Dashboard login: Google Sign-In + phone-OTP
+|   |-- farms.py               Farm CRUD, timeseries, available-dates, status
+|   |-- tiles.py               Dashboard map tile PNGs (session-cookie auth)
+|   |-- reference.py            Crop/soil reference data (proxied from NovosEdge)
+|   |-- notifications.py         In-app + email notifications
+|   |-- contact.py                Public "Contact us" form
+|   |-- errors.py                  Admin error-log panel API
+|   |-- prewarm.py                  Admin: pre-fetch coverage for a region
+|   |-- billing.py                   Wallet, farm plans, Razorpay, invoices
+|   |-- business_onboarding.py        Business account signup + GST verification
+|   |-- business_api_credentials.py    Issue/rotate/revoke partner API keys
+|   |-- partner_farms.py                Partner API: farm CRUD, indices, dates
+|   |-- partner_tiles.py                 Partner API: map-layer + tile PNGs
+|   `-- developer_docs.py                 Serves the filtered "partner-api"
+|                                         OpenAPI schema + Swagger UI
+|-- processing/               Pure(ish) raster/index math, no DB/network I/O
+|   |-- pipeline.py, pipeline_s1.py, pipeline_s2.py   Per-scene processing
+|   |-- cloud_mask.py, cog_writer.py                  Supporting steps
+|   |-- indices.py, sar_indices.py                    Index formulas (S2, S1)
+|   `-- index_scale.py                                Discrete color legends
+|-- models.py                 All SQLAlchemy models (21 tables)
+|-- config.py                 Pydantic Settings -- every env var, in one place
+|-- auth.py / api_auth.py     Dashboard session auth / partner API-key auth
+|-- discovery.py              CDSE product search
+|-- download_manager.py       CDSE product download (+ redirect auth fix)
+|-- cdse_rate_limiter.py      Redis-leased concurrency + retry around CDSE
+|-- zonal_stats.py            Per-farm scalar stats from a processed COG
+|-- interpolation.py          Scalar-timeseries gap-fill
+|-- raster_interpolation.py   Pixel-level gap-fill (interpolated tiles)
+|-- reuse_check.py            Backfill new farms from existing coverage
+|-- tile_grid.py              Shared bounding-box grouping for farms
+|-- geometry_utils.py         Polygon sanitization (see gotchas below)
+|-- wallet.py, farm_pricing.py, coupons.py,
+|   invoicing.py, invoice_pdf.py, gst.py,
+|   gst_verification.py       Billing internals
+|-- razorpay_client.py        Razorpay order/signature verification
+|-- otp_client.py, google_auth.py       Auth provider clients
+|-- email_utils.py, notifications.py    Email templates + notification rules
+|-- error_log.py              Central log_error() used everywhere
+|-- prewarm.py                Admin region pre-fetch logic
+|-- idempotency.py            Idempotency-Key handling (partner API)
+|-- celery_app.py             Celery app + beat schedule
+`-- tasks.py, billing_tasks.py   Celery task definitions
+
+web/
+|-- index.html                 The farmer dashboard (single file, see below)
+|-- config.js / config.js.example   Client-side config (API keys, base URLs)
+|-- admin/                      Internal tools -- errors.html, prewarm.html,
+|                                coupons.html
+|-- developers/playground.html   Interactive partner-API tester
+`-- legal/                       ToS, privacy, refund, billing-terms pages
+
+migrations/                  Hand-written, sequentially-numbered SQL migrations
+                              (schema.sql is the original base; run in order)
+test/                        Standalone scripts (not a pytest suite) --
+                              test_wasabi.py, check_cdse_auth.py
+docs/                        Screenshots + a Word doc from earlier planning;
+                              historical, not guaranteed current
+docker-compose.dev.yml       Postgres + Redis for local development only
+.env.example                 Every environment variable this app reads
+requirements.txt             Pinned Python dependencies
+```
+
+### `web/index.html`'s internal structure
+
+Because it's one file, here's how to navigate it:
+
+- **CSS** (top of file): design tokens as CSS custom properties (`--canopy`
+  for the AgriDoot green, `--bg-panel`, `--line`, etc.) so light/dark theme
+  is just re-pointing the variables.
+- **HTML**: a left nav + page shell (`#page-overview`, `#page-myfields`,
+  `#page-imagery`, `#page-comparisons`, `#page-settings`), plus a set of
+  `.modal-overlay` divs for everything modal (draw-new-field, item pickers,
+  help/contact, notifications). The "Draw new field" modal
+  (`#draw-field-modal`) is a 4-step wizard (Draw -> Field details -> Payment
+  -> Done) -- see its own comment block at the top of that div for how the
+  steps are wired.
+- **JavaScript** (bottom of file): no modules, everything is a top-level
+  `function` or `let`. Search for a DOM id or a function name directly --
+  there's no other indirection to trace through.
+
+---
+
+## Data model, in one paragraph
+
+`User` (dashboard account: Google/phone auth, `role` user/admin, wallet
+balance) owns `Polygon` rows (a "farm" -- geometry, crop/soil/sowing-date
+metadata, plan status). Each polygon accumulates `Product` rows (one per
+discovered CDSE scene covering it, tracked through
+discovered -> downloading -> downloaded -> processing -> processed/failed),
+`ZonalStat` rows (one per product x index x farm -- the real scalar
+readings), and optionally `InterpolatedStat`/`InterpolatedTile` rows (see
+next section). Billing lives in `FarmPlan`, `WalletTransaction`,
+`Coupon`/`CouponRedemption`, and `BusinessApiInvoice`. The partner-API side
+adds `BusinessAccount`, `ApiCredential` (hashed secret, rate limits),
+`ApiAuditLog`, and `BusinessSubscription`. Full definitions with comments
+are in `vyom/models.py`; the migrations directory shows the order these
+were introduced in, which is often useful context for _why_ a column exists
+the way it does.
+
+---
+
+## The imagery pipeline, end to end
+
+1. **`discovery.py`** searches CDSE's OData catalogue for products
+   intersecting a farm's (buffered) bounding box, filtered by collection
+   (`SENTINEL-2`/`SENTINEL-1`), product type, cloud cover, and a
+   configurable lookback window. `poll_all_farms` (Celery beat, every 6h)
+   sweeps every farm with a 30-day lookback; a brand-new farm additionally
+   gets a one-time 365-day/85%-cloud-cover backfill request on creation.
+2. **`tile_grid.py`** groups farms that share the same processing area so
+   one downloaded scene can serve several nearby farms without re-fetching.
+3. **`download_manager.py`** downloads the product via CDSE's
+   `/odata/v1/Products($ID)/$value` endpoint, manually re-attaching the
+   Authorization bearer token across the redirect that endpoint issues
+   (the `requests` library strips auth headers on cross-host redirects by
+   default -- CDSE's own docs handle this with curl's
+   `--location-trusted`). `cdse_rate_limiter.py` wraps every CDSE call with
+   a Redis-leased concurrency limit, a fairness queue across farms, retry
+   with backoff on 429/5xx, AND on network-level timeouts (an easy-to-miss
+   gap: a `Timeout`/`ConnectionError` never produces an HTTP response
+   object, so it needs its own except-block, not just a status-code check).
+4. **`processing/pipeline_s2.py`** cloud-masks the scene and computes every
+   enabled S2 index (`processing/indices.py`) as a Cloud-Optimized GeoTIFF.
+   **`processing/pipeline_s1.py`** does the Sentinel-1-specific work: S1 GRD
+   has no real map projection, only ground-control-point (GCP) tie-points,
+   so the band must be reprojected onto a clean axis-aligned EPSG:4326 grid
+   via `rasterio.warp.reproject(..., gcps=...)` -- restricted to the farm's
+   bounds so it stays cheap -- before any of the downstream raster tooling
+   (which assumes a real, north-up projection) can touch it.
+5. **`zonal_stats.py`** extracts one scalar value per farm/index/date from
+   the COG via `exactextract` (farms are passed as GeoJSON Feature dicts,
+   not raw Shapely geometries -- that's the one input shape it accepts).
+   NaN results (e.g. a fully cloud-masked farm window) are sanitized to
+   `None` before they ever reach the database or a JSON response.
+6. **`api/tiles.py`**'s `render_index_tile()` (shared by both the dashboard
+   and partner-API tile routes) reads the COG, masks out anything outside
+   the farm's actual polygon (a product's COG covers the shared bounding
+   box of every farm on that tile, not just one), and renders either a
+   discrete labelled-band PNG (via `processing/index_scale.py`, for indices
+   with a defined scale) or a continuous colormap (for anything without
+   one, currently just `VV_VH_RATIO`).
+
+---
+
+## Real vs. filled data: interpolation
+
+Satellite revisit isn't daily -- Sentinel-2 is ~5 days _if_ cloud cover
+allows a usable pass at all, Sentinel-1 depends on orbit geometry. Rather
+than showing a hole in the timeline for every day without a real pass,
+`interpolation.py` (scalar) and `raster_interpolation.py` (per-pixel/raster)
+can fill it, on a fixed cadence, at two confidence levels:
+
+- **`interpolated`**: a real reading exists on _both_ sides of this date --
+  linear interpolation between them.
+- **`provisional`**: only _one_ real reading exists so far (the most
+  recent) -- a flat carry-forward, pending a second real reading to
+  confirm or replace it. Weaker than `interpolated` since there's nothing
+  on the far side to draw a line to yet.
+- **`satellite`**: an actual reading, not filled at all.
+
+**Every** endpoint that can return a filled value says which kind it
+actually served: the dashboard/partner `available-dates` endpoints include
+a `source` field per date, and every tile response (dashboard or partner)
+carries an `X-Vyom-Data-Source` response header. Filled values are opt-in
+(`include_interpolated=true` on the scalar endpoints) except the partner
+map-tile endpoint, which defaults to including them -- a map widget with
+large blank gaps between real passes is a much worse experience than the
+dashboard's date-picker, where a farmer can just see there's no reading
+for that day.
+
+---
+
+## Auth: three separate schemes
+
+This codebase has three genuinely different auth mechanisms, used in
+different places on purpose -- conflating them is the single most common
+source of confusion when reading unfamiliar parts of the code:
+
+| Scheme                                        | Used for                                             | Implemented in                                                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session cookie / JWT                          | Dashboard pages, most `/farms/*`, `/notifications/*` | `vyom/auth.py`, `require_auth`                                        | Google Sign-In or phone-OTP; `require_auth_query` is a `?token=`-based variant used **only** by `/tiles/*` because map tiles are loaded as plain image requests with no custom headers available.                                                                                                                                                                                                              |
+| API key + secret (headers)                    | Every `/api/v1/*` partner route except tile PNGs     | `vyom/api_auth.py`, `require_business_api_auth`                       | `X-Api-Key` / `X-Api-Secret` headers; rate-limited, audit-logged, tied to a `BusinessAccount`.                                                                                                                                                                                                                                                                                                                 |
+| Signed short-lived map-tile token (`?token=`) | Partner map tile PNGs only                           | `vyom/api_auth.py`, `issue_map_tile_token` / `require_map_tile_token` | Minted by `GET /api/v1/farms/{id}/map-layer` (itself key/secret-authed), scoped to exactly one `farm_id` + credential, expires in 24h. Exists for the same reason as `require_auth_query` above: a map library's tile requests can't carry custom headers, so the credential has to live in the URL, and it's deliberately narrow-scoped and short-lived so a leaked tile URL can't be used for anything else. |
+
+If you're adding a new endpoint, ask "who's calling this, and can they set
+headers?" before picking one of the three.
+
+---
+
+## Billing & monetization
+
+Two separate billing surfaces exist:
+
+1. **Farm plans** (`farm_pricing.py`, `billing.py`, `wallet.py`,
+   `coupons.py`): a farmer pays per acre for a 3/6/12-month plan on a farm,
+   from wallet balance first, then Razorpay for any remainder. GST is
+   applied via `gst.py`. `billing_tasks.py` (Celery beat, daily) expires
+   plans past their term and reconciles farms whose payment never
+   completed.
+2. **Business/partner API accounts** (`business_onboarding.py`,
+   `business_api_credentials.py`, `invoicing.py`, `invoice_pdf.py`,
+   `gst_verification.py`): a business signs up (GST verified against the
+   GSTINAPI service), gets a maintenance-fee subscription
+   (`BusinessSubscription`), and issues one or more API credentials
+   (`ApiCredential`) scoped to their account. Usage is metered and shows up
+   on their monthly `BusinessApiInvoice`, rendered as a PDF and emailed via
+   `email_utils.py`.
+
+Both surfaces reuse the same `Coupon`/GST/invoice machinery rather than two
+separate implementations -- check `billing.py` before assuming a
+partner-side billing question needs new code.
+
+---
+
+## The partner API
+
+Base path: `/api/v1`. Full interactive docs: `GET /developers/docs` (Swagger
+UI, filtered to just the `partner-api`-tagged routes via
+`vyom/openapi_partner.py`) and a hands-on tester at
+`web/developers/playground.html`.
+
+Every JSON response shares one envelope:
+
+```json
+{ "data": { "...": "..." }, "meta": { "request_id": "...", "warnings": [] } }
+```
+
+or, on failure:
+
+```json
+{ "error": { "code": "FARM_NOT_FOUND", "message": "...", "retriable": false } }
+```
+
+Key routes (see `vyom/api/partner_farms.py` and `partner_tiles.py` for full
+docstrings on each):
+
+- `POST/GET/PATCH/DELETE /api/v1/farms` -- farm CRUD, scoped to farms
+  created via this credential (`created_via='api'`).
+- `GET /api/v1/farms/{id}/indices` -- latest (or a specific date's) index
+  readings.
+- `GET /api/v1/farms/{id}/timeseries` -- full history for one metric.
+- `GET /api/v1/farms/{id}/available-dates?metric=...&include_interpolated=...`
+  -- which dates have data, each tagged with its `source`
+  (`satellite`/`interpolated`/`provisional`) -- see
+  [Real vs. filled data](#real-vs-filled-data-interpolation).
+- `GET /api/v1/farms/{id}/map-layer` -- **plot a farm's indices on your own
+  map.** Returns an XYZ tile URL template with a signed token already
+  embedded, the farm's bounds/center, which indices exist per platform, and
+  a legend (colors + labelled bands) matching exactly what the dashboard
+  itself renders. Feed the template straight into Leaflet / Mapbox GL /
+  Google Maps' `ImageMapType`, substituting `{platform}`, `{index}`,
+  `{date}`, `{z}`, `{x}`, `{y}` yourself.
+- `GET /api/v1/farms/{id}/map/{platform}/{index}/{date}/{z}/{x}/{y}.png` --
+  the actual tile pixels behind that template. Auth is the embedded
+  `?token=`, **not** `X-Api-Key`/`X-Api-Secret` -- see
+  [Auth](#auth-three-separate-schemes). Always includes
+  `X-Vyom-Data-Source`.
+
+Idempotency: mutating routes accept an `Idempotency-Key` header
+(`vyom/idempotency.py`) so a retried request after a network blip doesn't
+create a duplicate farm/charge.
+
+---
+
+## Local development setup
+
+**Prerequisites**: Python 3.11+, PostgreSQL with PostGIS, Redis, a CDSE
+account (free, at dataspace.copernicus.eu), and either local disk or a
+Wasabi/S3-compatible bucket pair for storage.
 
 ```bash
+git clone <this repo>
+cd Vyom-Engine
+python -m venv venv && source venv/bin/activate     # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-### 2. Configure
+# Postgres + Redis for local dev:
+docker compose -f docker-compose.dev.yml up -d
 
-```bash
 cp .env.example .env
-# edit .env with your CDSE client_id/secret and DB connection string
-```
+# Fill in at minimum: CDSE_USERNAME/PASSWORD, DATABASE_URL, REDIS_URL,
+# AUTH_SECRET_KEY (openssl rand -hex 32), and either
+# STORAGE_BACKEND=local (uses RAW_DATA_DIR/PROCESSED_DATA_DIR, no S3 needed)
+# or the S3_* Wasabi credentials for STORAGE_BACKEND=s3.
 
-To get CDSE OAuth2 client credentials (if you registered with just a username/password
-instead): go to https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings
-and create an OAuth client, or use the password-grant flow — `auth_broker.py` supports
-both (see comments in that file).
+# Apply migrations in order (schema.sql first, then 002 onward):
+psql "$DATABASE_URL" -f migrations/schema.sql
+for f in migrations/0*.sql; do psql "$DATABASE_URL" -f "$f"; done
 
-**Download endpoint**: `CDSE_DOWNLOAD_URL` points at
-`https://download.dataspace.copernicus.eu/odata/v1` (the old `zipper.dataspace...`
-host used for the same job is retired). This endpoint 302-redirects to a signed
-node/object-storage URL, so `download_manager.py` follows redirects manually and
-re-attaches the `Authorization` header on every hop — the same thing CDSE's own
-docs do with curl's `--location-trusted` flag. Plain `requests.get(..., allow_redirects=True)`
-would silently drop the token on that redirect and fail.
-
-### 3. Create the database
-
-```bash
-createdb vyom
-psql vyom -c "CREATE EXTENSION postgis;"
-psql vyom -f migrations/schema.sql
-```
-
-### 4. Run it
-
-Terminal 1 — API:
-```bash
+# Run everything in separate terminals (not via systemd -- that's
+# deploy-only, see below):
 uvicorn vyom.api.main:app --reload --port 8000
-```
-
-Terminal 2 — Celery worker:
-```bash
-celery -A vyom.celery_app worker --loglevel=info -Q download,process,stats
-```
-
-Terminal 3 — Celery beat (scheduled discovery polling):
-```bash
+celery -A vyom.celery_app worker -Q download,discover --loglevel=info
+celery -A vyom.celery_app worker -Q process,stats --loglevel=info
 celery -A vyom.celery_app beat --loglevel=info
+
+# Frontend needs no build step -- just serve web/ statically, or point
+# your dev server's API base at http://localhost:8000 in web/config.js
+# (copy from web/config.js.example first).
 ```
 
-Redis must be running locally (`redis-server`) as the Celery broker.
+Split Celery into (at least) two queues -- `download,discover` and
+`process,stats` -- rather than one worker for everything. A single shared
+queue has caused OOM kills in the past when a heavy raster-processing task
+and several concurrent downloads land on the same worker at once.
 
-## Using it end-to-end
+`test/` is not a pytest suite -- `test_wasabi.py` and `check_cdse_auth.py`
+are standalone scripts for manually verifying storage/CDSE credentials are
+working, run directly with `python test/test_wasabi.py`.
 
-1. **Register a farm** (POST a GeoJSON polygon):
-   ```bash
-   curl -X POST http://localhost:8000/farms \
-     -H "Content-Type: application/json" \
-     -d '{
-       "name": "Ramesh Field 1",
-       "user_id": "00000000-0000-0000-0000-000000000001",
-       "geometry": {"type": "Polygon", "coordinates": [[[77.0,28.5],[77.01,28.5],[77.01,28.51],[77.0,28.51],[77.0,28.5]]]}
-     }'
-   ```
+---
 
-2. **Trigger ingestion + processing** for that farm (discovers + downloads + processes
-   the latest available Sentinel-2 scene covering it):
-   ```bash
-   curl -X POST http://localhost:8000/farms/{farm_id}/refresh
-   ```
-   This runs asynchronously via Celery — discovery finds the product, download_manager
-   fetches it, the processing pipeline computes NDVI/NDWI/COG, and zonal_stats.py
-   computes the farm's mean NDVI/NDWI for that date.
+## Configuration reference
 
-3. **Get the NDVI time series** for the farm (for a chart on your web dashboard):
-   ```bash
-   curl http://localhost:8000/farms/{farm_id}/timeseries?metric=NDVI_mean
-   ```
+Every setting is a field on `Settings` in `vyom/config.py` (pydantic-settings,
+reads from `.env`); `.env.example` documents each with a comment. The
+categories, roughly:
 
-4. **View the map**. Open `web/map.html` in a browser (or serve it statically) — it's
-   a minimal Leaflet page that loads farm boundaries from `/farms` and NDVI tiles from
-   `/tiles/{farm_id}/{date}/{z}/{x}/{y}.png`.
+- **CDSE**: credentials, OAuth/OData/download URLs, concurrency/rate limits.
+- **Database / Redis**: `DATABASE_URL`, `REDIS_URL`.
+- **Storage**: `STORAGE_BACKEND` (`local` or `s3`), local paths, or the
+  full Wasabi S3 credential set.
+- **Discovery defaults**: default cloud-cover threshold, S1/S2 collection
+  and product-type identifiers, `S2_INDICES` (JSON list -- add a new index
+  here _and_ implement its formula in `processing/indices.py` before it'll
+  actually compute anything).
+- **Auth**: `AUTH_SECRET_KEY` (JWT signing -- treat as a real secret),
+  session TTL, `GOOGLE_CLIENT_ID`, AgriDoot's own OTP API credentials.
+- **Notifications**: admin alert email/throttle, stale-data threshold,
+  `DASHBOARD_BASE_URL` (also used to build partner map-tile URLs).
+- **Billing**: Razorpay keys, GST percent/number, maintenance fee,
+  subscription length, GSTINAPI key for business verification.
+- **Legal**: platform legal name/address/invoice email, used on generated
+  invoices.
+- **CORS**: `CORS_ALLOWED_ORIGINS` -- a comma-separated allowlist; do not
+  wildcard this in production (see [Recurring gotchas](#recurring-gotchas)).
 
-## Files
+---
 
-- `vyom/config.py` — all settings, loaded from `.env`
-- `vyom/db.py` — SQLAlchemy engine/session + PostGIS-aware base
-- `vyom/models.py` — `catalog_products`, `polygons` (farms), `polygon_tile_map`, `zonal_stats`
-- `vyom/auth_broker.py` — Copernicus OAuth2 token acquisition + caching
-- `vyom/discovery.py` — STAC query against CDSE, writes to `catalog_products`
-- `vyom/download_manager.py` — downloads + checksums + dedupes products
-- `vyom/tile_grid.py` — MGRS tile id extraction, polygon<->tile intersection mapping
-- `vyom/processing/cloud_mask.py` — SCL-based cloud mask (L2A)
-- `vyom/processing/indices.py` — NDVI, NDWI formulas
-- `vyom/processing/cog_writer.py` — writes internally-tiled COGs with overviews
-- `vyom/processing/pipeline.py` — orchestrates the full per-tile processing loop
-- `vyom/zonal_stats.py` — per-farm zonal statistics using `exactextract`
-- `vyom/celery_app.py`, `vyom/tasks.py` — task queue wiring, beat schedule
-- `vyom/api/main.py`, `vyom/api/farms.py`, `vyom/api/tiles.py` — the web-facing layer
-- `web/map.html` — minimal Leaflet demo page
-- `migrations/schema.sql` — the Postgres/PostGIS schema
-- `docker-compose.dev.yml` — Postgres+PostGIS and Redis for local dev
+## Deployment
 
-## Multi-index & Sentinel-1
+Production currently runs manually (not via the `systemd`/`nginx` units
+that exist in the repo history) on a Hostinger KVM instance with Wasabi
+object storage. Whichever way you deploy:
 
-Indices are configured, not hardcoded — `S2_INDICES`/`S1_INDICES` in `.env`
-control what gets computed. Adding a new index later is: implement the formula
-in `vyom/processing/indices.py` (or `sar_indices.py` for S1), add its name to
-the relevant `_INDEX_BAND_REQUIREMENTS` dict in the pipeline file, list it in
-`.env` — no database migration, since `processed_indices` is stored as JSONB.
+- **nginx routing**: every new top-level API prefix (`/auth`, `/farms`,
+  `/tiles`, `/errors` -> `/api/errors`, `/admin`, `/health`, `/reference`,
+  `/support`, `/notifications`, and now `/api/v1`) needs to be added to
+  nginx's `location ~ ^/(...)(/|$)` regex, or it 404s to the SPA's
+  `index.html` fallback instead of reaching FastAPI at all. This has bitten
+  every new router added so far -- if a brand-new endpoint returns HTML
+  instead of JSON in production, check this first.
+- **Deploying `web/index.html` changes**: always fully overwrite the file
+  (e.g. `scp` from a clean local copy) rather than manually editing it on
+  the server. Partial copy-paste edits on a live server have caused
+  syntax errors that silently broke the _entire_ page's script (not just
+  the intended change) more than once.
+- **Env vars that must be set for production, not left as `.env.example`
+  placeholders**: `AUTH_SECRET_KEY`, all `S3_*` credentials,
+  `RAZORPAY_*`, `GST_NUMBER`, `PLATFORM_*`, `SMTP_*`, and
+  `CORS_ALLOWED_ORIGINS` (a real origin list, never `*`).
 
-Currently computed:
+---
 
-| Index | Platform | What it's for |
-|---|---|---|
-| NDVI | S2 | General vegetation vigor/density |
-| NDWI | S2 | Surface water / waterlogging |
-| NDMI | S2 | Canopy moisture — irrigation stress, ahead of visible wilting |
-| MSAVI2 | S2 | Vegetation index corrected for bare-soil brightness, useful early season |
-| NDRE | S2 | Chlorophyll/nitrogen status in dense canopy where NDVI saturates |
-| SOC_VIS | S2 | **Experimental** visible-band soil organic carbon proxy — see caveat in `indices.py`, not a lab-grade measurement |
-| RVI | S1 | Radar vegetation index — cloud-independent, works through monsoon |
-| VV_VH_RATIO | S1 | Backscatter ratio — flags flooding/harvest, cloud-independent |
+## Recurring gotchas
 
-**Sentinel-1 calibration caveat**: the S1 pipeline currently reads raw GRD
-digital numbers rather than radiometrically calibrated backscatter. See the
-docstring at the top of `vyom/processing/pipeline_s1.py` for what's needed
-(applying the product's calibration LUT, ideally terrain correction) before S1
-values are directly comparable across fields/time in production — right now
-they're internally consistent enough to show relative change on one field over
-time, but not absolute cross-field comparison.
+Things that have already caused real bugs in this codebase -- worth
+knowing before you hit them again:
 
-## Production storage
+- **Near-duplicate polygon vertices** (two clicks a few cm apart while
+  drawing) make CDSE's geometry validator reject the whole farm with an
+  opaque 400. Both the client (`polygonToGeoJSON()` in `web/index.html`)
+  and the server (`geometry_utils.py`, applied on every create/update) snap
+  and dedupe vertices as a backstop -- if you're adding another geometry
+  entry point, route it through `geometry_utils.py` too.
+- **A product's COG is NOT scoped to one farm.** It covers the shared
+  buffered bounding box of every farm on that processing tile
+  (`tile_grid.py`). Any new raster-serving code must mask by the actual
+  farm polygon (`get_coverage_array`, as `render_index_tile` already does)
+  or it'll show neighboring fields' land.
+- **`exactextract` wants GeoJSON Feature dicts**, not raw Shapely geometry
+  objects -- passing a bare `Polygon` fails silently in ways that are easy
+  to misattribute to something else.
+- **NaN, not None**, is what a fully-masked zonal-stat window produces --
+  sanitize before it reaches the DB or a JSON response (`json` rejects
+  NaN outright).
+- **CDSE's `download` endpoint redirects across hosts**, and `requests`
+  strips the `Authorization` header on cross-host redirects by default --
+  `download_manager.py` re-attaches it manually.
+- **Timeouts don't raise HTTP-status-based exceptions.** A retry loop that
+  only checks `response.status_code` will never fire on a raw
+  `requests.Timeout`/`ConnectionError` -- needs its own `except` clause.
+- **Every new API router needs an nginx location-regex entry** (see
+  [Deployment](#deployment)) or it 404s to the SPA fallback in production.
+- **Long unbroken strings (raw CDSE URLs in error messages) overflow
+  fixed-width cards** without `overflow-wrap: anywhere` -- has recurred in
+  both `web/admin/errors.html` and the dashboard's notification panel.
 
-`STORAGE_BACKEND` in `.env` switches between:
-- `local` — files on this server's disk (what you've been running)
-- `s3` — MinIO or any S3-compatible store (`vyom/storage.py`). This is what
-  lets you run more than one worker machine sharing the same raw/processed
-  files, and lets tile-serving read COGs via partial range-requests (GDAL's
-  `/vsis3/`) without a full download. `docker-compose.dev.yml` includes a
-  MinIO service for local testing — start it, set `STORAGE_BACKEND=s3` and the
-  `S3_*` vars in `.env`, nothing else in the pipeline code changes.
+---
 
-## The web dashboard
+## Where to look for X
 
-`web/index.html` — "Vyom Engine - By AgriDoot" — is a full dashboard, not just
-a demo page:
-- Draw a field boundary anywhere in the world (Leaflet + Leaflet.draw)
-- Search any place name to jump the map there
-- Pick Sentinel-2 or Sentinel-1, then any index for that platform
-- See the current value for every index at a glance, and a trend chart for
-  the selected one
-- Pick a specific past date, not just "latest"
-
-Serve it with any static file server (`python3 -m http.server` for local
-testing, or nginx alongside the API in production) — it talks to the API over
-plain `fetch()`, no build step.
-
-## Next slices (per your roadmap)
-
-Once this is running against real farms, the natural next additions, in order, are:
-Sentinel-1 (flood/all-weather for farms during monsoon cloud cover), MinIO for object
-storage, multi-tenancy + auth, then splitting `discovery`/`download_manager`/
-`tile_processor` into independently-scaled services once one of them becomes a
-bottleneck — not before.
+| I want to...                            | Start here                                                                                                                                                           |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a new satellite index               | `vyom/processing/indices.py` (S2) or `sar_indices.py` (S1), then add it to `S2_INDICES`/`s1_indices` in config, then optionally give it a legend in `index_scale.py` |
+| Change how a farm is billed             | `vyom/farm_pricing.py`, `vyom/api/billing.py`                                                                                                                        |
+| Add a partner-API endpoint              | `vyom/api/partner_farms.py` or `partner_tiles.py`; reuse dashboard logic where it exists rather than re-deriving it                                                  |
+| Change the dashboard UI                 | `web/index.html` -- search for the relevant DOM id or function name                                                                                                  |
+| Debug a stuck/failed satellite fetch    | `vyom/api/errors.py` + `web/admin/errors.html`, or the `Product.status` column directly                                                                              |
+| Understand what data is real vs. filled | [Real vs. filled data](#real-vs-filled-data-interpolation)                                                                                                           |
+| Add a new auth-gated route              | [Auth: three separate schemes](#auth-three-separate-schemes) -- pick the right one first                                                                             |
+| Change notification behavior            | `vyom/notifications.py` (rules), `vyom/api/notifications.py` (API), `vyom/email_utils.py` (templates)                                                                |

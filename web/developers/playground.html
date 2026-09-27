@@ -4,10 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vyom Engine API Playground</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
     />
     <style>
       :root {
@@ -15,6 +24,10 @@
         --canopy-bright: #22c55e;
         --canopy-deep: #166534;
         --danger: #dc2626;
+        --warn: #b45309;
+        --post: #2563eb;
+        --patch: #b45309;
+        --get: #16a34a;
         --radius-sm: 8px;
         --radius: 14px;
         --radius-lg: 18px;
@@ -29,6 +42,7 @@
         --bg-deep: #f4f7f2;
         --bg-panel: #ffffff;
         --bg-raised: #f7faf5;
+        --bg-sunken: #eef3ea;
         --line: #e6ebe2;
         --text-primary: #16241a;
         --text-muted: #5c6b60;
@@ -39,6 +53,7 @@
         --bg-deep: #0d1512;
         --bg-panel: #131c17;
         --bg-raised: #1e2b23;
+        --bg-sunken: #0f1a14;
         --line: #263329;
         --text-primary: #eef1ea;
         --text-muted: #9aa79a;
@@ -67,22 +82,42 @@
       input.code {
         font-family: "IBM Plex Mono", monospace;
       }
+      a {
+        color: var(--canopy-deep);
+      }
+
+      /* ---------- header ---------- */
       header {
-        padding: var(--sp-5) var(--sp-6);
+        padding: var(--sp-4) var(--sp-6);
         border-bottom: 1px solid var(--line);
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
         gap: var(--sp-3);
+        background: var(--bg-panel);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+      }
+      .brand img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        object-fit: contain;
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
       }
       header h1 {
-        font-size: 1.3rem;
+        font-size: 1.2rem;
+        line-height: 1.2;
       }
       header p {
-        margin: 0;
+        margin: 2px 0 0;
         color: var(--text-muted);
-        font-size: 0.9rem;
+        font-size: 0.85rem;
       }
       .theme-toggle {
         background: var(--bg-raised);
@@ -93,19 +128,99 @@
         color: var(--text-primary);
         font-size: 0.85rem;
       }
-      main {
-        max-width: 1200px;
+
+      /* ---------- shell layout: sidebar + request + response ---------- */
+      .shell {
+        max-width: 1440px;
         margin: 0 auto;
-        padding: var(--sp-6);
+        padding: var(--sp-5) var(--sp-6);
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 250px 1fr 1fr;
         gap: var(--sp-5);
+        align-items: start;
       }
-      @media (max-width: 900px) {
-        main {
-          grid-template-columns: 1fr;
+      @media (max-width: 1150px) {
+        .shell {
+          grid-template-columns: 220px 1fr;
+        }
+        .response-panel {
+          grid-column: 1 / -1;
         }
       }
+      @media (max-width: 760px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+        .response-panel {
+          grid-column: auto;
+        }
+      }
+
+      /* ---------- endpoint sidebar ---------- */
+      .endpoint-nav {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        padding: var(--sp-3);
+        box-shadow: var(--shadow);
+        position: sticky;
+        top: var(--sp-5);
+        max-height: calc(100vh - 2 * var(--sp-5));
+        overflow-y: auto;
+      }
+      .endpoint-nav h3 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        margin: var(--sp-3) var(--sp-2) var(--sp-1);
+      }
+      .endpoint-nav h3:first-child {
+        margin-top: var(--sp-1);
+      }
+      .endpoint-item {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: var(--sp-2);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.83rem;
+        color: var(--text-muted);
+      }
+      .endpoint-item:hover {
+        background: var(--bg-raised);
+      }
+      .endpoint-item.active {
+        background: rgba(22, 163, 74, 0.1);
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+      .method-badge {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 5px;
+        flex-shrink: 0;
+        min-width: 42px;
+        text-align: center;
+        color: white;
+      }
+      .method-GET {
+        background: var(--get);
+      }
+      .method-POST {
+        background: var(--post);
+      }
+      .method-PATCH {
+        background: var(--patch);
+      }
+      .method-DELETE {
+        background: var(--danger);
+      }
+
+      /* ---------- shared panel ---------- */
       .panel {
         background: var(--bg-panel);
         border: 1px solid var(--line);
@@ -113,6 +228,26 @@
         padding: var(--sp-5);
         box-shadow: var(--shadow);
       }
+      .panel-title-row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--sp-2);
+        flex-wrap: wrap;
+        margin-bottom: var(--sp-1);
+      }
+      .endpoint-summary {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-4);
+      }
+      .endpoint-path {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.82rem;
+        background: var(--bg-sunken);
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+
       label {
         display: block;
         font-size: 0.8rem;
@@ -137,6 +272,20 @@
       textarea {
         min-height: 110px;
         resize: vertical;
+      }
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        margin-top: var(--sp-3);
+      }
+      .checkbox-row input {
+        width: auto;
+      }
+      .checkbox-row label {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text-primary);
       }
       .row {
         display: flex;
@@ -174,11 +323,14 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
+
+      /* ---------- tabs (used for panel-view AND for snippet languages) ---------- */
       .tabs {
         display: flex;
         gap: var(--sp-1);
         margin-bottom: var(--sp-3);
         border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
       }
       .tab {
         padding: var(--sp-2) var(--sp-3);
@@ -186,23 +338,29 @@
         font-size: 0.85rem;
         color: var(--text-muted);
         border-bottom: 2px solid transparent;
+        white-space: nowrap;
       }
       .tab.active {
         color: var(--canopy-deep);
         border-bottom-color: var(--canopy);
         font-weight: 600;
       }
+      .tab.hidden {
+        display: none;
+      }
+
       pre.output {
         background: var(--bg-raised);
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
         padding: var(--sp-3);
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         overflow-x: auto;
         white-space: pre-wrap;
         word-break: break-word;
         max-height: 420px;
         overflow-y: auto;
+        margin: 0;
       }
       .status-pill {
         display: inline-block;
@@ -221,11 +379,83 @@
         background: rgba(220, 38, 38, 0.12);
         color: var(--danger);
       }
+      .timing-pill {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        margin-left: var(--sp-2);
+      }
       .snippet-code {
         display: none;
       }
       .snippet-code.active {
         display: block;
+      }
+      .header-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        font-family: "IBM Plex Mono", monospace;
+      }
+      .header-table td {
+        padding: 5px 6px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+        word-break: break-all;
+      }
+      .header-table td:first-child {
+        color: var(--text-muted);
+        white-space: nowrap;
+        padding-right: var(--sp-3);
+      }
+      .source-tag {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .source-satellite {
+        background: rgba(22, 163, 74, 0.15);
+        color: var(--canopy-deep);
+      }
+      .source-interpolated {
+        background: rgba(37, 99, 235, 0.13);
+        color: var(--post);
+      }
+      .source-provisional {
+        background: rgba(180, 83, 9, 0.14);
+        color: var(--warn);
+      }
+      #mapPreviewEl {
+        width: 100%;
+        height: 340px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--line);
+      }
+      .legend-swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: var(--sp-2);
+      }
+      .legend-swatch {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 8px 2px 4px;
+      }
+      .legend-swatch .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
       }
       .footer-note {
         text-align: center;
@@ -233,19 +463,22 @@
         font-size: 0.8rem;
         padding: var(--sp-5);
       }
-      a {
-        color: var(--canopy-deep);
-      }
     </style>
   </head>
   <body>
     <header>
-      <div>
-        <h1>Vyom Engine API Playground</h1>
-        <p>
-          Test the partner API against your own account. Nothing you enter here
-          is sent anywhere except directly to this API.
-        </p>
+      <div class="brand">
+        <img
+          src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+          alt="AgriDoot"
+        />
+        <div>
+          <h1>Vyom Engine API Playground</h1>
+          <p>
+            Test the partner API against your own account -- requests go
+            straight from your browser to this API, nowhere else.
+          </p>
+        </div>
       </div>
       <div style="display: flex; gap: var(--sp-3); align-items: center">
         <a href="/developers/docs" style="font-size: 0.85rem"
@@ -255,9 +488,18 @@
       </div>
     </header>
 
-    <main>
+    <div class="shell">
+      <!-- ================= Endpoint sidebar ================= -->
+      <nav class="endpoint-nav" id="endpointNav"></nav>
+
+      <!-- ================= Request builder ================= -->
       <section class="panel" id="requestPanel">
         <h2>Request</h2>
+        <div class="panel-title-row">
+          <span class="method-badge" id="activeMethodBadge">GET</span>
+          <span class="endpoint-path" id="activePathLabel"></span>
+        </div>
+        <p class="endpoint-summary" id="activeSummary"></p>
 
         <label>API Key</label>
         <input class="code" id="apiKey" placeholder="vyom_key_..." />
@@ -270,12 +512,9 @@
           placeholder="Paste the secret shown once at generation"
         />
         <p class="warn">
-          Stored only in this browser's localStorage, and only sent to
-          vyom.agridoot.in itself -- never to any third party.
+          Stored only in this browser's localStorage, and only sent to this API
+          itself -- never to any third party.
         </p>
-
-        <label>Endpoint</label>
-        <select id="endpoint"></select>
 
         <div id="farmIdRow" style="display: none">
           <label>Farm ID</label>
@@ -331,6 +570,23 @@
           </p>
         </div>
 
+        <div id="interpolatedRow" style="display: none">
+          <div class="checkbox-row">
+            <input type="checkbox" id="includeInterpolated" />
+            <label for="includeInterpolated"
+              >Include interpolated / provisional dates</label
+            >
+          </div>
+          <p class="hint">
+            Off: only real satellite readings. On: also includes gap-filled
+            dates -- each result is tagged
+            <span class="source-tag source-satellite">satellite</span>,
+            <span class="source-tag source-interpolated">interpolated</span>, or
+            <span class="source-tag source-provisional">provisional</span>
+            so you can decide what's good enough for your use case.
+          </p>
+        </div>
+
         <div id="bodyRow" style="display: none">
           <label>Request body (JSON)</label>
           <textarea class="code" id="requestBody"></textarea>
@@ -351,17 +607,30 @@
         <button class="primary" id="sendBtn">Send request</button>
       </section>
 
-      <section class="panel">
+      <!-- ================= Response / snippets / preview ================= -->
+      <section class="panel response-panel">
         <div class="tabs">
           <div class="tab active" data-panel="response">Response</div>
-          <div class="tab" data-panel="snippets">Code snippets</div>
+          <div class="tab" data-panel="headers">Headers</div>
+          <div class="tab" data-panel="snippets">Code</div>
+          <div class="tab hidden" data-panel="preview" id="previewTab">
+            Map preview
+          </div>
         </div>
 
         <div id="responsePanelView">
           <div id="responseMeta"></div>
           <pre class="output" id="responseOutput">
-Fill in your credentials and pick an endpoint, then hit Send.</pre
+Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
           >
+        </div>
+
+        <div id="headersPanelView" style="display: none">
+          <table class="header-table" id="headersTable">
+            <tr>
+              <td colspan="2">Send a request to see its response headers.</td>
+            </tr>
+          </table>
         </div>
 
         <div id="snippetsPanelView" style="display: none">
@@ -369,13 +638,29 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
             <div class="tab active" data-snippet="curl">curl</div>
             <div class="tab" data-snippet="python">Python</div>
             <div class="tab" data-snippet="node">Node.js</div>
+            <div class="tab" data-snippet="php">PHP</div>
+            <div class="tab" data-snippet="go">Go</div>
           </div>
           <pre class="output snippet-code active" id="snippet-curl"></pre>
           <pre class="output snippet-code" id="snippet-python"></pre>
           <pre class="output snippet-code" id="snippet-node"></pre>
+          <pre class="output snippet-code" id="snippet-php"></pre>
+          <pre class="output snippet-code" id="snippet-go"></pre>
+        </div>
+
+        <div id="previewPanelView" style="display: none">
+          <p class="hint" style="margin-top: 0">
+            Rendered directly from this response's
+            <code>tile_url_template</code>
+            (an OpenStreetMap base map, with the returned index layer overlaid)
+            -- exactly what you'd get plotting it in your own Leaflet/Mapbox
+            map.
+          </p>
+          <div id="mapPreviewEl"></div>
+          <div class="legend-swatches" id="mapLegendEl"></div>
         </div>
       </section>
-    </main>
+    </div>
 
     <p class="footer-note">
       Every request here counts against your account's real rate limit and
@@ -383,16 +668,42 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
       integration.
     </p>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script>
       const API_BASE = window.location.origin;
 
+      // ================= Endpoint catalogue =================
+      // Grouped for the sidebar; each entry mirrors a real route in
+      // vyom/api/partner_farms.py or vyom/api/partner_tiles.py. Keep this in
+      // sync with those files -- see each route's own docstring for the
+      // authoritative behavior this playground is just exercising.
+      const ENDPOINT_GROUPS = [
+        {
+          title: "Farms",
+          keys: ["create_farm", "list_farms", "get_farm", "update_farm"],
+        },
+        {
+          title: "Indices & dates",
+          keys: [
+            "get_indices",
+            "get_available_dates",
+            "get_timeseries",
+            "get_supported_indices",
+          ],
+        },
+        {
+          title: "Map",
+          keys: ["get_map_layer"],
+        },
+      ];
+
       const ENDPOINTS = {
         create_farm: {
-          label: "POST /api/v1/farms -- Create farm",
+          label: "Create farm",
           method: "POST",
           path: "/api/v1/farms",
-          needsFarmId: false,
-          needsMetric: false,
+          summary:
+            "Registers a new farm polygon under your business account and kicks off its satellite backfill.",
           needsBody: true,
           defaultBody: {
             name: "Playground Test Farm",
@@ -414,94 +725,139 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
           },
         },
         list_farms: {
-          label: "GET /api/v1/farms -- List farms",
+          label: "List farms",
           method: "GET",
           path: "/api/v1/farms",
-          needsFarmId: false,
-          needsMetric: false,
-          needsBody: false,
+          summary: "Every farm created via this credential.",
         },
         get_farm: {
-          label: "GET /api/v1/farms/{farm_id} -- Get farm",
+          label: "Get farm",
           method: "GET",
           path: "/api/v1/farms/{farm_id}",
+          summary: "A single farm's current details.",
           needsFarmId: true,
-          needsMetric: false,
-          needsBody: false,
         },
         update_farm: {
-          label: "PATCH /api/v1/farms/{farm_id} -- Update farm",
+          label: "Update farm",
           method: "PATCH",
           path: "/api/v1/farms/{farm_id}",
+          summary: "Update crop, soil, sowing date, name, or geometry.",
           needsFarmId: true,
-          needsMetric: false,
           needsBody: true,
           defaultBody: { crop_type: "rice", sowing_date: "2026-11-15" },
         },
         get_indices: {
-          label:
-            "GET /api/v1/farms/{farm_id}/indices -- Indices (latest or specific date)",
+          label: "Get indices",
           method: "GET",
           path: "/api/v1/farms/{farm_id}/indices",
+          summary:
+            "Every index's latest reading, or all readings for one specific date.",
           needsFarmId: true,
-          needsMetric: false,
           needsDate: true,
-          needsBody: false,
         },
         get_available_dates: {
-          label:
-            "GET /api/v1/farms/{farm_id}/available-dates -- Available dates",
+          label: "Available dates",
           method: "GET",
           path: "/api/v1/farms/{farm_id}/available-dates",
+          summary:
+            "Which dates have data for one metric -- optionally including gap-filled dates, each tagged with its source.",
           needsFarmId: true,
           needsMetric: true,
-          needsBody: false,
+          needsInterpolatedToggle: true,
         },
         get_timeseries: {
-          label: "GET /api/v1/farms/{farm_id}/timeseries -- Timeseries",
+          label: "Timeseries",
           method: "GET",
           path: "/api/v1/farms/{farm_id}/timeseries",
+          summary: "Full history for one metric, optionally date-bounded.",
           needsFarmId: true,
           needsMetric: true,
           needsDateRange: true,
-          needsBody: false,
         },
         get_supported_indices: {
-          label: "GET /api/v1/farms/indices -- Supported indices list",
+          label: "Supported indices",
           method: "GET",
           path: "/api/v1/farms/indices",
-          needsFarmId: false,
-          needsMetric: false,
-          needsBody: false,
+          summary:
+            "Which indices this deployment computes, per platform (S2/S1).",
+        },
+        get_map_layer: {
+          label: "Map layer (plot on a map)",
+          method: "GET",
+          path: "/api/v1/farms/{farm_id}/map-layer",
+          summary:
+            "A ready-to-use XYZ tile URL template (token embedded) plus bounds, center, and a color legend -- feed straight into Leaflet, Mapbox GL, or Google Maps to plot this farm's indices on your own map. See the Map preview tab after sending.",
+          needsFarmId: true,
+          hasMapPreview: true,
         },
       };
 
       const $ = (id) => document.getElementById(id);
-      const endpointSelect = $("endpoint");
-      Object.entries(ENDPOINTS).forEach(([key, cfg]) => {
-        const opt = document.createElement("option");
-        opt.value = key;
-        opt.textContent = cfg.label;
-        endpointSelect.appendChild(opt);
+      let activeEndpointKey = ENDPOINT_GROUPS[0].keys[0];
+
+      // ---------- build the sidebar ----------
+      const nav = $("endpointNav");
+      ENDPOINT_GROUPS.forEach((group) => {
+        const h3 = document.createElement("h3");
+        h3.textContent = group.title;
+        nav.appendChild(h3);
+        group.keys.forEach((key) => {
+          const cfg = ENDPOINTS[key];
+          const item = document.createElement("div");
+          item.className = "endpoint-item";
+          item.dataset.key = key;
+          item.innerHTML = `<span class="method-badge method-${cfg.method}">${cfg.method}</span><span>${cfg.label}</span>`;
+          item.addEventListener("click", () => selectEndpoint(key));
+          nav.appendChild(item);
+        });
       });
 
       function currentConfig() {
-        return ENDPOINTS[endpointSelect.value];
+        return ENDPOINTS[activeEndpointKey];
+      }
+
+      function selectEndpoint(key) {
+        activeEndpointKey = key;
+        document
+          .querySelectorAll(".endpoint-item")
+          .forEach((el) =>
+            el.classList.toggle("active", el.dataset.key === key),
+          );
+        refreshFormVisibility();
       }
 
       function refreshFormVisibility() {
         const cfg = currentConfig();
+        $("activeMethodBadge").textContent = cfg.method;
+        $("activeMethodBadge").className = "method-badge method-" + cfg.method;
+        $("activePathLabel").textContent = cfg.path;
+        $("activeSummary").textContent = cfg.summary || "";
+
         $("farmIdRow").style.display = cfg.needsFarmId ? "block" : "none";
         $("metricRow").style.display = cfg.needsMetric ? "block" : "none";
         $("dateRow").style.display = cfg.needsDate ? "block" : "none";
         $("dateRangeRow").style.display = cfg.needsDateRange ? "block" : "none";
+        $("interpolatedRow").style.display = cfg.needsInterpolatedToggle
+          ? "block"
+          : "none";
         $("bodyRow").style.display = cfg.needsBody ? "block" : "none";
         if (cfg.needsBody && cfg.defaultBody && !$("requestBody").value) {
           $("requestBody").value = JSON.stringify(cfg.defaultBody, null, 2);
         }
+
+        // The "Map preview" tab only makes sense for an endpoint that
+        // actually returns a tile_url_template -- hide it otherwise rather
+        // than showing an empty/confusing panel.
+        const previewTab = $("previewTab");
+        previewTab.classList.toggle("hidden", !cfg.hasMapPreview);
+        if (!cfg.hasMapPreview && previewTab.classList.contains("active")) {
+          switchPanelTab("response");
+        }
       }
-      endpointSelect.addEventListener("change", refreshFormVisibility);
-      refreshFormVisibility();
+      selectEndpoint(activeEndpointKey);
+      document
+        .querySelector(`.endpoint-item[data-key="${activeEndpointKey}"]`)
+        .classList.add("active");
 
       // Persist credentials locally for convenience across visits -- never sent anywhere but this API.
       ["apiKey", "apiSecret"].forEach((id) => {
@@ -529,6 +885,9 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
           if ($("startDate").value) qs.set("start_date", $("startDate").value);
           if ($("endDate").value) qs.set("end_date", $("endDate").value);
         }
+        if (cfg.needsInterpolatedToggle && $("includeInterpolated").checked) {
+          qs.set("include_interpolated", "true");
+        }
         const qsString = qs.toString();
         if (qsString) path += "?" + qsString;
 
@@ -552,8 +911,8 @@ Fill in your credentials and pick an endpoint, then hit Send.</pre
         return { method: cfg.method, url: API_BASE + path, headers, body };
       }
 
+      // ---------- code snippets, 5 languages ----------
       function renderSnippets(req) {
-        const maskedHeaders = { ...req.headers };
         const curlHeaders = Object.entries(req.headers)
           .map(([k, v]) => `  -H "${k}: ${v}"`)
           .join(" \\\n");
@@ -580,8 +939,101 @@ print(resp.status_code, resp.json())`;
 ${req.body ? "  body: JSON.stringify(" + JSON.stringify(req.body) + ")," : ""}
 });
 console.log(resp.status, await resp.json());`;
+
+        const phpHeaderLines = Object.entries(req.headers)
+          .map(([k, v]) => `    "${k}: ${v}",`)
+          .join("\n");
+        $("snippet-php").textContent = `<?php
+$ch = curl_init("${req.url}");
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "${req.method}");
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+${phpHeaderLines}
+]);
+${req.body ? "curl_setopt($ch, CURLOPT_POSTFIELDS, '" + JSON.stringify(req.body) + "');\n" : ""}$response = curl_exec($ch);
+echo $response;
+curl_close($ch);`;
+
+        const goHeaderLines = Object.entries(req.headers)
+          .map(([k, v]) => `\treq.Header.Set("${k}", "${v}")`)
+          .join("\n");
+        $("snippet-go").textContent = `package main
+
+import (
+\t"fmt"
+\t"io"
+\t"net/http"
+\t"strings"
+)
+
+func main() {
+\tbody := strings.NewReader(\`${req.body ? JSON.stringify(req.body) : ""}\`)
+\treq, _ := http.NewRequest("${req.method}", "${req.url}", body)
+${goHeaderLines}
+\tresp, err := http.DefaultClient.Do(req)
+\tif err != nil {
+\t\tpanic(err)
+\t}
+\tdefer resp.Body.Close()
+\tout, _ := io.ReadAll(resp.Body)
+\tfmt.Println(resp.StatusCode, string(out))
+}`;
       }
 
+      // ---------- map preview (Leaflet), for get_map_layer only ----------
+      let mapPreviewInstance = null;
+      function renderMapPreview(data) {
+        const el = $("mapPreviewEl");
+        if (!mapPreviewInstance) {
+          mapPreviewInstance = L.map(el);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
+            maxZoom: 19,
+          }).addTo(mapPreviewInstance);
+        }
+        if (mapPreviewInstance._vyomLayer) {
+          mapPreviewInstance.removeLayer(mapPreviewInstance._vyomLayer);
+        }
+
+        // Pick the first S2 index (falls back to whatever's first) purely
+        // for this preview -- an integrator's real map would let the end
+        // user choose, same as the dashboard's own index picker does.
+        const platform =
+          data.platforms.S2 && data.platforms.S2.length ? "S2" : "S1";
+        const index = data.platforms[platform][0];
+        const tileUrl = data.tile_url_template
+          .replace("{platform}", platform)
+          .replace("{index}", index)
+          .replace("{date}", "latest");
+
+        mapPreviewInstance._vyomLayer = L.tileLayer(tileUrl, {
+          tms: false,
+          opacity: 0.85,
+        }).addTo(mapPreviewInstance);
+
+        const bounds = L.latLngBounds(data.bounds);
+        mapPreviewInstance.fitBounds(bounds, { padding: [16, 16] });
+        setTimeout(() => mapPreviewInstance.invalidateSize(), 60);
+
+        const legendEl = $("mapLegendEl");
+        legendEl.innerHTML = "";
+        const legend = data.legend[index];
+        if (legend && legend.bands) {
+          legend.bands.forEach((band) => {
+            const chip = document.createElement("span");
+            chip.className = "legend-swatch";
+            chip.innerHTML = `<span class="dot" style="background:${band.color}"></span>${band.tier}`;
+            legendEl.appendChild(chip);
+          });
+        } else {
+          const chip = document.createElement("span");
+          chip.className = "legend-swatch";
+          chip.textContent = `${index}: continuous ${legend ? legend.colormap : ""} scale`;
+          legendEl.appendChild(chip);
+        }
+      }
+
+      // ---------- send ----------
       $("sendBtn").addEventListener("click", async () => {
         const out = $("responseOutput");
         const meta = $("responseMeta");
@@ -594,7 +1046,9 @@ console.log(resp.status, await resp.json());`;
           const fetchOpts = { method: req.method, headers: req.headers };
           if (req.body) fetchOpts.body = JSON.stringify(req.body);
 
+          const startedAt = performance.now();
           const resp = await fetch(req.url, fetchOpts);
+          const elapsedMs = Math.round(performance.now() - startedAt);
           const text = await resp.text();
           let parsed;
           try {
@@ -609,15 +1063,38 @@ console.log(resp.status, await resp.json());`;
               : resp.status < 500
                 ? "status-4xx"
                 : "status-5xx";
-          meta.innerHTML = `<span class="status-pill ${cls}">${resp.status} ${resp.statusText}</span>`;
+          meta.innerHTML =
+            `<span class="status-pill ${cls}">${resp.status} ${resp.statusText}</span>` +
+            `<span class="timing-pill">${elapsedMs} ms</span>`;
           const rl = resp.headers.get("X-RateLimit-Remaining");
           if (rl !== null)
-            meta.innerHTML += ` <span class="hint">Rate limit remaining: ${rl}</span>`;
+            meta.innerHTML += ` <span class="hint">&middot; Rate limit remaining: ${rl}</span>`;
 
           out.textContent =
             typeof parsed === "string"
               ? parsed
               : JSON.stringify(parsed, null, 2);
+
+          // Headers tab
+          const headersTable = $("headersTable");
+          headersTable.innerHTML = "";
+          let anyHeader = false;
+          resp.headers.forEach((value, key) => {
+            anyHeader = true;
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${key}</td><td>${value}</td>`;
+            headersTable.appendChild(tr);
+          });
+          if (!anyHeader) {
+            headersTable.innerHTML =
+              '<tr><td colspan="2">No response headers exposed to this browser context.</td></tr>';
+          }
+
+          // Map preview, only for the map-layer endpoint and only on success
+          const cfg = currentConfig();
+          if (cfg.hasMapPreview && resp.ok && parsed && parsed.data) {
+            renderMapPreview(parsed.data);
+          }
         } catch (err) {
           meta.innerHTML = `<span class="status-pill status-4xx">Error</span>`;
           out.textContent = err.message;
@@ -626,19 +1103,30 @@ console.log(resp.status, await resp.json());`;
         }
       });
 
-      // Tab switching
+      // ---------- top-level panel tabs (Response / Headers / Code / Map preview) ----------
+      function switchPanelTab(name) {
+        document
+          .querySelectorAll(".tab[data-panel]")
+          .forEach((t) =>
+            t.classList.toggle("active", t.dataset.panel === name),
+          );
+        $("responsePanelView").style.display =
+          name === "response" ? "block" : "none";
+        $("headersPanelView").style.display =
+          name === "headers" ? "block" : "none";
+        $("snippetsPanelView").style.display =
+          name === "snippets" ? "block" : "none";
+        $("previewPanelView").style.display =
+          name === "preview" ? "block" : "none";
+        if (name === "preview" && mapPreviewInstance) {
+          setTimeout(() => mapPreviewInstance.invalidateSize(), 60);
+        }
+      }
       document.querySelectorAll(".tab[data-panel]").forEach((tab) => {
-        tab.addEventListener("click", () => {
-          document
-            .querySelectorAll(".tab[data-panel]")
-            .forEach((t) => t.classList.remove("active"));
-          tab.classList.add("active");
-          $("responsePanelView").style.display =
-            tab.dataset.panel === "response" ? "block" : "none";
-          $("snippetsPanelView").style.display =
-            tab.dataset.panel === "snippets" ? "block" : "none";
-        });
+        tab.addEventListener("click", () => switchPanelTab(tab.dataset.panel));
       });
+
+      // ---------- snippet-language tabs ----------
       document.querySelectorAll(".tab[data-snippet]").forEach((tab) => {
         tab.addEventListener("click", () => {
           document
@@ -652,7 +1140,7 @@ console.log(resp.status, await resp.json());`;
         });
       });
 
-      // Theme toggle, defaulting to light per the main dashboard's convention.
+      // ---------- theme toggle, defaulting to light per the main dashboard's convention ----------
       const themeToggle = $("themeToggle");
       function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
