@@ -4,11 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Vyom Engine - By AgriDoot</title>
-    <link
-      rel="icon"
-      type="image/png"
-      href="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
-    />
+    <link rel="icon" type="image/png" href="/assets/img/agridoot-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
@@ -1545,8 +1541,7 @@
         position: relative;
         overflow: hidden;
         min-width: 0;
-        background: url("https://apiv2.agridoot.co.in:12443/img/app_img//bg_img_0a6283.png")
-          center/cover no-repeat;
+        background: url("/assets/img/login-hero-bg.png") center/cover no-repeat;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
@@ -3047,10 +3042,7 @@
           <div class="login-card" id="login-card-main">
             <div class="login-logo-row">
               <div class="login-logo">
-                <img
-                  src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
-                  alt="AgriDoot"
-                />
+                <img src="/assets/img/agridoot-logo.png" alt="AgriDoot" />
               </div>
               <span class="login-brandtext">AgriDoot</span>
             </div>
@@ -3384,10 +3376,7 @@
         </button>
         <div class="brand">
           <div class="brand-logo">
-            <img
-              src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
-              alt="AgriDoot logo"
-            />
+            <img src="/assets/img/agridoot-logo.png" alt="AgriDoot logo" />
           </div>
           <div class="brand-text">
             <span class="title">Vyom Engine</span>
@@ -3528,7 +3517,7 @@
             <img
               class="avatar"
               id="user-avatar"
-              src="https://apiv2.agridoot.co.in:12443/img/app_img//profile_img_d10e50.png"
+              src="/assets/img/profile-avatar.png"
               alt=""
             />
             <div
@@ -3714,7 +3703,7 @@
               "
             >
               <img
-                src="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+                src="/assets/img/agridoot-logo.png"
                 alt=""
                 style="width: 100%; height: 100%; object-fit: cover"
               />
@@ -3744,7 +3733,7 @@
                 style="width: 120px; height: 40px; display: block"
               >
                 <img
-                  src="https://apiv2.agridoot.co.in:12443/img/app_img//play-store_2584f9.png"
+                  src="/assets/img/google-play-badge.png"
                   alt="Get it on Google Play"
                   style="
                     width: 80px;
@@ -3762,7 +3751,7 @@
                 style="width: 120px; height: 40px; display: block"
               >
                 <img
-                  src="https://apiv2.agridoot.co.in:12443/img/app_img//app-store_afcb76.png"
+                  src="/assets/img/app-store-badge.png"
                   alt="Download on the App Store"
                   style="
                     width: 80px;
@@ -6188,8 +6177,7 @@
       // Shown when an account has no profile_img_url (phone-only signup with
       // no linked Google avatar) -- reuses the existing AgriDoot mark rather
       // than adding a new asset.
-      const DEFAULT_AVATAR_URL =
-        "https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png";
+      const DEFAULT_AVATAR_URL = "/assets/img/agridoot-logo.png";
 
       let map, geocoder, searchMarker;
       let farms = [];

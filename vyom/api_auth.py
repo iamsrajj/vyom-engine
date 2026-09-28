@@ -226,11 +226,13 @@ def require_business_api_auth(
 MAP_TILE_TOKEN_TTL_SECONDS = 24 * 3600
 
 
-def issue_map_tile_token(farm_id: uuid.UUID, credential_id: int) -> tuple[str, int]:
+def issue_map_tile_token(farm_id: uuid.UUID, credential_id: uuid.UUID) -> tuple[str, int]:
     now = int(time.time())
     expires_at = now + MAP_TILE_TOKEN_TTL_SECONDS
     payload = {
-        "farm_id": str(farm_id), "cred_id": credential_id,
+        # Both ids are UUIDs -- must be stringified, PyJWT json-encodes the
+        # payload and UUID objects are not JSON serializable.
+        "farm_id": str(farm_id), "cred_id": str(credential_id),
         "iat": now, "exp": expires_at, "typ": "partner_map_tile",
     }
     token = jwt.encode(payload, settings.auth_secret_key, algorithm="HS256")
@@ -240,7 +242,7 @@ def issue_map_tile_token(farm_id: uuid.UUID, credential_id: int) -> tuple[str, i
 @dataclass
 class MapTileTokenContext:
     farm_id: uuid.UUID
-    credential_id: int
+    credential_id: uuid.UUID
 
 
 def require_map_tile_token(
@@ -262,5 +264,9 @@ def require_map_tile_token(
         raise HTTPException(401, "Invalid map tile token")
     if payload.get("typ") != "partner_map_tile":
         raise HTTPException(401, "Invalid map tile token")
-    return MapTileTokenContext(
-        farm_id=uuid.UUID(payload["farm_id"]), credential_id=payload["cred_id"])
+    try:
+        return MapTileTokenContext(
+            farm_id=uuid.UUID(payload["farm_id"]),
+            credential_id=uuid.UUID(payload["cred_id"]))
+    except (KeyError, ValueError):
+        raise HTTPException(401, "Invalid map tile token")

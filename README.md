@@ -16,10 +16,15 @@ products.
 
 ## Table of contents
 
+- [Project overview: what we are building and why](#project-overview-what-we-are-building-and-why)
+  - [Index catalogue](#index-catalogue-what-each-one-is-for)
 - [What this system actually does](#what-this-system-actually-does)
 - [Architecture at a glance](#architecture-at-a-glance)
 - [Repository layout](#repository-layout)
 - [Data model, in one paragraph](#data-model-in-one-paragraph)
+- [Request flows](#request-flows-how-the-code-behaves-today)
+- [Database tables](#database-tables)
+- [Scheduled jobs](#scheduled-jobs-celery-beat-celery_apppy)
 - [The imagery pipeline, end to end](#the-imagery-pipeline-end-to-end)
 - [Real vs. filled data: interpolation](#real-vs-filled-data-interpolation)
 - [Auth: three separate schemes](#auth-three-separate-schemes)
@@ -30,6 +35,166 @@ products.
 - [Deployment](#deployment)
 - [Recurring gotchas](#recurring-gotchas)
 - [Where to look for X](#where-to-look-for-x)
+
+---
+
+## Project overview: what we are building and why
+
+### The problem
+
+A farmer in India usually cannot see how a whole field is doing at any one
+moment. Walking it takes hours, ground sensors are too expensive to put on
+every plot, and by the time stress is visible to the eye the yield loss has
+often already started. Advisory, insurance, credit and input-supply
+businesses have the same blind spot: they need an objective, repeatable
+signal for thousands of plots they will never visit.
+
+Free public satellites already photograph every field on Earth every few
+days. What is missing is the plumbing that turns those raw scenes into
+something a farmer or an agri-business can act on: "which part of this field
+is stressed, since when, and is it getting better or worse?"
+
+**Vyom Engine is that plumbing.** It is AgriDoot's Earth-observation and GIS
+backend: draw your field once, and it is monitored continuously from space,
+with the results delivered as maps, time series, alerts and API responses.
+
+### What "GIS" and "satellite" mean here
+
+- **GIS (Geographic Information System)**: every field is stored as a
+  _polygon_ (`Polygon.geom`, PostGIS geometry, WGS84 / EPSG:4326). Because a
+  field is a real geometry and not just a name, we can intersect it with
+  satellite scenes, clip rasters to its exact boundary, compute its area in
+  acres, reverse-geocode its location, and serve map tiles for it.
+- **Satellites** (both free, from the EU's Copernicus programme, fetched via
+  the Copernicus Data Space Ecosystem, CDSE):
+  - **Sentinel-2** (optical, like a very good camera with extra colours):
+    13 spectral bands; we use 10 m bands (Blue B02, Green B03, Red B04, NIR
+    B08) and 20 m bands (Red-edge B05/B06/B07/B8A, SWIR B11/B12). Revisit is
+    about 5 days, but **clouds block it**, which is the whole story in the
+    Indian monsoon (kharif) season.
+  - **Sentinel-1** (C-band radar, VV and VH polarisation): sends its own
+    microwave pulse and measures what bounces back, so it **sees through
+    cloud, day or night**. It cannot tell "green" from "not green", but it
+    is sensitive to canopy structure, water and soil roughness.
+- **Why both**: Sentinel-2 gives the rich crop-health picture on clear days;
+  Sentinel-1 keeps the timeline alive when Sentinel-2 is blind. Where neither
+  has a pass, the system can fill the gap and always labels it as filled
+  (see [Real vs. filled data](#real-vs-filled-data-interpolation)).
+
+### From pixels to a number a farmer can use
+
+A satellite scene is a grid of pixels, each a set of band reflectances. An
+**index** is a small formula over bands that turns those raw reflectances
+into one number tied to something agronomic (greenness, canopy water,
+chlorophyll, bare soil...). For each field and each pass the pipeline:
+
+1. clips the scene to the field polygon and masks clouds/shadows (Sentinel-2
+   uses the SCL scene-classification layer, classes 0, 1, 3, 8, 9, 10 are
+   rejected);
+2. computes every enabled index per pixel and stores it as a
+   Cloud-Optimized GeoTIFF (this is what the map shows);
+3. reduces each index to **zonal statistics** over the field
+   (`{INDEX}_mean`, `{INDEX}_std`, pixel count, cloud %), which is what the
+   time-series chart, notifications and the partner API's numeric endpoints
+   use.
+
+### Index catalogue (what each one is for)
+
+Formulas below are the ones actually implemented in
+`vyom/processing/indices.py` (Sentinel-2) and `sar_indices.py`
+(Sentinel-1). Names in `code` are the exact `S2_INDICES` / `s1_indices`
+config values and the prefix of the metric name (e.g. `NDVI` gives
+`NDVI_mean`).
+
+#### Crop vigour and canopy (Sentinel-2)
+
+| Index       | Formula (S2 bands)                               | Use it for                                                                                        | Caveat                                                                     |
+| ----------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `NDVI`      | (NIR-Red)/(NIR+Red), B08, B04                    | Overall greenness, vigour, stand density; healthy crop is roughly 0.6 to 0.9. The headline index. | Saturates in dense canopy.                                                 |
+| `EVI`       | 2.5(NIR-Red)/(NIR+6Red-7.5Blue+1), B08, B04, B02 | Dense canopy where NDVI flattens; corrects atmosphere and background.                             | Needs the Blue band.                                                       |
+| `EVI2`      | 2.5(NIR-Red)/(NIR+2.4Red+1), B08, B04            | EVI-like response without Blue, so less haze noise.                                               |                                                                            |
+| `NIRV`      | NIR x NDVI, B08, B04                             | Photosynthetic-capacity / productivity proxy.                                                     |                                                                            |
+| `MSAVI2`    | (2NIR+1-sqrt((2NIR+1)^2-8(NIR-Red)))/2           | Early season, sparse canopy: suppresses bare-soil brightness with no tuning.                      |                                                                            |
+| `OSAVI`     | 1.16(NIR-Red)/(NIR+Red+0.16)                     | Sparse canopy on bright soils.                                                                    |                                                                            |
+| `SAVI`      | 1.5(NIR-Red)/(NIR+Red+0.5)                       | Soil-adjusted vigour (L = 0.5).                                                                   | L is a fixed guess.                                                        |
+| `VARI`      | (Green-Red)/(Green+Red-Blue), B03, B04, B02      | Visible-only greenness when NIR is unreliable.                                                    | Sensitive to haze; prefer NDVI.                                            |
+| `LAI_PROXY` | 3.618 x EVI - 0.118                              | Relative leaf-area / canopy-density trend.                                                        | **Experimental.** Not a true LAI in m2/m2; not calibrated to Indian crops. |
+
+#### Chlorophyll, nitrogen and stress (Sentinel-2 red-edge)
+
+| Index           | Formula                                                   | Use it for                                                                    | Caveat           |
+| --------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------- |
+| `NDRE`          | (NIR-RedEdge)/(NIR+RedEdge), B08, B05                     | Chlorophyll / nitrogen status in mid-to-late season, when NDVI has saturated. |                  |
+| `NDREX`         | (B8A-B06)/(B8A+B06)                                       | NDRE variant probing slightly deeper into the canopy.                         |                  |
+| `NDRE_B7`       | (B8A-B07)/(B8A+B07)                                       | Dense-canopy discrimination.                                                  |                  |
+| `CAR_RE` (CARI) | RedEdge/Red x sqrt((aRed+Red+b)^2/(a^2+1)), B03, B04, B05 | Chlorophyll absorption with a baseline correction.                            |                  |
+| `ARI1`          | 1/Green - 1/RedEdge, B03, B05                             | Anthocyanin (stress / senescence pigment) rather than chlorophyll.            | Unbounded range. |
+
+#### Water and moisture (Sentinel-2)
+
+| Index                 | Formula                                                    | Use it for                                                             | Caveat                            |
+| --------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `NDMI`                | (NIR-SWIR1)/(NIR+SWIR1), B08, B11                          | Water held in leaf tissue: irrigation stress _before_ visible wilting. |                                   |
+| `MSI`                 | SWIR1/NIR                                                  | Simple moisture-stress ratio (higher = drier).                         | Unstable near shadow/water edges. |
+| `NDWI`                | (Green-NIR)/(Green+NIR), B03, B08                          | Surface water / waterlogging / flooded paddy.                          |                                   |
+| `MNDWI`               | (Green-SWIR1)/(Green+SWIR1), B03, B11                      | Open water with fewer built-up false positives.                        | Wet soil, shadows.                |
+| `AWEI_SH`, `AWEI_NSH` | multi-band water extraction (shadow / non-shadow variants) | Ponds, tanks, flood extent.                                            | Needs good cloud mask.            |
+| `WI2015`              | multi-band water regression                                | Water in complex scenes.                                               | Needs true 0..1 reflectance.      |
+| `GREEN_BLUE_RATIO`    | Green/Blue                                                 | Qualitative turbidity of farm ponds.                                   | Weak over farmland.               |
+
+#### Soil, land cover and events (Sentinel-2)
+
+| Index                     | Formula                                                               | Use it for                                                                      | Caveat                                                                        |
+| ------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `SOC_VIS`                 | 1 - Red/(Blue+Green+Red)                                              | Relative soil darkness, i.e. a hint of within-field organic-matter variability. | **Experimental.** Not a calibrated SOC %, confounded by moisture and texture. |
+| `BSI`                     | ((SWIR1+Red)-(NIR+Blue))/((SWIR1+Red)+(NIR+Blue))                     | Fallow / uncultivated patches, bare soil.                                       | Cloud shadow can fake "soil".                                                 |
+| `NDBI`, `IBI`             | SWIR1/NIR contrast; NDBI-NDVI combination                             | Built-up structures (sheds, paths, encroachment) inside a polygon.              | Also responds to dry bare soil.                                               |
+| `NBR`, `NBR2`, `BAI`      | (NIR-SWIR2)/(NIR+SWIR2); (SWIR1-SWIR2)/(SWIR1+SWIR2); burn-area index | Post-harvest **residue (stubble) burning** detection; compare before/after.     | Best as a two-date change, not one date.                                      |
+| `NDSI`, `SNOW_BRIGHTNESS` | (Green-SWIR1)/(Green+SWIR1) (identical to MNDWI); (Green+Blue)/2      | Snow cues; only relevant for hill-state farming.                                |                                                                               |
+
+#### Radar, cloud-independent (Sentinel-1)
+
+| Index         | Formula      | Use it for                                                              | Caveat                                           |
+| ------------- | ------------ | ----------------------------------------------------------------------- | ------------------------------------------------ |
+| `RVI`         | 4 VH/(VV+VH) | Cloud-proof stand-in for NDVI-style canopy density through the monsoon. | Needs calibrated, terrain-corrected backscatter. |
+| `VV_VH_RATIO` | VV/VH        | Canopy development trend; sharp change can flag flooding or harvest.    | Coarser than RVI; no discrete legend yet.        |
+
+**Which are on by default?** `Settings.s2_indices` in `vyom/config.py`
+defaults to `NDVI, NDRE, NDWI, NDMI, EVI, MSAVI2, LAI_PROXY, ARI1, CAR_RE,
+NDREX`; a deployment overrides it with `S2_INDICES` in `.env` (the shipped
+`.env.example` enables the full set above). Only an index that is both listed
+in `S2_INDICES` **and** implemented in `indices.py` is computed.
+`NDVI, NDWI, NDMI, NDRE, MSAVI2, SOC_VIS, RVI` also have discrete, labelled
+Low/Med/High colour legends (`processing/index_scale.py`); the rest use a
+continuous colormap.
+
+**Deliberately not implemented** (so nobody assumes they exist): `CCC`
+(canopy chlorophyll content, needs a PROSAIL-style model inversion), `RSM`
+(Sentinel-1 soil moisture, needs change detection against a per-pixel
+dry/wet baseline) and `SOC_SWIR`. We prefer no number to a made-up number
+shown to a farmer.
+
+### A rule of thumb through the crop calendar
+
+| Stage                      | Lead with                | Why                                            |
+| -------------------------- | ------------------------ | ---------------------------------------------- |
+| Sowing to early growth     | `MSAVI2`, `OSAVI`, `BSI` | Canopy is sparse, soil dominates the pixel.    |
+| Vegetative peak            | `NDVI`, `EVI`            | Vigour and uniformity across the field.        |
+| Late season / dense canopy | `NDRE`, `NDREX`          | NDVI saturates, red-edge keeps discriminating. |
+| Any time, water worries    | `NDMI`, `MSI`, `NDWI`    | Drought stress vs waterlogging.                |
+| Monsoon / cloudy weeks     | `RVI`, `VV_VH_RATIO`     | Radar is unaffected by cloud.                  |
+| Post-harvest               | `NBR`, `BSI`             | Residue burning, fallow detection.             |
+
+### Who it serves
+
+- **Farmers** (web dashboard, `web/index.html`): draw a field, pick crop/soil
+  and sowing date, pay per acre for a 3/6/12-month plan, then see maps,
+  trends, notifications and advisory for it.
+- **Businesses** (partner API, `/api/v1`): agri-input, insurance, lending and
+  advisory companies register their own customers' fields via API key/secret,
+  pull index readings and dates, and plot the same layers on their own maps.
+- **Operators** (`web/admin/*`): error log, region pre-warming of imagery,
+  coupon management.
 
 ---
 
@@ -89,7 +254,7 @@ satellite reading without checking that label.
                                  | raw .SAFE.zip               | COGs + stats
                      +-----------v------------+     +----------v-------------+
                      |  Object storage         |     |  PostgreSQL + PostGIS  |
-                     |  (Wasabi S3, or local   |     |  models.py (21 tables) |
+                     |  (Wasabi S3, or local   |     |  models.py (22 tables) |
                      |  disk -- storage.py)    |     |                        |
                      +-------------------------+     +-----------+------------+
                                                                   |
@@ -113,7 +278,7 @@ sweeps, email/notification fan-out). PostgreSQL with PostGIS handles both
 relational data (users, farms, invoices) and geometry (`Polygon.geom`).
 
 **Frontend**: no build step, no framework. `web/index.html` is a single
-~11,000-line file (vanilla JS, Google Maps JavaScript API, Chart.js) that IS
+~11,400-line file (vanilla JS, Google Maps JavaScript API, Chart.js) that IS
 the entire farmer-facing dashboard. `web/admin/*.html` and
 `web/developers/playground.html` are separate single-file pages for
 internal/admin and partner-developer use respectively.
@@ -156,7 +321,7 @@ vyom/                        Python package -- all backend logic
 |   |-- cloud_mask.py, cog_writer.py                  Supporting steps
 |   |-- indices.py, sar_indices.py                    Index formulas (S2, S1)
 |   `-- index_scale.py                                Discrete color legends
-|-- models.py                 All SQLAlchemy models (21 tables)
+|-- models.py                 All SQLAlchemy models (22 tables)
 |-- config.py                 Pydantic Settings -- every env var, in one place
 |-- auth.py / api_auth.py     Dashboard session auth / partner API-key auth
 |-- discovery.py              CDSE product search
@@ -180,7 +345,11 @@ vyom/                        Python package -- all backend logic
 |-- celery_app.py             Celery app + beat schedule
 `-- tasks.py, billing_tasks.py   Celery task definitions
 
+scripts/
+`-- download_assets.py         Fetches logo + store badges into web/assets/img/
+
 web/
+|-- assets/img/                Local logo + Google Play / App Store badges
 |-- index.html                 The farmer dashboard (single file, see below)
 |-- config.js / config.js.example   Client-side config (API keys, base URLs)
 |-- admin/                      Internal tools -- errors.html, prewarm.html,
@@ -235,6 +404,103 @@ adds `BusinessAccount`, `ApiCredential` (hashed secret, rate limits),
 are in `vyom/models.py`; the migrations directory shows the order these
 were introduced in, which is often useful context for _why_ a column exists
 the way it does.
+
+---
+
+## Request flows (how the code behaves today)
+
+### 1. A farmer adds a field (dashboard)
+
+The "Draw new field" modal in `web/index.html` is a 4-step wizard driven by
+`wizardGoToStep()`:
+
+```
+Step 1 Draw      map + search, Start drawing -> Finish shape -> area preview
+                 (Next stays disabled until a shape exists)
+Step 2 Details   name, auto reverse-geocoded location, crop/soil pickers
+                 (proxied via /reference/*), sowing date (+ live crop age)
+Step 3 Payment   3/6/12-month plan, coupon, GST breakdown -> "Save & pay"
+Step 4 Done      summary; "View field" or "Draw another field"
+```
+
+Behind "Save & pay" (`saveDraft()`):
+
+```
+browser                         FastAPI                       Celery / DB
+   | POST /farms (geometry, ...)   |                               |
+   |------------------------------>| geometry_utils.sanitize       |
+   |                               | INSERT polygons (draft)       |
+   |                               | reuse_check: backfill from    |
+   |                               |   already-processed coverage  |
+   | POST /billing/... (plan)      |                               |
+   |------------------------------>| wallet -> Razorpay order      |
+   |<- Razorpay checkout           |                               |
+   | payment success + webhook     | activate FarmPlan             |
+   |                               | dispatch refresh_farm         |
+   |                               |  (priority queues, 365 d,     |
+   |                               |   85% cloud) ---------------->| discover -> download ->
+   |                               |                               | process -> stats ->
+   | poll GET /farms/{id}/status   |                               | fill_gaps_callback ->
+   |<- ready + progress            |                               | notifications
+```
+
+### 2. Satellite data pipeline (Celery)
+
+```
+poll_all_farms (beat, every 6 h) / refresh_farm (on demand)
+  -> vyom.discovery.*     CDSE OData search per farm bbox
+  -> vyom.download.*      download_product_task   (raw .SAFE.zip -> storage)
+  -> vyom.process.*       process_product_task    (S2 or S1 pipeline -> COGs)
+  -> vyom.stats.*         compute_stats_task      (exactextract -> zonal_stats)
+  -> vyom.stats.*         fill_gaps_callback      (interpolation + notifications)
+Every stage has a "<queue>_priority" twin so a farmer waiting on a new field is
+never stuck behind background sweeps (needs a dedicated worker; see setup).
+```
+
+### 3. A partner plots a farm on their own map
+
+```
+partner server                     Vyom API                       partner's browser map
+  | GET /api/v1/farms/{id}/map-layer  |                                     |
+  |   X-Api-Key / X-Api-Secret ------>| ownership check                     |
+  |                                   | issue_map_tile_token(farm, cred)    |
+  |<-- tile_url_template ?token=..., bounds, center, indices, legend        |
+  |----------------------------------------------- template ---------------->|
+  |                                   |<-- GET .../map/S2/NDVI/latest/z/x/y.png?token=
+  |                                   | verify token (scoped to ONE farm)   |
+  |                                   | render_index_tile() -> PNG          |
+  |                                   |--- PNG + X-Vyom-Data-Source ------->|
+```
+
+The token is a 24 h JWT (`typ=partner_map_tile`) carrying the farm id and
+credential id as **strings** (they are UUIDs; PyJWT cannot serialise raw UUID
+objects, which is exactly the bug that `map-layer` originally hit).
+
+## Database tables
+
+`vyom/models.py` (22 tables), grouped by role:
+
+| Group             | Tables                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identity          | `users`, `otp_verifications`, `business_email_otps`                                                                                                                        |
+| Farms and imagery | `polygons`, `catalog_products`, `polygon_tile_map`, `zonal_stats`, `interpolated_stats`, `interpolated_tiles`                                                              |
+| Farm billing      | `farm_plans`, `wallet_transactions`, `coupons`, `coupon_redemptions`                                                                                                       |
+| Partner API       | `api_credentials`, `api_idempotency_keys`, `api_access_log`, `business_subscriptions`, `business_api_invoices`, `business_api_invoice_farms`, `business_renewal_reminders` |
+| Operations        | `notifications`, `error_logs`                                                                                                                                              |
+
+## Scheduled jobs (Celery beat, `celery_app.py`)
+
+| Task                                                    | Every  | Purpose                                                            |
+| ------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
+| `vyom.discovery.poll_all_farms`                         | 6 h    | Incremental 30-day refresh of every farm; stale-data notifications |
+| `vyom.billing.expire_farm_plans`                        | 24 h   | End plans past their term                                          |
+| `vyom.billing.reconcile_abandoned_farm_plans`           | 24 h   | Clean up farms whose payment never completed                       |
+| `vyom.billing.generate_monthly_business_api_invoices`   | 24 h   | Idempotent per month (unique user + month)                         |
+| `vyom.billing.suspend_overdue_business_invoices`        | 24 h   | Enforce unpaid partner invoices                                    |
+| `vyom.billing.send_business_renewal_reminders`          | 24 h   | Renewal emails                                                     |
+| `vyom.billing.cleanup_idempotency_keys`                 | 24 h   | Expire old `Idempotency-Key` rows                                  |
+| `vyom.billing.reconcile_pending_business_subscriptions` | 30 min | Settle Razorpay state                                              |
+| `vyom.billing.reconcile_pending_business_invoices`      | 30 min | Settle Razorpay state                                              |
 
 ---
 
@@ -426,11 +692,19 @@ cp .env.example .env
 psql "$DATABASE_URL" -f migrations/schema.sql
 for f in migrations/0*.sql; do psql "$DATABASE_URL" -f "$f"; done
 
+# Local assets (logo + app-store badges) are served from web/assets/img/:
+python scripts/download_assets.py
+
 # Run everything in separate terminals (not via systemd -- that's
 # deploy-only, see below):
 uvicorn vyom.api.main:app --reload --port 8000
-celery -A vyom.celery_app worker -Q download,discover --loglevel=info
+celery -A vyom.celery_app worker -Q download,discover,billing --loglevel=info
 celery -A vyom.celery_app worker -Q process,stats --loglevel=info
+# Dedicated worker for farmer-waiting work; without it the *_priority
+# queues are never consumed and new farms will sit idle:
+celery -A vyom.celery_app worker \
+  -Q download_priority,discover_priority,process_priority,stats_priority \
+  --loglevel=info
 celery -A vyom.celery_app beat --loglevel=info
 
 # Frontend needs no build step -- just serve web/ statically, or point
@@ -438,8 +712,9 @@ celery -A vyom.celery_app beat --loglevel=info
 # (copy from web/config.js.example first).
 ```
 
-Split Celery into (at least) two queues -- `download,discover` and
-`process,stats` -- rather than one worker for everything. A single shared
+Split Celery across separate worker processes -- `download,discover,billing`,
+`process,stats`, and a dedicated `*_priority` worker -- rather than one worker
+for everything. A single shared
 queue has caused OOM kills in the past when a heavy raster-processing task
 and several concurrent downloads land on the same worker at once.
 
