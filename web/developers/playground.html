@@ -14,6 +14,10 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+    />
     <style>
       :root {
         --canopy: #16a34a;
@@ -24,6 +28,7 @@
         --post: #2563eb;
         --patch: #b45309;
         --get: #16a34a;
+        --delete: #dc2626;
         --radius-sm: 8px;
         --radius: 14px;
         --radius-lg: 18px;
@@ -44,6 +49,7 @@
         --text-muted: #5c6b60;
         --text-dim: #8b9a8f;
         --shadow: 0 10px 32px rgba(30, 50, 30, 0.08);
+        --code-bg: #282c34;
       }
       html[data-theme="dark"] {
         --bg-deep: #0d1512;
@@ -55,6 +61,7 @@
         --text-muted: #9aa79a;
         --text-dim: #64766a;
         --shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+        --code-bg: #0f1a14;
       }
       * {
         box-sizing: border-box;
@@ -81,6 +88,9 @@
       a {
         color: var(--canopy-deep);
       }
+      ::selection {
+        background: rgba(22, 163, 74, 0.25);
+      }
 
       /* ---------- header ---------- */
       header {
@@ -92,6 +102,9 @@
         flex-wrap: wrap;
         gap: var(--sp-3);
         background: var(--bg-panel);
+        position: sticky;
+        top: 0;
+        z-index: 20;
       }
       .brand {
         display: flex;
@@ -115,7 +128,7 @@
         color: var(--text-muted);
         font-size: 0.85rem;
       }
-      .theme-toggle {
+      .icon-btn {
         background: var(--bg-raised);
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
@@ -123,6 +136,67 @@
         cursor: pointer;
         color: var(--text-primary);
         font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .icon-btn:hover {
+        border-color: var(--canopy);
+      }
+      kbd {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        background: var(--bg-sunken);
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--text-muted);
+      }
+
+      /* ---------- environment bar (auth + base URL, shared across every endpoint) ---------- */
+      .env-bar {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: var(--sp-4) var(--sp-6) 0;
+        display: grid;
+        grid-template-columns: 1.1fr 1.3fr 1.3fr auto;
+        gap: var(--sp-3);
+        align-items: end;
+      }
+      @media (max-width: 900px) {
+        .env-bar {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .env-field label {
+        display: block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--text-dim);
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+      .env-status {
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        padding-bottom: 9px;
+      }
+      .env-status .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        flex-shrink: 0;
+      }
+      .env-status.ready .dot {
+        background: var(--canopy);
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
       }
 
       /* ---------- shell layout: sidebar + request + response ---------- */
@@ -131,13 +205,13 @@
         margin: 0 auto;
         padding: var(--sp-5) var(--sp-6);
         display: grid;
-        grid-template-columns: 250px 1fr 1fr;
+        grid-template-columns: 260px 1fr 1fr;
         gap: var(--sp-5);
         align-items: start;
       }
       @media (max-width: 1150px) {
         .shell {
-          grid-template-columns: 220px 1fr;
+          grid-template-columns: 230px 1fr;
         }
         .response-panel {
           grid-column: 1 / -1;
@@ -160,18 +234,32 @@
         padding: var(--sp-3);
         box-shadow: var(--shadow);
         position: sticky;
-        top: var(--sp-5);
-        max-height: calc(100vh - 2 * var(--sp-5));
+        top: 88px;
+        max-height: calc(100vh - 110px);
         overflow-y: auto;
       }
+      .sidebar-search {
+        width: 100%;
+        padding: 7px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        margin-bottom: var(--sp-2);
+      }
+      .sidebar-search:focus {
+        outline: none;
+        border-color: var(--canopy);
+      }
       .endpoint-nav h3 {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: var(--text-dim);
         margin: var(--sp-3) var(--sp-2) var(--sp-1);
       }
-      .endpoint-nav h3:first-child {
+      .endpoint-nav h3:first-of-type {
         margin-top: var(--sp-1);
       }
       .endpoint-item {
@@ -213,7 +301,7 @@
         background: var(--patch);
       }
       .method-DELETE {
-        background: var(--danger);
+        background: var(--delete);
       }
 
       /* ---------- shared panel ---------- */
@@ -243,6 +331,17 @@
         padding: 2px 7px;
         border-radius: 6px;
       }
+      .copy-path-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-dim);
+        font-size: 0.78rem;
+        padding: 2px 4px;
+      }
+      .copy-path-btn:hover {
+        color: var(--canopy-deep);
+      }
 
       label {
         display: block;
@@ -265,9 +364,35 @@
         color: var(--text-primary);
         font-size: 0.9rem;
       }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--canopy);
+        box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+      }
       textarea {
         min-height: 110px;
         resize: vertical;
+      }
+      textarea.invalid {
+        border-color: var(--danger);
+      }
+      .field-row-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .link-btn {
+        background: none;
+        border: none;
+        color: var(--canopy-deep);
+        cursor: pointer;
+        font-size: 0.76rem;
+        padding: 0;
+      }
+      .link-btn:hover {
+        text-decoration: underline;
       }
       .checkbox-row {
         display: flex;
@@ -311,6 +436,11 @@
         font-weight: 600;
         font-size: 0.95rem;
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: background 0.15s;
       }
       button.primary:hover {
         background: var(--canopy-deep);
@@ -319,8 +449,15 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
+      button.primary .kbd-hint {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        background: rgba(255, 255, 255, 0.18);
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
 
-      /* ---------- tabs (used for panel-view AND for snippet languages) ---------- */
+      /* ---------- tabs (panel-view AND snippet languages) ---------- */
       .tabs {
         display: flex;
         gap: var(--sp-1);
@@ -335,6 +472,9 @@
         color: var(--text-muted);
         border-bottom: 2px solid transparent;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 5px;
       }
       .tab.active {
         color: var(--canopy-deep);
@@ -344,20 +484,63 @@
       .tab.hidden {
         display: none;
       }
+      .tab .count-badge {
+        background: var(--bg-sunken);
+        color: var(--text-dim);
+        font-size: 0.65rem;
+        padding: 0 5px;
+        border-radius: 999px;
+      }
 
+      /* ---------- code / output blocks, highlight.js-driven ---------- */
+      .output-wrap {
+        position: relative;
+      }
       pre.output {
-        background: var(--bg-raised);
+        background: var(--code-bg);
         border: 1px solid var(--line);
         border-radius: var(--radius-sm);
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+      }
+      pre.output code {
+        display: block;
         padding: var(--sp-3);
         font-size: 0.8rem;
         overflow-x: auto;
+        overflow-y: auto;
+        max-height: 420px;
+        white-space: pre;
+        background: transparent !important;
+      }
+      pre.output code.plain {
+        color: #c9d1d9;
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 420px;
-        overflow-y: auto;
-        margin: 0;
       }
+      .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: #d7dde3;
+        font-size: 0.7rem;
+        padding: 3px 9px;
+        border-radius: 6px;
+        cursor: pointer;
+        z-index: 2;
+      }
+      .copy-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .copy-btn.copied {
+        background: var(--canopy);
+        border-color: var(--canopy);
+        color: white;
+      }
+
       .status-pill {
         display: inline-block;
         padding: 2px 10px;
@@ -375,11 +558,39 @@
         background: rgba(220, 38, 38, 0.12);
         color: var(--danger);
       }
-      .timing-pill {
+      .timing-pill,
+      .size-pill {
         font-size: 0.78rem;
         color: var(--text-dim);
         margin-left: var(--sp-2);
       }
+      .segmented {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        overflow: hidden;
+        font-size: 0.72rem;
+      }
+      .segmented button {
+        background: var(--bg-raised);
+        border: none;
+        padding: 4px 12px;
+        cursor: pointer;
+        color: var(--text-muted);
+      }
+      .segmented button.active {
+        background: var(--canopy);
+        color: white;
+      }
+      .response-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--sp-2);
+        flex-wrap: wrap;
+        gap: var(--sp-2);
+      }
+
       .snippet-code {
         display: none;
       }
@@ -453,6 +664,49 @@
         border-radius: 50%;
         flex-shrink: 0;
       }
+
+      /* ---------- history ---------- */
+      .history-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: var(--sp-2);
+      }
+      .history-item {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: var(--sp-2) var(--sp-3);
+        margin-bottom: 7px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .history-item:hover {
+        border-color: var(--canopy);
+      }
+      .history-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.78rem;
+        margin-bottom: 2px;
+      }
+      .history-path {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        word-break: break-all;
+      }
+      .history-meta {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        margin-top: 3px;
+      }
+      .empty-note {
+        font-size: 0.83rem;
+        color: var(--text-dim);
+        text-align: center;
+        padding: var(--sp-5) 0;
+      }
+
       .footer-note {
         text-align: center;
         color: var(--text-dim);
@@ -477,26 +731,34 @@
         <a href="/developers/docs" style="font-size: 0.85rem"
           >Full API docs &rarr;</a
         >
-        <button class="theme-toggle" id="themeToggle">🌙 Dark</button>
+        <span class="icon-btn" style="cursor: default"
+          >Send: <kbd>Ctrl</kbd>+<kbd>Enter</kbd></span
+        >
+        <button class="icon-btn" id="themeToggle">🌙 Dark</button>
       </div>
     </header>
 
-    <div class="shell">
-      <!-- ================= Endpoint sidebar ================= -->
-      <nav class="endpoint-nav" id="endpointNav"></nav>
-
-      <!-- ================= Request builder ================= -->
-      <section class="panel" id="requestPanel">
-        <h2>Request</h2>
-        <div class="panel-title-row">
-          <span class="method-badge" id="activeMethodBadge">GET</span>
-          <span class="endpoint-path" id="activePathLabel"></span>
-        </div>
-        <p class="endpoint-summary" id="activeSummary"></p>
-
+    <!-- ================= Environment bar: base URL + auth, shared by every endpoint ================= -->
+    <div class="env-bar">
+      <div class="env-field">
+        <label>Base URL</label>
+        <select id="baseUrlSelect">
+          <option value="origin">This deployment</option>
+          <option value="local">Local dev (http://localhost:8000)</option>
+          <option value="custom">Custom...</option>
+        </select>
+        <input
+          class="code"
+          id="customBaseUrlInput"
+          placeholder="https://your-host"
+          style="display: none; margin-top: 6px"
+        />
+      </div>
+      <div class="env-field">
         <label>API Key</label>
         <input class="code" id="apiKey" placeholder="vyom_key_..." />
-
+      </div>
+      <div class="env-field">
         <label>API Secret</label>
         <input
           class="code"
@@ -504,18 +766,46 @@
           type="password"
           placeholder="Paste the secret shown once at generation"
         />
-        <p class="warn">
-          Stored only in this browser's localStorage, and only sent to this API
-          itself -- never to any third party.
-        </p>
+      </div>
+      <div class="env-status" id="envStatus">
+        <span class="dot"></span><span id="envStatusText">Not configured</span>
+      </div>
+    </div>
+
+    <div class="shell">
+      <!-- ================= Endpoint sidebar ================= -->
+      <nav class="endpoint-nav">
+        <input
+          class="sidebar-search"
+          id="endpointSearch"
+          type="text"
+          placeholder="Filter endpoints..."
+        />
+        <div id="endpointNav"></div>
+      </nav>
+
+      <!-- ================= Request builder ================= -->
+      <section class="panel" id="requestPanel">
+        <h2>Request</h2>
+        <div class="panel-title-row">
+          <span class="method-badge" id="activeMethodBadge">GET</span>
+          <span class="endpoint-path" id="activePathLabel"></span>
+          <button class="copy-path-btn" id="copyPathBtn" title="Copy full path">
+            Copy
+          </button>
+        </div>
+        <p class="endpoint-summary" id="activeSummary"></p>
 
         <div id="farmIdRow" style="display: none">
           <label>Farm ID</label>
           <input
             class="code"
             id="farmId"
+            list="farmIdHistoryList"
             placeholder="e.g. 4ec38a8b-b7e9-4ab1-90d0-a14a623bf1d9"
           />
+          <datalist id="farmIdHistoryList"></datalist>
+          <p class="hint">Recently used farm IDs appear as suggestions.</p>
         </div>
 
         <div id="metricRow" style="display: none">
@@ -581,8 +871,12 @@
         </div>
 
         <div id="bodyRow" style="display: none">
-          <label>Request body (JSON)</label>
+          <div class="field-row-actions">
+            <label style="margin: 0">Request body (JSON)</label>
+            <button class="link-btn" id="formatJsonBtn">Format</button>
+          </div>
           <textarea class="code" id="requestBody"></textarea>
+          <p class="hint" id="bodyValidityHint"></p>
         </div>
 
         <label
@@ -591,16 +885,24 @@
             >(optional, for Create/Update)</span
           ></label
         >
-        <input
-          class="code"
-          id="idempotencyKey"
-          placeholder="any unique string, e.g. a UUID you generate"
-        />
+        <div style="display: flex; gap: 8px">
+          <input
+            class="code"
+            id="idempotencyKey"
+            placeholder="any unique string, e.g. a UUID you generate"
+            style="flex: 1"
+          />
+          <button class="link-btn" id="genIdemBtn" style="white-space: nowrap">
+            Generate
+          </button>
+        </div>
 
-        <button class="primary" id="sendBtn">Send request</button>
+        <button class="primary" id="sendBtn">
+          Send request <span class="kbd-hint">Ctrl+Enter</span>
+        </button>
       </section>
 
-      <!-- ================= Response / snippets / preview ================= -->
+      <!-- ================= Response / snippets / preview / history ================= -->
       <section class="panel response-panel">
         <div class="tabs">
           <div class="tab active" data-panel="response">Response</div>
@@ -609,13 +911,27 @@
           <div class="tab hidden" data-panel="preview" id="previewTab">
             Map preview
           </div>
+          <div class="tab" data-panel="history">
+            History <span class="count-badge" id="historyCount">0</span>
+          </div>
         </div>
 
         <div id="responsePanelView">
-          <div id="responseMeta"></div>
-          <pre class="output" id="responseOutput">
-Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
-          >
+          <div class="response-toolbar">
+            <div id="responseMeta"></div>
+            <div class="segmented" id="responseViewToggle">
+              <button data-view="pretty" class="active">Pretty</button>
+              <button data-view="raw">Raw</button>
+            </div>
+          </div>
+          <div class="output-wrap">
+            <button class="copy-btn" data-copy-target="responseOutput">
+              Copy
+            </button>
+            <pre
+              class="output"
+            ><code id="responseOutput" class="plain">Fill in your credentials above, pick an endpoint from the left, then hit Send (or Ctrl+Enter).</code></pre>
+          </div>
         </div>
 
         <div id="headersPanelView" style="display: none">
@@ -634,23 +950,67 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
             <div class="tab" data-snippet="php">PHP</div>
             <div class="tab" data-snippet="go">Go</div>
           </div>
-          <pre class="output snippet-code active" id="snippet-curl"></pre>
-          <pre class="output snippet-code" id="snippet-python"></pre>
-          <pre class="output snippet-code" id="snippet-node"></pre>
-          <pre class="output snippet-code" id="snippet-php"></pre>
-          <pre class="output snippet-code" id="snippet-go"></pre>
+          <div class="output-wrap snippet-code active" id="snippet-wrap-curl">
+            <button class="copy-btn" data-copy-target="snippet-curl">
+              Copy
+            </button>
+            <pre
+              class="output"
+            ><code id="snippet-curl" class="language-bash"></code></pre>
+          </div>
+          <div class="output-wrap snippet-code" id="snippet-wrap-python">
+            <button class="copy-btn" data-copy-target="snippet-python">
+              Copy
+            </button>
+            <pre
+              class="output"
+            ><code id="snippet-python" class="language-python"></code></pre>
+          </div>
+          <div class="output-wrap snippet-code" id="snippet-wrap-node">
+            <button class="copy-btn" data-copy-target="snippet-node">
+              Copy
+            </button>
+            <pre
+              class="output"
+            ><code id="snippet-node" class="language-javascript"></code></pre>
+          </div>
+          <div class="output-wrap snippet-code" id="snippet-wrap-php">
+            <button class="copy-btn" data-copy-target="snippet-php">
+              Copy
+            </button>
+            <pre
+              class="output"
+            ><code id="snippet-php" class="language-php"></code></pre>
+          </div>
+          <div class="output-wrap snippet-code" id="snippet-wrap-go">
+            <button class="copy-btn" data-copy-target="snippet-go">Copy</button>
+            <pre
+              class="output"
+            ><code id="snippet-go" class="language-go"></code></pre>
+          </div>
         </div>
 
         <div id="previewPanelView" style="display: none">
           <p class="hint" style="margin-top: 0">
             Rendered directly from this response's
-            <code>tile_url_template</code>
-            (an OpenStreetMap base map, with the returned index layer overlaid)
-            -- exactly what you'd get plotting it in your own Leaflet/Mapbox
-            map.
+            <code>tile_url_template</code> (an OpenStreetMap base map, with the
+            returned index layer overlaid) -- exactly what you'd get plotting it
+            in your own Leaflet/Mapbox map.
           </p>
           <div id="mapPreviewEl"></div>
           <div class="legend-swatches" id="mapLegendEl"></div>
+        </div>
+
+        <div id="historyPanelView" style="display: none">
+          <div class="history-toolbar">
+            <button class="link-btn" id="clearHistoryBtn">Clear history</button>
+          </div>
+          <div id="historyList">
+            <p class="empty-note">
+              Requests you send appear here, newest first -- click one to reload
+              it into the builder on the left.
+            </p>
+          </div>
         </div>
       </section>
     </div>
@@ -658,12 +1018,20 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
     <p class="footer-note">
       Every request here counts against your account's real rate limit and
       monthly farm count, exactly like production traffic from your own
-      integration.
+      integration. Credentials and history are kept only in this browser's
+      localStorage.
     </p>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
     <script>
-      const API_BASE = window.location.origin;
+      const $ = (id) => document.getElementById(id);
 
       // ================= Endpoint catalogue =================
       // Grouped for the sidebar; each entry mirrors a real route in
@@ -785,25 +1153,44 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
         },
       };
 
-      const $ = (id) => document.getElementById(id);
       let activeEndpointKey = ENDPOINT_GROUPS[0].keys[0];
 
-      // ---------- build the sidebar ----------
-      const nav = $("endpointNav");
-      ENDPOINT_GROUPS.forEach((group) => {
-        const h3 = document.createElement("h3");
-        h3.textContent = group.title;
-        nav.appendChild(h3);
-        group.keys.forEach((key) => {
-          const cfg = ENDPOINTS[key];
-          const item = document.createElement("div");
-          item.className = "endpoint-item";
-          item.dataset.key = key;
-          item.innerHTML = `<span class="method-badge method-${cfg.method}">${cfg.method}</span><span>${cfg.label}</span>`;
-          item.addEventListener("click", () => selectEndpoint(key));
-          nav.appendChild(item);
+      // ================= sidebar: build + filter =================
+      const navEl = $("endpointNav");
+      function buildSidebar() {
+        navEl.innerHTML = "";
+        const query = $("endpointSearch").value.trim().toLowerCase();
+        ENDPOINT_GROUPS.forEach((group) => {
+          const matchingKeys = group.keys.filter((key) => {
+            const cfg = ENDPOINTS[key];
+            return (
+              !query ||
+              cfg.label.toLowerCase().includes(query) ||
+              cfg.path.toLowerCase().includes(query) ||
+              cfg.method.toLowerCase().includes(query)
+            );
+          });
+          if (!matchingKeys.length) return;
+          const h3 = document.createElement("h3");
+          h3.textContent = group.title;
+          navEl.appendChild(h3);
+          matchingKeys.forEach((key) => {
+            const cfg = ENDPOINTS[key];
+            const item = document.createElement("div");
+            item.className =
+              "endpoint-item" + (key === activeEndpointKey ? " active" : "");
+            item.dataset.key = key;
+            item.innerHTML = `<span class="method-badge method-${cfg.method}">${cfg.method}</span><span>${cfg.label}</span>`;
+            item.addEventListener("click", () => selectEndpoint(key));
+            navEl.appendChild(item);
+          });
         });
-      });
+        if (!navEl.children.length) {
+          navEl.innerHTML =
+            '<p class="empty-note">No endpoints match that filter.</p>';
+        }
+      }
+      $("endpointSearch").addEventListener("input", buildSidebar);
 
       function currentConfig() {
         return ENDPOINTS[activeEndpointKey];
@@ -837,6 +1224,7 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
         if (cfg.needsBody && cfg.defaultBody && !$("requestBody").value) {
           $("requestBody").value = JSON.stringify(cfg.defaultBody, null, 2);
         }
+        checkBodyValidity();
 
         // The "Map preview" tab only makes sense for an endpoint that
         // actually returns a tile_url_template -- hide it otherwise rather
@@ -847,18 +1235,111 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
           switchPanelTab("response");
         }
       }
-      selectEndpoint(activeEndpointKey);
-      document
-        .querySelector(`.endpoint-item[data-key="${activeEndpointKey}"]`)
-        .classList.add("active");
 
-      // Persist credentials locally for convenience across visits -- never sent anywhere but this API.
+      // ================= environment bar: base URL + auth =================
+      function getBaseUrl() {
+        const sel = $("baseUrlSelect").value;
+        if (sel === "local") return "http://localhost:8000";
+        if (sel === "custom")
+          return (
+            $("customBaseUrlInput").value || window.location.origin
+          ).replace(/\/$/, "");
+        return window.location.origin;
+      }
+
+      function updateEnvStatus() {
+        const ready = $("apiKey").value.trim() && $("apiSecret").value.trim();
+        $("envStatus").classList.toggle("ready", !!ready);
+        $("envStatusText").textContent = ready
+          ? "Credentials set (saved locally)"
+          : "Not configured";
+      }
+
+      $("baseUrlSelect").addEventListener("change", () => {
+        const isCustom = $("baseUrlSelect").value === "custom";
+        $("customBaseUrlInput").style.display = isCustom ? "block" : "none";
+        localStorage.setItem(
+          "vyom_playground_baseUrlSelect",
+          $("baseUrlSelect").value,
+        );
+      });
+      $("customBaseUrlInput").addEventListener("change", () =>
+        localStorage.setItem(
+          "vyom_playground_customBaseUrl",
+          $("customBaseUrlInput").value,
+        ),
+      );
+
+      // Persist credentials + base URL locally for convenience across visits
+      // -- never sent anywhere but this API.
       ["apiKey", "apiSecret"].forEach((id) => {
         const saved = localStorage.getItem("vyom_playground_" + id);
         if (saved) $(id).value = saved;
-        $(id).addEventListener("change", () =>
-          localStorage.setItem("vyom_playground_" + id, $(id).value),
+        $(id).addEventListener("input", () => {
+          localStorage.setItem("vyom_playground_" + id, $(id).value);
+          updateEnvStatus();
+        });
+      });
+      (function restoreBaseUrl() {
+        const savedSel = localStorage.getItem("vyom_playground_baseUrlSelect");
+        const savedCustom = localStorage.getItem(
+          "vyom_playground_customBaseUrl",
         );
+        if (savedSel) $("baseUrlSelect").value = savedSel;
+        if (savedCustom) $("customBaseUrlInput").value = savedCustom;
+        $("customBaseUrlInput").style.display =
+          $("baseUrlSelect").value === "custom" ? "block" : "none";
+      })();
+      updateEnvStatus();
+
+      // ================= request body: format + validity =================
+      function checkBodyValidity() {
+        const cfg = currentConfig();
+        const hint = $("bodyValidityHint");
+        const ta = $("requestBody");
+        if (!cfg.needsBody) {
+          hint.textContent = "";
+          return;
+        }
+        if (!ta.value.trim()) {
+          ta.classList.remove("invalid");
+          hint.textContent = "";
+          return;
+        }
+        try {
+          JSON.parse(ta.value);
+          ta.classList.remove("invalid");
+          hint.textContent = "Valid JSON.";
+          hint.className = "hint";
+        } catch (e) {
+          ta.classList.add("invalid");
+          hint.textContent = "Invalid JSON: " + e.message;
+          hint.className = "warn";
+        }
+      }
+      $("requestBody").addEventListener("input", checkBodyValidity);
+      $("formatJsonBtn").addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse($("requestBody").value || "{}");
+          $("requestBody").value = JSON.stringify(parsed, null, 2);
+          checkBodyValidity();
+        } catch (e) {
+          $("bodyValidityHint").textContent = "Can't format: " + e.message;
+          $("bodyValidityHint").className = "warn";
+        }
+      });
+
+      $("genIdemBtn").addEventListener("click", () => {
+        $("idempotencyKey").value =
+          crypto.randomUUID?.() ??
+          "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+          });
+      });
+
+      $("copyPathBtn").addEventListener("click", () => {
+        copyText(getBaseUrl() + currentConfig().path, $("copyPathBtn"));
       });
 
       function buildRequest() {
@@ -901,10 +1382,16 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
             throw new Error("Request body is not valid JSON: " + e.message);
           }
         }
-        return { method: cfg.method, url: API_BASE + path, headers, body };
+        return {
+          method: cfg.method,
+          url: getBaseUrl() + path,
+          path,
+          headers,
+          body,
+        };
       }
 
-      // ---------- code snippets, 5 languages ----------
+      // ================= code snippets, 5 languages =================
       function renderSnippets(req) {
         const curlHeaders = Object.entries(req.headers)
           .map(([k, v]) => `  -H "${k}: ${v}"`)
@@ -912,10 +1399,14 @@ Fill in your credentials and pick an endpoint from the left, then hit Send.</pre
         const bodyArg = req.body
           ? ` \\\n  -d '${JSON.stringify(req.body)}'`
           : "";
-        $("snippet-curl").textContent =
-          `curl -X ${req.method} "${req.url}" \\\n${curlHeaders}${bodyArg}`;
+        setSnippet(
+          "snippet-curl",
+          `curl -X ${req.method} "${req.url}" \\\n${curlHeaders}${bodyArg}`,
+        );
 
-        $("snippet-python").textContent = `import requests
+        setSnippet(
+          "snippet-python",
+          `import requests
 
 resp = requests.request(
     "${req.method}",
@@ -923,20 +1414,25 @@ resp = requests.request(
     headers=${JSON.stringify(req.headers, null, 4).replace(/^/gm, "    ").trim()},
 ${req.body ? "    json=" + JSON.stringify(req.body, null, 4).replace(/^/gm, "    ").trim() + "," : ""}
 )
-print(resp.status_code, resp.json())`;
+print(resp.status_code, resp.json())`,
+        );
 
-        $("snippet-node").textContent =
+        setSnippet(
+          "snippet-node",
           `const resp = await fetch("${req.url}", {
   method: "${req.method}",
   headers: ${JSON.stringify(req.headers, null, 2)},
 ${req.body ? "  body: JSON.stringify(" + JSON.stringify(req.body) + ")," : ""}
 });
-console.log(resp.status, await resp.json());`;
+console.log(resp.status, await resp.json());`,
+        );
 
         const phpHeaderLines = Object.entries(req.headers)
           .map(([k, v]) => `    "${k}: ${v}",`)
           .join("\n");
-        $("snippet-php").textContent = `<?php
+        setSnippet(
+          "snippet-php",
+          `<?php
 $ch = curl_init("${req.url}");
 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "${req.method}");
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -945,12 +1441,15 @@ ${phpHeaderLines}
 ]);
 ${req.body ? "curl_setopt($ch, CURLOPT_POSTFIELDS, '" + JSON.stringify(req.body) + "');\n" : ""}$response = curl_exec($ch);
 echo $response;
-curl_close($ch);`;
+curl_close($ch);`,
+        );
 
         const goHeaderLines = Object.entries(req.headers)
           .map(([k, v]) => `\treq.Header.Set("${k}", "${v}")`)
           .join("\n");
-        $("snippet-go").textContent = `package main
+        setSnippet(
+          "snippet-go",
+          `package main
 
 import (
 \t"fmt"
@@ -970,10 +1469,17 @@ ${goHeaderLines}
 \tdefer resp.Body.Close()
 \tout, _ := io.ReadAll(resp.Body)
 \tfmt.Println(resp.StatusCode, string(out))
-}`;
+}`,
+        );
       }
 
-      // ---------- map preview (Leaflet), for get_map_layer only ----------
+      function setSnippet(id, text) {
+        const el = $(id);
+        el.textContent = text;
+        if (window.hljs) hljs.highlightElement(el);
+      }
+
+      // ================= map preview (Leaflet), for get_map_layer only ================
       let mapPreviewInstance = null;
       function renderMapPreview(data) {
         const el = $("mapPreviewEl");
@@ -1026,28 +1532,174 @@ ${goHeaderLines}
         }
       }
 
-      // ---------- send ----------
+      // ================= response: pretty/raw toggle + rendering =================
+      let lastResponseText = "";
+      let lastResponseParsed = null;
+      let responseView = "pretty";
+
+      function renderResponseBody() {
+        const el = $("responseOutput");
+        if (lastResponseParsed !== null && responseView === "pretty") {
+          el.className = "language-json";
+          el.textContent = JSON.stringify(lastResponseParsed, null, 2);
+          if (window.hljs) hljs.highlightElement(el);
+        } else {
+          el.className = "plain";
+          el.textContent = lastResponseText;
+        }
+      }
+      document.querySelectorAll("#responseViewToggle button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          responseView = btn.dataset.view;
+          document
+            .querySelectorAll("#responseViewToggle button")
+            .forEach((b) => b.classList.toggle("active", b === btn));
+          renderResponseBody();
+        });
+      });
+
+      // ================= copy-to-clipboard, everywhere ================
+      function copyText(text, btnEl) {
+        navigator.clipboard.writeText(text).then(() => {
+          if (!btnEl) return;
+          const original = btnEl.textContent;
+          btnEl.textContent = "Copied!";
+          btnEl.classList.add("copied");
+          setTimeout(() => {
+            btnEl.textContent = original;
+            btnEl.classList.remove("copied");
+          }, 1200);
+        });
+      }
+      document
+        .querySelectorAll(".copy-btn[data-copy-target]")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const target = $(btn.dataset.copyTarget);
+            copyText(target.textContent, btn);
+          });
+        });
+
+      // ================= request history =================
+      const HISTORY_KEY = "vyom_playground_history";
+      const HISTORY_LIMIT = 20;
+
+      function loadHistory() {
+        try {
+          return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        } catch {
+          return [];
+        }
+      }
+      function saveHistory(list) {
+        localStorage.setItem(
+          HISTORY_KEY,
+          JSON.stringify(list.slice(0, HISTORY_LIMIT)),
+        );
+      }
+      function recordHistory(entry) {
+        const list = loadHistory();
+        list.unshift(entry);
+        saveHistory(list);
+        renderHistory();
+        renderFarmIdSuggestions();
+      }
+
+      function renderHistory() {
+        const list = loadHistory();
+        $("historyCount").textContent = list.length;
+        const container = $("historyList");
+        if (!list.length) {
+          container.innerHTML =
+            '<p class="empty-note">Requests you send appear here, newest first -- click one to reload it into the builder on the left.</p>';
+          return;
+        }
+        container.innerHTML = "";
+        list.forEach((entry, i) => {
+          const div = document.createElement("div");
+          div.className = "history-item";
+          const cls = entry.status < 300 ? "status-2xx" : "status-4xx";
+          div.innerHTML = `
+            <div class="history-top">
+              <span><span class="method-badge method-${entry.method}">${entry.method}</span>
+              <span class="status-pill ${cls}" style="margin:0 0 0 6px">${entry.status || "ERR"}</span></span>
+              <span class="hint" style="margin:0">${new Date(entry.ts).toLocaleTimeString()}</span>
+            </div>
+            <div class="history-path">${entry.path}</div>
+            <div class="history-meta">${entry.elapsedMs != null ? entry.elapsedMs + " ms" : ""}</div>
+          `;
+          div.addEventListener("click", () => restoreFromHistory(entry));
+          container.appendChild(div);
+        });
+      }
+
+      function restoreFromHistory(entry) {
+        selectEndpoint(entry.endpointKey);
+        if (entry.farmId) $("farmId").value = entry.farmId;
+        if (entry.metric) $("metric").value = entry.metric;
+        if (entry.date) $("date").value = entry.date;
+        if (entry.startDate) $("startDate").value = entry.startDate;
+        if (entry.endDate) $("endDate").value = entry.endDate;
+        $("includeInterpolated").checked = !!entry.includeInterpolated;
+        if (entry.body)
+          $("requestBody").value = JSON.stringify(entry.body, null, 2);
+        checkBodyValidity();
+        switchPanelTab("response");
+      }
+
+      $("clearHistoryBtn").addEventListener("click", () => {
+        saveHistory([]);
+        renderHistory();
+        renderFarmIdSuggestions();
+      });
+
+      function renderFarmIdSuggestions() {
+        const ids = [
+          ...new Set(
+            loadHistory()
+              .map((e) => e.farmId)
+              .filter(Boolean),
+          ),
+        ];
+        const dl = $("farmIdHistoryList");
+        dl.innerHTML = "";
+        ids.slice(0, 10).forEach((id) => {
+          const opt = document.createElement("option");
+          opt.value = id;
+          dl.appendChild(opt);
+        });
+      }
+
+      // ================= send =================
       $("sendBtn").addEventListener("click", async () => {
         const out = $("responseOutput");
         const meta = $("responseMeta");
         meta.innerHTML = "";
-        out.textContent = "Sending...";
+        lastResponseParsed = null;
+        lastResponseText = "Sending...";
+        out.className = "plain";
+        out.textContent = lastResponseText;
         $("sendBtn").disabled = true;
+        const cfg = currentConfig();
+        const startedAt = performance.now();
+        let status = null;
+        let elapsedMs = null;
+
         try {
           const req = buildRequest();
           renderSnippets(req);
           const fetchOpts = { method: req.method, headers: req.headers };
           if (req.body) fetchOpts.body = JSON.stringify(req.body);
 
-          const startedAt = performance.now();
           const resp = await fetch(req.url, fetchOpts);
-          const elapsedMs = Math.round(performance.now() - startedAt);
+          elapsedMs = Math.round(performance.now() - startedAt);
+          status = resp.status;
           const text = await resp.text();
-          let parsed;
+          lastResponseText = text;
           try {
-            parsed = JSON.parse(text);
+            lastResponseParsed = JSON.parse(text);
           } catch {
-            parsed = text;
+            lastResponseParsed = null;
           }
 
           const cls =
@@ -1056,17 +1708,22 @@ ${goHeaderLines}
               : resp.status < 500
                 ? "status-4xx"
                 : "status-5xx";
+          const sizeBytes = new Blob([text]).size;
           meta.innerHTML =
             `<span class="status-pill ${cls}">${resp.status} ${resp.statusText}</span>` +
-            `<span class="timing-pill">${elapsedMs} ms</span>`;
+            `<span class="timing-pill">${elapsedMs} ms</span>` +
+            `<span class="size-pill">${sizeBytes} B</span>`;
           const rl = resp.headers.get("X-RateLimit-Remaining");
           if (rl !== null)
             meta.innerHTML += ` <span class="hint">&middot; Rate limit remaining: ${rl}</span>`;
 
-          out.textContent =
-            typeof parsed === "string"
-              ? parsed
-              : JSON.stringify(parsed, null, 2);
+          responseView = "pretty";
+          document
+            .querySelectorAll("#responseViewToggle button")
+            .forEach((b) =>
+              b.classList.toggle("active", b.dataset.view === "pretty"),
+            );
+          renderResponseBody();
 
           // Headers tab
           const headersTable = $("headersTable");
@@ -1084,19 +1741,59 @@ ${goHeaderLines}
           }
 
           // Map preview, only for the map-layer endpoint and only on success
-          const cfg = currentConfig();
-          if (cfg.hasMapPreview && resp.ok && parsed && parsed.data) {
-            renderMapPreview(parsed.data);
+          if (
+            cfg.hasMapPreview &&
+            resp.ok &&
+            lastResponseParsed &&
+            lastResponseParsed.data
+          ) {
+            renderMapPreview(lastResponseParsed.data);
           }
         } catch (err) {
+          elapsedMs = Math.round(performance.now() - startedAt);
           meta.innerHTML = `<span class="status-pill status-4xx">Error</span>`;
-          out.textContent = err.message;
+          lastResponseText = err.message;
+          lastResponseParsed = null;
+          renderResponseBody();
         } finally {
           $("sendBtn").disabled = false;
+          recordHistory({
+            ts: Date.now(),
+            endpointKey: activeEndpointKey,
+            method: cfg.method,
+            path: currentConfig().path,
+            status,
+            elapsedMs,
+            farmId: cfg.needsFarmId ? $("farmId").value.trim() : null,
+            metric: cfg.needsMetric ? $("metric").value.trim() : null,
+            date: cfg.needsDate ? $("date").value : null,
+            startDate: cfg.needsDateRange ? $("startDate").value : null,
+            endDate: cfg.needsDateRange ? $("endDate").value : null,
+            includeInterpolated: cfg.needsInterpolatedToggle
+              ? $("includeInterpolated").checked
+              : false,
+            body: cfg.needsBody ? safeParseJson($("requestBody").value) : null,
+          });
         }
       });
 
-      // ---------- top-level panel tabs (Response / Headers / Code / Map preview) ----------
+      function safeParseJson(text) {
+        try {
+          return JSON.parse(text || "{}");
+        } catch {
+          return null;
+        }
+      }
+
+      // Ctrl/Cmd+Enter sends the request from anywhere on the page.
+      document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          $("sendBtn").click();
+        }
+      });
+
+      // ================= top-level panel tabs =================
       function switchPanelTab(name) {
         document
           .querySelectorAll(".tab[data-panel]")
@@ -1111,6 +1808,8 @@ ${goHeaderLines}
           name === "snippets" ? "block" : "none";
         $("previewPanelView").style.display =
           name === "preview" ? "block" : "none";
+        $("historyPanelView").style.display =
+          name === "history" ? "block" : "none";
         if (name === "preview" && mapPreviewInstance) {
           setTimeout(() => mapPreviewInstance.invalidateSize(), 60);
         }
@@ -1119,7 +1818,7 @@ ${goHeaderLines}
         tab.addEventListener("click", () => switchPanelTab(tab.dataset.panel));
       });
 
-      // ---------- snippet-language tabs ----------
+      // ================= snippet-language tabs =================
       document.querySelectorAll(".tab[data-snippet]").forEach((tab) => {
         tab.addEventListener("click", () => {
           document
@@ -1129,11 +1828,11 @@ ${goHeaderLines}
             .querySelectorAll(".snippet-code")
             .forEach((el) => el.classList.remove("active"));
           tab.classList.add("active");
-          $("snippet-" + tab.dataset.snippet).classList.add("active");
+          $("snippet-wrap-" + tab.dataset.snippet).classList.add("active");
         });
       });
 
-      // ---------- theme toggle, defaulting to light per the main dashboard's convention ----------
+      // ================= theme toggle =================
       const themeToggle = $("themeToggle");
       function applyTheme(theme) {
         document.documentElement.setAttribute("data-theme", theme);
@@ -1148,6 +1847,12 @@ ${goHeaderLines}
         localStorage.setItem("vyom_playground_theme", next);
         applyTheme(next);
       });
+
+      // ================= init =================
+      buildSidebar();
+      selectEndpoint(activeEndpointKey);
+      renderHistory();
+      renderFarmIdSuggestions();
     </script>
   </body>
 </html>
