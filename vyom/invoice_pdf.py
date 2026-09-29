@@ -32,7 +32,7 @@ _LINE = colors.HexColor("#e3e8e3")
 
 # Same logo used in vyom/email_utils.py's HTML emails, reused here for
 # visual consistency across every AgriDoot-branded document.
-_LOGO_URL = "https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+_LOGO_URL = "./web/assets/img/agridoot-logo.png"
 # Fetched once per process and cached -- invoices can be generated
 # repeatedly (every Billing page load re-downloads its own PDF on click),
 # and there's no reason to hit AgriDoot's image host every single time.

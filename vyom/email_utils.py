@@ -17,7 +17,7 @@ from vyom.config import settings
 
 logger = logging.getLogger("vyom.email_utils")
 
-_LOGO_URL = "https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png"
+_LOGO_URL = "./web/assets/img/agridoot-logo.png"
 _CANOPY = "#4c9a5b"
 _CANOPY_DARK = "#3d7d49"
 
