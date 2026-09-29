@@ -233,6 +233,7 @@
         overflow: hidden;
         cursor: pointer;
         box-shadow: var(--shadow-sm);
+        position: relative;
         transition:
           border-color 0.15s,
           transform 0.1s;
@@ -240,6 +241,32 @@
       .field-card:hover {
         border-color: var(--canopy);
         transform: translateY(-1px);
+      }
+      .fc-delete-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        border: none;
+        background: rgba(0, 0, 0, 0.28);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+        transition: background 0.15s;
+      }
+      .fc-delete-btn:hover {
+        background: var(--danger);
+      }
+      .fc-delete-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: #fff;
+        fill: none;
+        stroke-width: 2.2;
       }
       .field-card .fc-thumb {
         height: 90px;
@@ -9358,9 +9385,19 @@
       // loadFarmCurrentStatus()) -- no extra network call. Returns "" when
       // there's nothing noteworthy to flag (a fresh real reading), matching
       // the existing badges' pattern of only appearing for exceptions.
+      // Only true once BOTH signals agree there's nothing at all -- the
+      // real-only farmStatus AND the gap-fill-inclusive fieldSeries. Without
+      // this second check, a field with a provisional/interpolated estimate
+      // (which farmStatus doesn't know about) would show "FETCHING" right
+      // next to a sparkline and an "Updated ... (provisional)" line that
+      // both contradict it.
+      function hasAnyEstimate(farm) {
+        return (fieldSeries[farm.id] || []).length > 0;
+      }
+
       function readinessBadgeHtml(farm) {
         const status = farmStatus[farm.id];
-        if (!status || status.source === "no_data") {
+        if ((!status || status.source === "no_data") && !hasAnyEstimate(farm)) {
           const age = daysSinceCreated(farm);
           if (age !== null && age < 2) {
             return '<span class="fc-badge fc-badge--fetching">FETCHING</span>';
@@ -9368,6 +9405,7 @@
           return '<span class="fc-badge fc-badge--no-coverage">NO COVERAGE</span>';
         }
         if (
+          status &&
           status.source === "provisional" &&
           status.days_since_reading > STALE_DATA_THRESHOLD_DAYS
         ) {
@@ -9474,6 +9512,19 @@
         `;
         return `
     <div class="field-card" onclick="openFieldFromCard('${farm.id}')">
+      <button
+        class="fc-delete-btn"
+        onclick="deleteFarmFromCard(event, '${farm.id}')"
+        title="Delete field"
+        aria-label="Delete field"
+      >
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+      </button>
       <div class="fc-thumb">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
       </div>
@@ -9492,6 +9543,28 @@
       function openFieldFromCard(farmId) {
         switchPage("imagery");
         selectFarm(farmId);
+      }
+
+      // Delete straight from a field card's own icon, without first opening
+      // the field -- separate from deleteFarm() (used inside the field
+      // detail panel, which acts on the already-open activeFarmId) since
+      // this one is handed an explicit farmId and must stop the click from
+      // also bubbling up into the card's own onclick (which would otherwise
+      // navigate to the very field it just deleted).
+      async function deleteFarmFromCard(event, farmId) {
+        event.stopPropagation();
+        const farm = farms.find((f) => f.id === farmId);
+        const label = (farm && farm.name) || "this field";
+        if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+        await api(`/farms/${farmId}`, { method: "DELETE" });
+        if (activeFarmId === farmId) {
+          activeFarmId = null;
+          stopFarmStatusPolling();
+          hideProcessingOverlay();
+          const detailPanel = document.getElementById("detail-panel");
+          if (detailPanel) detailPanel.style.display = "none";
+        }
+        await loadFarms();
       }
 
       let globalFieldQuery = "";
@@ -9737,6 +9810,7 @@
           const age = daysSinceCreated(farm);
           if (
             (!status || status.source === "no_data") &&
+            !hasAnyEstimate(farm) &&
             age !== null &&
             age >= 2
           )
@@ -9944,6 +10018,7 @@
           const age = daysSinceCreated(farm);
           if (
             (!status || status.source === "no_data") &&
+            !hasAnyEstimate(farm) &&
             age !== null &&
             age >= 2
           ) {
