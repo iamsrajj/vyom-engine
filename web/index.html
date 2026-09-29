@@ -304,6 +304,188 @@
         background: rgba(59, 130, 246, 0.14);
         color: #3b82f6;
       }
+      .fc-badge--fetching {
+        background: rgba(59, 130, 246, 0.14);
+        color: #3b82f6;
+      }
+      .fc-badge--stale {
+        background: rgba(180, 83, 9, 0.14);
+        color: #b45309;
+      }
+      .fc-badge--no-coverage {
+        background: var(--bg-deep);
+        color: var(--text-dim);
+      }
+      .fc-last-reading {
+        font-size: 10.5px;
+        color: var(--text-dim);
+        margin-top: 4px;
+      }
+      .fc-spark {
+        width: 100%;
+        height: 26px;
+        margin-top: 8px;
+        display: block;
+      }
+
+      /* ---------- Overview: field toolbar (sort) ---------- */
+      .field-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 9px;
+      }
+      .select-compact {
+        width: auto !important;
+        padding: 6px 10px !important;
+        font-size: 11.5px !important;
+        border-radius: 7px !important;
+      }
+
+      /* ---------- Overview: insights row (crop mix + portfolio trend) ---------- */
+      .insights-row {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      @media (max-width: 900px) {
+        .insights-row {
+          grid-template-columns: 1fr;
+        }
+      }
+      .insight-panel {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+      }
+      .insight-panel .panel-label {
+        margin-bottom: 12px;
+      }
+      .crop-mix-bar {
+        display: flex;
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--bg-deep);
+        margin-bottom: 12px;
+      }
+      .crop-mix-segment {
+        height: 100%;
+      }
+      .crop-mix-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .crop-mix-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--text-muted);
+        background: var(--bg-deep);
+        border-radius: 999px;
+        padding: 4px 10px 4px 6px;
+      }
+      .crop-mix-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .trend-headline {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .trend-value {
+        font-family: "Space Grotesk", sans-serif;
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .trend-delta {
+        font-size: 13px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .trend-delta.up {
+        color: var(--canopy);
+      }
+      .trend-delta.down {
+        color: #b45309;
+      }
+      .trend-delta.flat {
+        color: var(--text-dim);
+      }
+      .trend-caption {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 8px;
+        line-height: 1.5;
+      }
+
+      /* ---------- Overview: needs-attention panel ---------- */
+      .attention-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        background: var(--bg-panel);
+      }
+      .attention-panel.has-items {
+        border-color: rgba(180, 83, 9, 0.35);
+        background: rgba(180, 83, 9, 0.05);
+      }
+      .attention-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12.5px;
+        cursor: pointer;
+      }
+      .attention-item:last-child {
+        border-bottom: none;
+      }
+      .attention-item:hover .attention-text {
+        color: var(--canopy-deep, var(--canopy));
+      }
+      .attention-text {
+        color: var(--text-primary);
+      }
+      .attention-text .fname {
+        font-weight: 600;
+      }
+      .attention-reason {
+        color: var(--text-dim);
+      }
+      .attention-arrow {
+        color: var(--text-dim);
+        flex-shrink: 0;
+      }
+      .attention-ok {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--text-muted);
+      }
+      .attention-ok svg {
+        width: 15px;
+        height: 15px;
+        stroke: var(--canopy);
+        fill: none;
+        stroke-width: 2.4;
+        flex-shrink: 0;
+      }
 
       .empty-page {
         display: flex;
@@ -3863,7 +4045,42 @@
                 <div class="sval" id="ov-s1-count">&ndash;</div>
               </div>
             </div>
-            <div class="panel-label">Your fields</div>
+
+            <div class="insights-row">
+              <div class="insight-panel">
+                <div class="panel-label">Crop mix</div>
+                <div id="ov-crop-mix"></div>
+              </div>
+              <div class="insight-panel">
+                <div class="panel-label">Portfolio NDVI trend</div>
+                <div id="ov-ndvi-trend"></div>
+              </div>
+            </div>
+
+            <div class="attention-panel" id="ov-attention-panel">
+              <div class="panel-label" style="margin-bottom: 10px">
+                Needs attention
+              </div>
+              <div id="ov-attention-list">
+                <div class="attention-ok">Loading field status&hellip;</div>
+              </div>
+            </div>
+
+            <div class="field-toolbar">
+              <div class="panel-label" style="margin-bottom: 0">
+                Your fields
+              </div>
+              <select
+                class="select-compact"
+                id="ov-sort-select"
+                onchange="onFieldSortChange(this.value)"
+              >
+                <option value="recent">Recently sown first</option>
+                <option value="attention">Needs attention first</option>
+                <option value="name">Name (A&ndash;Z)</option>
+                <option value="area">Largest area first</option>
+              </select>
+            </div>
             <div class="field-grid" id="ov-field-grid"></div>
           </div>
         </div>
@@ -3889,6 +4106,19 @@
               >
                 + Draw new field
               </button>
+            </div>
+            <div class="field-toolbar">
+              <span></span>
+              <select
+                class="select-compact"
+                id="myfields-sort-select"
+                onchange="onFieldSortChange(this.value)"
+              >
+                <option value="recent">Recently sown first</option>
+                <option value="attention">Needs attention first</option>
+                <option value="name">Name (A&ndash;Z)</option>
+                <option value="area">Largest area first</option>
+              </select>
             </div>
             <div class="field-grid" id="myfields-grid"></div>
           </div>
@@ -8805,6 +9035,62 @@
       }
 
       let farmStatus = {}; // farm_id -> {value, source, days_since_reading, real_acquisition_date}
+      let fieldSeries = {}; // farm_id -> [{date, value, source}, ...] ascending -- see loadFieldSeriesInsights()
+
+      // Powers the Overview page's sparklines, "last reading" line, and
+      // portfolio NDVI trend. Deliberately separate from
+      // loadFarmCurrentStatus() (which only fetches each farm's single
+      // latest REAL value, for map coloring) since this needs each farm's
+      // short history instead, INCLUDING gap-filled (interpolated/
+      // provisional) points -- kept as its own non-blocking pass so a
+      // slow/rate-limited response here never delays the map or field list
+      // from painting with what loadFarmCurrentStatus() already gave them.
+      // Every point keeps its own `source` tag (satellite/interpolated/
+      // provisional) through to rendering -- see sparklineHtml() and
+      // lastReadingHtml() for how each is displayed differently.
+      let fieldSeriesRequestId = 0;
+      async function loadFieldSeriesInsights() {
+        const myRequestId = ++fieldSeriesRequestId;
+        if (!farms.length) {
+          fieldSeries = {};
+          return;
+        }
+        const results = await Promise.allSettled(
+          farms.map((f) =>
+            api(
+              `/farms/${f.id}/timeseries?metric=NDVI_mean&include_interpolated=true`,
+            ),
+          ),
+        );
+        // A newer loadFarms()/loadFieldSeriesInsights() call superseded this
+        // one (e.g. the farmer navigated away and back quickly) -- drop
+        // this stale result rather than overwriting fresher data with it.
+        if (myRequestId !== fieldSeriesRequestId) return;
+
+        const next = {};
+        farms.forEach((farm, i) => {
+          const result = results[i];
+          // A rejected call (most commonly a locked/unpaid farm's 402, but
+          // could also be a transient network error) just means no
+          // sparkline/trend contribution for that farm -- never surfaced as
+          // an error, since the base field card already rendered fine
+          // without it.
+          next[farm.id] =
+            result.status === "fulfilled"
+              ? result.value
+                  .filter((p) => p.value != null)
+                  .map((p) => ({
+                    date: p.acquisition_date,
+                    value: p.value,
+                    source: p.source || "satellite",
+                  }))
+                  .slice(-8)
+              : [];
+        });
+        fieldSeries = next;
+        renderOverviewPage();
+        renderMyFieldsPage();
+      }
 
       async function loadFarmCurrentStatus() {
         try {
@@ -8921,6 +9207,12 @@
         farmOverlays = {};
 
         await loadFarmCurrentStatus();
+        // Deliberately not awaited -- the map and field cards below must
+        // not wait on N per-farm timeseries calls just to paint. This fills
+        // in sparklines/portfolio trend a moment later via its own
+        // re-render, same pattern as farmStatusPollTimer elsewhere in this
+        // file.
+        loadFieldSeriesInsights();
 
         const bounds = new google.maps.LatLngBounds();
         farms.forEach((farm) => {
@@ -9049,6 +9341,122 @@
         if (map) setTimeout(() => google.maps.event.trigger(map, "resize"), 60);
       }
 
+      // Mirrors settings.stale_data_threshold_days in vyom/config.py -- used
+      // client-side only for the "STALE" badge / attention sort, purely a
+      // display heuristic. The server's own stale_data notification is the
+      // authoritative source of truth; this just lets the dashboard show
+      // the same signal without waiting for that notification to fire.
+      const STALE_DATA_THRESHOLD_DAYS = 20;
+
+      function daysSinceCreated(farm) {
+        if (!farm.created_at) return null;
+        return (Date.now() - new Date(farm.created_at).getTime()) / 86400000;
+      }
+
+      // Readiness/freshness badge for a field card, built from the same
+      // farmStatus[] the map polygons already use (see
+      // loadFarmCurrentStatus()) -- no extra network call. Returns "" when
+      // there's nothing noteworthy to flag (a fresh real reading), matching
+      // the existing badges' pattern of only appearing for exceptions.
+      function readinessBadgeHtml(farm) {
+        const status = farmStatus[farm.id];
+        if (!status || status.source === "no_data") {
+          const age = daysSinceCreated(farm);
+          if (age !== null && age < 2) {
+            return '<span class="fc-badge fc-badge--fetching">FETCHING</span>';
+          }
+          return '<span class="fc-badge fc-badge--no-coverage">NO COVERAGE</span>';
+        }
+        if (
+          status.source === "provisional" &&
+          status.days_since_reading > STALE_DATA_THRESHOLD_DAYS
+        ) {
+          return `<span class="fc-badge fc-badge--stale">STALE &middot; ${status.days_since_reading}D</span>`;
+        }
+        return "";
+      }
+
+      const SOURCE_LABEL = {
+        interpolated: "interpolated",
+        provisional: "provisional",
+      };
+
+      // Prefers fieldSeries (includes gap-filled interpolated/provisional
+      // points, see loadFieldSeriesInsights()) since it's the more complete
+      // picture; falls back to the real-only farmStatus signal for the
+      // brief window before fieldSeries has finished loading, or if a
+      // field's timeseries call failed outright.
+      function lastReadingHtml(farm) {
+        const series = fieldSeries[farm.id];
+        if (series && series.length) {
+          const point = series[series.length - 1];
+          const days = Math.round(
+            (Date.now() - new Date(point.date).getTime()) / 86400000,
+          );
+          const when =
+            days <= 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+          const tag = SOURCE_LABEL[point.source]
+            ? ` (${SOURCE_LABEL[point.source]})`
+            : "";
+          return `Updated ${when}${tag}`;
+        }
+        const status = farmStatus[farm.id];
+        if (!status || status.source === "no_data") {
+          const age = daysSinceCreated(farm);
+          return age !== null && age < 2
+            ? "Fetching first satellite pass&hellip;"
+            : "No satellite coverage yet";
+        }
+        const d = status.days_since_reading;
+        const when =
+          d === 0 ? "today" : d === 1 ? "1 day ago" : `${d} days ago`;
+        return `Updated ${when}`;
+      }
+
+      // Small inline NDVI sparkline built from real AND gap-filled
+      // (interpolated/provisional) points -- see loadFieldSeriesInsights().
+      // Segments where either endpoint isn't a real satellite reading are
+      // drawn dashed/faded so a filled stretch still reads differently from
+      // an actual satellite-confirmed trend, without hiding it entirely.
+      function sparklineHtml(farm) {
+        const points = fieldSeries[farm.id] || [];
+        if (points.length < 2) return "";
+        const values = points.map((p) => p.value);
+        const w = 100,
+          h = 26,
+          pad = 3;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const stepX = (w - pad * 2) / (values.length - 1);
+        const coords = values.map((v, i) => [
+          pad + i * stepX,
+          h - pad - ((v - min) / range) * (h - pad * 2),
+        ]);
+        const delta = values[values.length - 1] - values[0];
+        const color =
+          Math.abs(delta) < 0.01
+            ? "#8b9a8f"
+            : delta > 0
+              ? "#22c55e"
+              : "#dc2626";
+        let segments = "";
+        let anyFilled = false;
+        for (let i = 0; i < coords.length - 1; i++) {
+          const [x1, y1] = coords[i];
+          const [x2, y2] = coords[i + 1];
+          const filled =
+            points[i].source !== "satellite" ||
+            points[i + 1].source !== "satellite";
+          if (filled) anyFilled = true;
+          segments += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="2" stroke-linecap="round"${filled ? ' stroke-dasharray="3,2" opacity="0.55"' : ""}/>`;
+        }
+        const title = anyFilled
+          ? "<title>Dashed segments include gap-filled (interpolated/provisional) estimates, not a confirmed satellite pass</title>"
+          : "";
+        return `<svg class="fc-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${title}${segments}</svg>`;
+      }
+
       function fieldCardHtml(farm) {
         const area =
           farm.area_acre != null ? `${farm.area_acre.toFixed(2)} ac` : "\u2013";
@@ -9062,6 +9470,7 @@
               : ""
           }
           ${farm.created_via === "api" ? '<span class="fc-badge fc-badge--api">API</span>' : ""}
+          ${!farm.plan_locked || farm.created_via === "api" ? readinessBadgeHtml(farm) : ""}
         `;
         return `
     <div class="field-card" onclick="openFieldFromCard('${farm.id}')">
@@ -9075,6 +9484,7 @@
           <span>${farm.sowing_date ? new Date(farm.sowing_date).toLocaleDateString() : "No sowing date"}</span>
           <span class="fc-area">${area}</span>
         </div>
+        ${!farm.plan_locked || farm.created_via === "api" ? `<div class="fc-last-reading">${lastReadingHtml(farm)}</div>${sparklineHtml(farm)}` : ""}
       </div>
     </div>`;
       }
@@ -9306,6 +9716,279 @@
         );
       }
 
+      // ================= Field sort (Overview + My Fields share one mode) =================
+      let fieldSortMode = localStorage.getItem("vyom_field_sort") || "recent";
+
+      // Higher = more urgent -- used only by the "Needs attention first"
+      // sort option, and shares its checks with computeAttentionItems()
+      // below so the sort order and the attention panel never disagree
+      // about which fields are flagged.
+      function attentionScoreForFarm(farm) {
+        if (farm.plan_status === "expired") return 4;
+        if (farm.plan_locked && farm.created_via !== "api") return 3;
+        const status = farmStatus[farm.id];
+        if (!farm.plan_locked || farm.created_via === "api") {
+          if (
+            status &&
+            status.source === "provisional" &&
+            status.days_since_reading > STALE_DATA_THRESHOLD_DAYS
+          )
+            return 2;
+          const age = daysSinceCreated(farm);
+          if (
+            (!status || status.source === "no_data") &&
+            age !== null &&
+            age >= 2
+          )
+            return 2;
+        }
+        if (!farm.sowing_date) return 1;
+        return 0;
+      }
+
+      function sortFarmsForDisplay(list) {
+        const arr = [...list];
+        switch (fieldSortMode) {
+          case "name":
+            arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+            break;
+          case "area":
+            arr.sort((a, b) => (b.area_acre || 0) - (a.area_acre || 0));
+            break;
+          case "attention":
+            arr.sort(
+              (a, b) => attentionScoreForFarm(b) - attentionScoreForFarm(a),
+            );
+            break;
+          case "recent":
+          default:
+            arr.sort(
+              (a, b) =>
+                new Date(b.sowing_date || b.created_at || 0) -
+                new Date(a.sowing_date || a.created_at || 0),
+            );
+        }
+        return arr;
+      }
+
+      function onFieldSortChange(mode) {
+        fieldSortMode = mode;
+        localStorage.setItem("vyom_field_sort", mode);
+        syncSortSelects();
+        renderOverviewPage();
+        renderMyFieldsPage();
+      }
+
+      function syncSortSelects() {
+        ["ov-sort-select", "myfields-sort-select"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = fieldSortMode;
+        });
+      }
+
+      // ================= Crop mix =================
+      const CROP_MIX_COLORS = [
+        "#16a34a",
+        "#2563eb",
+        "#b45309",
+        "#7c3aed",
+        "#0891b2",
+        "#dc2626",
+        "#65a30d",
+        "#db2777",
+      ];
+
+      function computeCropMix(list) {
+        const byCrop = {};
+        list.forEach((f) => {
+          const crop = f.crop_type || "Not set";
+          if (!byCrop[crop]) byCrop[crop] = { crop, count: 0, acres: 0 };
+          byCrop[crop].count += 1;
+          byCrop[crop].acres += f.area_acre || 0;
+        });
+        return Object.values(byCrop).sort((a, b) => b.acres - a.acres);
+      }
+
+      function renderCropMix(list) {
+        const el = document.getElementById("ov-crop-mix");
+        if (!el) return;
+        if (!list.length) {
+          el.innerHTML =
+            '<div class="empty-state">No fields yet -- crop mix will appear once you add some.</div>';
+          return;
+        }
+        const mix = computeCropMix(list);
+        const totalAcres = mix.reduce((s, m) => s + m.acres, 0) || 1;
+        const bar = mix
+          .map((m, i) => {
+            const pct = ((m.acres / totalAcres) * 100).toFixed(1);
+            const color = CROP_MIX_COLORS[i % CROP_MIX_COLORS.length];
+            return `<span class="crop-mix-segment" style="width:${pct}%;background:${color}" title="${escapeHtml(m.crop)}: ${pct}%"></span>`;
+          })
+          .join("");
+        const legend = mix
+          .map((m, i) => {
+            const color = CROP_MIX_COLORS[i % CROP_MIX_COLORS.length];
+            return `<span class="crop-mix-chip"><span class="crop-mix-dot" style="background:${color}"></span>${escapeHtml(m.crop)} &middot; ${m.count} field${m.count === 1 ? "" : "s"} &middot; ${m.acres.toFixed(1)} ac</span>`;
+          })
+          .join("");
+        el.innerHTML = `<div class="crop-mix-bar">${bar}</div><div class="crop-mix-legend">${legend}</div>`;
+      }
+
+      // ================= Portfolio NDVI trend =================
+      // Compares each field's most recent reading to its previous one,
+      // averaged across fields -- deliberately not a fixed calendar
+      // week-over-week comparison, since Sentinel revisit is irregular (5+
+      // days, longer under cloud) and different fields get hit on different
+      // days; comparing "latest vs prior" per field and then averaging is
+      // meaningful regardless of how the passes happened to land. Includes
+      // gap-filled (interpolated/provisional) points, same as the
+      // sparklines -- computePortfolioTrend() also reports how many fields'
+      // latest point is a real satellite reading vs a filled estimate, so
+      // renderPortfolioTrend() can say so rather than implying every point
+      // behind the average is a fresh satellite pass.
+      function computePortfolioTrend() {
+        let currentSum = 0,
+          currentCount = 0,
+          realLatestCount = 0,
+          deltaSum = 0,
+          deltaCount = 0;
+        Object.values(fieldSeries).forEach((series) => {
+          if (!series.length) return;
+          const last = series[series.length - 1];
+          currentSum += last.value;
+          currentCount += 1;
+          if (last.source === "satellite") realLatestCount += 1;
+          if (series.length >= 2) {
+            deltaSum += last.value - series[series.length - 2].value;
+            deltaCount += 1;
+          }
+        });
+        return {
+          currentAvg: currentCount ? currentSum / currentCount : null,
+          currentCount,
+          realLatestCount,
+          delta: deltaCount ? deltaSum / deltaCount : null,
+          deltaCount,
+        };
+      }
+
+      function renderPortfolioTrend() {
+        const el = document.getElementById("ov-ndvi-trend");
+        if (!el) return;
+        const totalFarms = farms.length;
+        if (!totalFarms) {
+          el.innerHTML =
+            '<div class="empty-state">No fields yet -- trend will appear once you add some.</div>';
+          return;
+        }
+        const { currentAvg, currentCount, realLatestCount, delta, deltaCount } =
+          computePortfolioTrend();
+        if (currentAvg === null) {
+          el.innerHTML =
+            '<div class="empty-state">No readings yet across your fields.</div>';
+          return;
+        }
+        let deltaHtml = "";
+        if (delta !== null) {
+          const cls =
+            Math.abs(delta) < 0.01 ? "flat" : delta > 0 ? "up" : "down";
+          const arrow =
+            cls === "flat" ? "&#8226;" : cls === "up" ? "&#9650;" : "&#9660;";
+          deltaHtml = `<span class="trend-delta ${cls}">${arrow} ${Math.abs(delta).toFixed(3)}</span>`;
+        }
+        const filledCount = currentCount - realLatestCount;
+        el.innerHTML = `
+          <div class="trend-headline">
+            <span class="trend-value">${currentAvg.toFixed(2)}</span>
+            ${deltaHtml}
+          </div>
+          <div class="trend-caption">
+            Average of the latest reading across ${currentCount} of ${totalFarms} field${totalFarms === 1 ? "" : "s"} with data${
+              deltaCount
+                ? `; trend from ${deltaCount} field${deltaCount === 1 ? "" : "s"} with two or more readings`
+                : ""
+            }.${
+              filledCount
+                ? ` Includes ${filledCount} field${filledCount === 1 ? "" : "s"} whose latest point is a gap-filled estimate, not a fresh satellite pass.`
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      // ================= Needs attention =================
+      function computeAttentionItems(list) {
+        const items = [];
+        list.forEach((farm) => {
+          if (farm.plan_status === "expired") {
+            items.push({ farm, reason: "Plan expired" });
+            return;
+          }
+          if (farm.plan_locked && farm.created_via !== "api") {
+            items.push({ farm, reason: "No active plan" });
+            return;
+          }
+          const status = farmStatus[farm.id];
+          if (
+            status &&
+            status.source === "provisional" &&
+            status.days_since_reading > STALE_DATA_THRESHOLD_DAYS
+          ) {
+            items.push({
+              farm,
+              reason: `No new imagery in ${status.days_since_reading} days`,
+            });
+            return;
+          }
+          const age = daysSinceCreated(farm);
+          if (
+            (!status || status.source === "no_data") &&
+            age !== null &&
+            age >= 2
+          ) {
+            items.push({ farm, reason: "No satellite coverage yet" });
+            return;
+          }
+          if (!farm.sowing_date) {
+            items.push({ farm, reason: "No sowing date set" });
+          }
+        });
+        return items;
+      }
+
+      function renderAttentionPanel(list) {
+        const panel = document.getElementById("ov-attention-panel");
+        const listEl = document.getElementById("ov-attention-list");
+        if (!panel || !listEl) return;
+        if (!list.length) {
+          panel.classList.remove("has-items");
+          listEl.innerHTML =
+            '<div class="attention-ok">No fields yet -- nothing to flag until you add some.</div>';
+          return;
+        }
+        const items = computeAttentionItems(list);
+        if (!items.length) {
+          panel.classList.remove("has-items");
+          listEl.innerHTML = `
+            <div class="attention-ok">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              All fields look good -- nothing needs attention.
+            </div>`;
+          return;
+        }
+        panel.classList.add("has-items");
+        listEl.innerHTML = items
+          .map(
+            ({ farm, reason }) => `
+            <div class="attention-item" onclick="openFieldFromCard('${farm.id}')">
+              <span class="attention-text"><span class="fname">${escapeHtml(farm.name) || "Unnamed field"}</span> &middot; <span class="attention-reason">${escapeHtml(reason)}</span></span>
+              <span class="attention-arrow">&rarr;</span>
+            </div>`,
+          )
+          .join("");
+      }
+
       function renderOverviewPage() {
         document.getElementById("ov-total-fields").textContent = farms.length;
         const totalAcres = farms.reduce(
@@ -9321,16 +10004,22 @@
           availableIndices.S1 || []
         ).length;
 
+        renderCropMix(farms);
+        renderPortfolioTrend();
+        renderAttentionPanel(farms);
+        syncSortSelects();
+
         const grid = document.getElementById("ov-field-grid");
-        const shown = matchingFarms();
+        const shown = sortFarmsForDisplay(matchingFarms());
         grid.innerHTML = shown.length
           ? shown.map(fieldCardHtml).join("")
           : `<div class="empty-state">${farms.length ? "No fields match your search." : "No fields yet -- go to My Fields to draw one."}</div>`;
       }
 
       function renderMyFieldsPage() {
+        syncSortSelects();
         const grid = document.getElementById("myfields-grid");
-        const shown = matchingFarms();
+        const shown = sortFarmsForDisplay(matchingFarms());
         grid.innerHTML = shown.length
           ? shown.map(fieldCardHtml).join("")
           : `<div class="empty-state">${farms.length ? "No fields match your search." : 'No fields yet -- click "+ Add New Field" to draw one.'}</div>`;
