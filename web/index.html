@@ -6294,6 +6294,49 @@
       </div>
     </div>
 
+    <div class="modal-overlay" id="confirm-modal" style="display: none">
+      <div class="modal-card" style="max-width: 380px">
+        <div class="modal-header">
+          <h3 id="confirm-modal-title">Are you sure?</h3>
+          <button
+            class="icon-btn"
+            onclick="resolveConfirmModal(false)"
+            aria-label="Close"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p
+            id="confirm-modal-message"
+            style="
+              margin: 0 0 18px;
+              font-size: 13.5px;
+              color: var(--text-primary);
+            "
+          ></p>
+          <div class="btn-row">
+            <button class="btn" onclick="resolveConfirmModal(false)">
+              Cancel
+            </button>
+            <button
+              class="btn btn-danger"
+              id="confirm-modal-confirm-btn"
+              onclick="resolveConfirmModal(true)"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="help-modal" style="display: none">
       <div class="modal-card help-modal-card">
         <div class="modal-header">
@@ -9545,6 +9588,35 @@
         selectFarm(farmId);
       }
 
+      // Reusable app-styled confirm dialog (modal-overlay/modal-card, same
+      // as every other dialog in this file) so destructive actions don't
+      // have to fall back to the browser's own native confirm() -- which
+      // looks/behaves inconsistently across browsers and can't be styled at
+      // all. Returns a Promise<boolean>; resolveConfirmModal() (wired to
+      // the modal's own buttons/close icon) is what settles it.
+      let _confirmModalResolver = null;
+      function showConfirmModal({
+        title = "Are you sure?",
+        message = "",
+        confirmLabel = "Confirm",
+      } = {}) {
+        document.getElementById("confirm-modal-title").textContent = title;
+        document.getElementById("confirm-modal-message").textContent = message;
+        document.getElementById("confirm-modal-confirm-btn").textContent =
+          confirmLabel;
+        document.getElementById("confirm-modal").style.display = "flex";
+        return new Promise((resolve) => {
+          _confirmModalResolver = resolve;
+        });
+      }
+      function resolveConfirmModal(result) {
+        document.getElementById("confirm-modal").style.display = "none";
+        if (_confirmModalResolver) {
+          _confirmModalResolver(result);
+          _confirmModalResolver = null;
+        }
+      }
+
       // Delete straight from a field card's own icon, without first opening
       // the field -- separate from deleteFarm() (used inside the field
       // detail panel, which acts on the already-open activeFarmId) since
@@ -9555,7 +9627,12 @@
         event.stopPropagation();
         const farm = farms.find((f) => f.id === farmId);
         const label = (farm && farm.name) || "this field";
-        if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+        const confirmed = await showConfirmModal({
+          title: "Delete field?",
+          message: `Delete "${label}"? This cannot be undone.`,
+          confirmLabel: "Delete",
+        });
+        if (!confirmed) return;
         await api(`/farms/${farmId}`, { method: "DELETE" });
         if (activeFarmId === farmId) {
           activeFarmId = null;
@@ -10551,7 +10628,14 @@
 
       async function deleteFarm() {
         if (!activeFarmId) return;
-        if (!confirm("Delete this field? This cannot be undone.")) return;
+        const farm = farms.find((f) => f.id === activeFarmId);
+        const label = (farm && farm.name) || "this field";
+        const confirmed = await showConfirmModal({
+          title: "Delete field?",
+          message: `Delete "${label}"? This cannot be undone.`,
+          confirmLabel: "Delete",
+        });
+        if (!confirmed) return;
         await api(`/farms/${activeFarmId}`, { method: "DELETE" });
         activeFarmId = null;
         stopFarmStatusPolling();
