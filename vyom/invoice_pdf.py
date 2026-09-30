@@ -13,7 +13,6 @@ from datetime import datetime
 from decimal import Decimal
 from io import BytesIO
 
-import requests
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -23,36 +22,13 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_RIGHT
 
+from vyom.branding import read_logo_bytes
 from vyom.config import settings
 
 _CANOPY = colors.HexColor("#3d7d49")
 _TEXT_DIM = colors.HexColor("#6b756b")
 _TEXT_DIM_HEX = "#6b756b"
 _LINE = colors.HexColor("#e3e8e3")
-
-# Same logo used in vyom/email_utils.py's HTML emails, reused here for
-# visual consistency across every AgriDoot-branded document.
-_LOGO_URL = "./web/assets/img/agridoot-logo.png"
-# Fetched once per process and cached -- invoices can be generated
-# repeatedly (every Billing page load re-downloads its own PDF on click),
-# and there's no reason to hit AgriDoot's image host every single time.
-# None means "not fetched yet"; False means "fetch failed, don't retry
-# this process" (the missing custom-port cert or a network hiccup isn't
-# going to fix itself mid-process, and a logo is cosmetic -- worth failing
-# quietly rather than slowing down or breaking invoice generation).
-_logo_cache: bytes | None | bool = None
-
-
-def _fetch_logo_bytes() -> bytes | None:
-    global _logo_cache
-    if _logo_cache is None:
-        try:
-            resp = requests.get(_LOGO_URL, timeout=5)
-            resp.raise_for_status()
-            _logo_cache = resp.content
-        except requests.RequestException:
-            _logo_cache = False
-    return _logo_cache or None
 
 
 def _rupees(paise: int) -> str:
@@ -93,7 +69,7 @@ def generate_invoice_pdf(
 
     story = []
 
-    logo_bytes = _fetch_logo_bytes()
+    logo_bytes = read_logo_bytes()
     title_stack = Table(
         [[Paragraph("Vyom Engine", h1)],
          [Paragraph("by AgriDoot &middot; Earth Observatory", small_dim)]],

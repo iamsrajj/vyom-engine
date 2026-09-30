@@ -333,6 +333,7 @@ vyom/                        Python package -- all backend logic
 |-- reuse_check.py            Backfill new farms from existing coverage
 |-- tile_grid.py              Shared bounding-box grouping for farms
 |-- geometry_utils.py         Polygon sanitization (see gotchas below)
+|-- branding.py               Local AgriDoot logo reader, shared by invoice_pdf.py + email_utils.py
 |-- wallet.py, farm_pricing.py, coupons.py,
 |   invoicing.py, invoice_pdf.py, gst.py,
 |   gst_verification.py       Billing internals
@@ -787,6 +788,16 @@ knowing before you hit them again:
   and the server (`geometry_utils.py`, applied on every create/update) snap
   and dedupe vertices as a backstop -- if you're adding another geometry
   entry point, route it through `geometry_utils.py` too.
+- **The AgriDoot logo/branding was originally hot-linked** from
+  apiv2.agridoot.co.in in `web/index.html`, `web/developers/playground.html`,
+  every `web/legal/*.html` page, `vyom/invoice_pdf.py`,
+  `vyom/email_utils.py`, and `vyom/api/developer_docs.py` (the Swagger
+  favicon) -- all fixed to use the one local copy at
+  `web/assets/img/agridoot-logo.png` (see `scripts/download_assets.py` and
+  `vyom/branding.py`). If a new page or generated document needs the logo,
+  use that local file (web-side: `/assets/img/agridoot-logo.png`;
+  server-side: `vyom.branding.read_logo_bytes()`) rather than a fresh
+  hot-link -- it's already happened three separate times.
 - **A product's COG is NOT scoped to one farm.** It covers the shared
   buffered bounding box of every farm on that processing tile
   (`tile_grid.py`). Any new raster-serving code must mask by the actual

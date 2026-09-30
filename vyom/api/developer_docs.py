@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from vyom.config import settings
 from vyom.openapi_partner import build_partner_openapi
 
 router = APIRouter(prefix="/developers", tags=["developer-docs"])
@@ -22,7 +23,14 @@ def partner_docs():
     return get_swagger_ui_html(
         openapi_url="/developers/openapi.json",
         title="Vyom Engine Partner API -- Docs",
-        swagger_favicon_url="https://apiv2.agridoot.co.in:12443/img/app_img//AgriDoot_-_Logo_3_ed8bc3.png",
+        # Local asset (see scripts/download_assets.py), same file the
+        # dashboard and playground use -- an absolute URL built from
+        # DASHBOARD_BASE_URL rather than a relative /assets/... path, since
+        # this route's own origin isn't guaranteed to be the same one the
+        # static web/ files are served from on every deployment (same
+        # reasoning as the absolute tile_url_template in
+        # vyom/api/partner_tiles.py).
+        swagger_favicon_url=f"{settings.dashboard_base_url}/assets/img/agridoot-logo.png",
         # Hides the auto-generated "Schemas" section at the bottom (every
         # request/response model, including internal ones like CouponIn/
         # ContactRequest that a business integrator never touches directly --

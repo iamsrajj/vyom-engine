@@ -10,14 +10,22 @@ change only has to happen in one place.
 import logging
 import smtplib
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from vyom.branding import read_logo_bytes
 from vyom.config import settings
 
 logger = logging.getLogger("vyom.email_utils")
 
-_LOGO_URL = "./web/assets/img/agridoot-logo.png"
+# Referenced from render_email()'s <img src="cid:..."> below -- an inline
+# MIME image embedded in the email itself (see send_email()), not a URL the
+# recipient's mail client fetches over HTTP. This is deliberately more
+# robust than a hosted URL: it still renders if our own server is down or
+# slow, and it sidesteps the "images are blocked, click to download" prompt
+# most mail clients show for remote images by default.
+_LOGO_CID = "agridoot-logo"
 _CANOPY = "#4c9a5b"
 _CANOPY_DARK = "#3d7d49"
 
@@ -48,10 +56,26 @@ def send_email(to, subject: str, html_body: str, text_fallback: str,
     msg["From"] = f"Vyom Engine <{settings.smtp_username}>"
     msg["To"] = ", ".join(recipients)
 
+    # "related" wraps the text/html alternative together with the inline
+    # logo image they both reference via cid: -- kept separate from the
+    # outer "mixed" part, which is only for real attachments (e.g. an
+    # invoice PDF from vyom/invoicing.py), so a mail client doesn't
+    # mistakenly offer the logo itself as a downloadable attachment.
+    related = MIMEMultipart("related")
     body = MIMEMultipart("alternative")
     body.attach(MIMEText(text_fallback, "plain", "utf-8"))
     body.attach(MIMEText(html_body, "html", "utf-8"))
-    msg.attach(body)
+    related.attach(body)
+
+    logo_bytes = read_logo_bytes()
+    if logo_bytes:
+        logo_part = MIMEImage(logo_bytes, _subtype="png")
+        logo_part.add_header("Content-ID", f"<{_LOGO_CID}>")
+        logo_part.add_header(
+            "Content-Disposition", "inline", filename="agridoot-logo.png")
+        related.attach(logo_part)
+
+    msg.attach(related)
 
     for filename, content, mime_type in attachments or []:
         maintype, _, subtype = mime_type.partition("/")
@@ -73,10 +97,11 @@ def render_email(*, preheader: str, heading: str, body_html: str,
                  cta_label: str | None = None, cta_url: str | None = None) -> str:
     """Wraps body_html (already-safe HTML -- callers are responsible for
     escaping any user-supplied text before passing it in here) in the
-    AgriDoot/Vyom Engine themed shell: canopy-green header with the real
-    AgriDoot logo, a white content card, and a footer linking to
-    agridoot.com. preheader is the short hidden preview text most email
-    clients show next to the subject line in an inbox list."""
+    AgriDoot/Vyom Engine themed shell: canopy-green header with the AgriDoot
+    logo (embedded inline by send_email() via cid:, see _LOGO_CID above), a
+    white content card, and a footer linking to agridoot.com. preheader is
+    the short hidden preview text most email clients show next to the
+    subject line in an inbox list."""
     cta_html = ""
     if cta_label and cta_url:
         cta_html = f"""
@@ -90,6 +115,20 @@ def render_email(*, preheader: str, heading: str, body_html: str,
             </a>
           </td>
         </tr>"""
+
+    # Degrade to text-only in the header rather than a broken-image icon if
+    # the logo file is missing (e.g. scripts/download_assets.py was never
+    # run on this deployment) -- read_logo_bytes() is cached, so this costs
+    # nothing extra; send_email() calls the same function to decide whether
+    # to actually attach the inline image this cid: would otherwise point
+    # at nowhere.
+    logo_cell = ""
+    if read_logo_bytes():
+        logo_cell = f"""
+                  <td style="padding-right:10px;">
+                    <img src="cid:{_LOGO_CID}" alt="AgriDoot" width="36" height="36"
+                         style="display:block;border-radius:8px;background:#ffffff;">
+                  </td>"""
 
     return f"""<!DOCTYPE html>
 <html>
@@ -105,10 +144,7 @@ def render_email(*, preheader: str, heading: str, body_html: str,
             <td style="background:linear-gradient(135deg,{_CANOPY},{_CANOPY_DARK});padding:22px 28px;">
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="padding-right:10px;">
-                    <img src="{_LOGO_URL}" alt="AgriDoot" width="36" height="36"
-                         style="display:block;border-radius:8px;background:#ffffff;">
-                  </td>
+                  {logo_cell}
                   <td>
                     <div style="color:#ffffff;font-size:17px;font-weight:700;">Vyom Engine</div>
                     <div style="color:rgba(255,255,255,0.85);font-size:11px;letter-spacing:0.05em;text-transform:uppercase;">by AgriDoot &middot; Earth Observatory</div>
