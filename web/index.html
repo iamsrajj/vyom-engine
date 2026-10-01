@@ -2,7 +2,10 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>Vyom Engine - By AgriDoot</title>
     <link rel="icon" type="image/png" href="/assets/img/agridoot-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -3150,6 +3153,101 @@
         }
         .modal-card {
           width: 100%;
+        }
+      }
+
+      /* ===== Mobile polish (phones & small tablets) ===== */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      img,
+      svg,
+      canvas,
+      video {
+        max-width: 100%;
+      }
+      body {
+        overflow-x: hidden;
+      }
+      @media (max-width: 768px) {
+        /* 100vh ignores the mobile browser's collapsing URL bar */
+        #app {
+          height: 100vh;
+          height: 100dvh;
+        }
+        #bottom-tab-bar {
+          height: calc(56px + env(safe-area-inset-bottom, 0px));
+          padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        #content-area {
+          padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+        }
+        /* >=16px stops iOS Safari zooming the page when a field is focused */
+        input,
+        select,
+        textarea {
+          font-size: 16px !important;
+        }
+        button,
+        .btn,
+        .icon-btn,
+        .tab-item {
+          min-height: 40px;
+        }
+        .modal-overlay {
+          padding: 8px;
+        }
+        .modal-card {
+          width: 100%;
+          max-width: 100%;
+          max-height: 94vh;
+          max-height: 94dvh;
+          overflow-y: auto;
+        }
+        .login-panel {
+          min-width: 0;
+        }
+        .login-card {
+          width: 100%;
+          max-width: 92%;
+        }
+        .page-scroll table,
+        .modal-card table {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .page-header {
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        pre,
+        code {
+          max-width: 100%;
+          overflow-x: auto;
+        }
+        .map-column {
+          height: 42vh;
+          min-height: 260px;
+        }
+        .calendar-grid {
+          gap: 2px;
+        }
+        .toast,
+        #toast {
+          max-width: calc(100vw - 24px);
+        }
+      }
+      @media (max-width: 380px) {
+        .stat-grid,
+        .field-grid,
+        .detail-grid,
+        .readout-grid {
+          grid-template-columns: 1fr;
+        }
+        .hero-stat {
+          min-width: 100%;
         }
       }
     </style>
@@ -7253,6 +7351,38 @@
       let draftPreviewLine = null;
       let draftClickListener = null;
 
+      // Client-side guard rails -- keep in sync with MAX_FARM_ACRES /
+      // MAX_FARM_BBOX_DEG in vyom/config.py (the server enforces them too).
+      const MAX_FARM_ACRES = 1000;
+      const MAX_FARM_SPAN_DEG = 0.06;
+      function pathSpanDeg(points) {
+        let minLat = 90,
+          maxLat = -90,
+          minLng = 180,
+          maxLng = -180;
+        points.forEach((p) => {
+          minLat = Math.min(minLat, p.lat());
+          maxLat = Math.max(maxLat, p.lat());
+          minLng = Math.min(minLng, p.lng());
+          maxLng = Math.max(maxLng, p.lng());
+        });
+        return Math.max(maxLat - minLat, maxLng - minLng);
+      }
+
+      // Tells the server to drop the draft placeholder row (and, via
+      // draftGen, also any draft whose creation request is still in flight).
+      // Only ever deletes a draft -- see POST /farms/{id}/discard.
+      let draftGen = 0;
+      function killServerDraft(id) {
+        api(`/farms/${id}/discard`, { method: "POST" }).catch(() => {});
+      }
+      function discardServerDraft() {
+        draftGen++;
+        const id = draftFarmId;
+        draftFarmId = null;
+        if (id) killServerDraft(id);
+      }
+
       function startDrawing() {
         // Guards against a rapid double-click/double-tap on "Start drawing"
         // registering a second map-click listener before updateDrawUI()
@@ -7265,11 +7395,20 @@
           draftPolygon = null;
         }
         draftPath = [];
-        draftFarmId = null;
+        discardServerDraft();
         isDrawing = true;
         map.setOptions({ draggableCursor: "crosshair" });
         draftClickListener = map.addListener("click", (e) => {
           const isFirstPoint = draftPath.length === 0;
+          if (
+            !isFirstPoint &&
+            pathSpanDeg([...draftPath, e.latLng]) > MAX_FARM_SPAN_DEG
+          ) {
+            showToast(
+              "That point is too far away. A field must fit within about 6 km - zoom in and trace just your field.",
+            );
+            return;
+          }
           draftPath.push(e.latLng);
           renderDraftPreview();
           // Kick off the background cold-start fetch the moment we have a
@@ -7288,7 +7427,8 @@
         // product's processing window to a cluster size (~3.3km) regardless
         // of how big this placeholder itself is (see cold_start_buffer_deg
         // in tile_grid.py/tasks.py). ~110m per side is plenty.
-        const d = 0.001;
+        const d = 0.0008; // ~8 acres, safely under the 15-acre draft limit
+        const gen = ++draftGen;
         const lat = latLng.lat(),
           lng = latLng.lng();
         const placeholderGeoJSON = {
@@ -7315,6 +7455,11 @@
           // POST /farms now returns {farm, payment} (payment is always null
           // for a draft, since is_draft farms aren't billed at creation --
           // see FarmCreate.plan_type's docstring in api/farms.py).
+          if (gen !== draftGen) {
+            // The user cancelled/restarted while this request was in flight.
+            killServerDraft(result.farm.id);
+            return;
+          }
           draftFarmId = result.farm.id;
         } catch (e) {
           // Silent -- saveDraft() falls back to a normal one-step create if
@@ -7341,6 +7486,17 @@
             "Add at least 3 points before finishing (click more spots on the map).",
           );
           return;
+        }
+        if (google.maps.geometry) {
+          const acres =
+            google.maps.geometry.spherical.computeArea(draftPath) /
+            4046.8564224;
+          if (acres > MAX_FARM_ACRES) {
+            showToast(
+              `This area is ${Math.round(acres).toLocaleString()} acres. The maximum field size is ${MAX_FARM_ACRES.toLocaleString()} acres - please trace a smaller field.`,
+            );
+            return;
+          }
         }
         stopDrawingListeners();
         draftPolygon = new google.maps.Polygon({
@@ -7393,8 +7549,15 @@
           draftPolygon.getPath(),
         );
         const acres = sqm / _SQM_PER_ACRE;
-        banner.textContent = `Field area: ${acres >= 100 ? acres.toFixed(1) : acres.toFixed(2)} acre`;
+        const tooBig =
+          acres > MAX_FARM_ACRES ||
+          pathSpanDeg(draftPolygon.getPath().getArray()) > MAX_FARM_SPAN_DEG;
+        banner.textContent = tooBig
+          ? `Too large: max field size is ${MAX_FARM_ACRES.toLocaleString()} acres`
+          : `Field area: ${acres >= 100 ? acres.toFixed(1) : acres.toFixed(2)} acre`;
         banner.style.display = "flex";
+        document.getElementById("wizard-step1-next-btn").disabled = tooBig;
+        if (tooBig) return;
         updatePlanPricePreview();
       }
 
@@ -8783,12 +8946,9 @@
         stopDrawingListeners();
         draftPath = [];
         isDrawing = false;
-        // draftFarmId is deliberately NOT deleted server-side here -- an
-        // abandoned draft's cold-start fetch already ran (or is running)
-        // and leaves real processed_bounds coverage behind that benefits
-        // any future real farm nearby, same as a prewarm seed. Just stop
-        // tracking it locally so a later drawing session starts clean.
-        draftFarmId = null;
+        // The draft placeholder is deleted server-side too, so an abandoned
+        // drawing no longer leaves a row (or queued satellite jobs) behind.
+        discardServerDraft();
         updateDrawUI();
       }
 
@@ -9391,9 +9551,17 @@
         }, 60);
       }
 
-      function closeDrawFieldModal(skipConfirm) {
+      async function closeDrawFieldModal(skipConfirm) {
         if (!skipConfirm && (isDrawing || draftPolygon)) {
-          if (!confirm("Discard the field you're drawing?")) return;
+          // App-styled popup (same modal as every other confirmation), not
+          // the browser's native confirm() alert.
+          const ok = await showConfirmModal({
+            title: "Discard this field?",
+            message:
+              "The boundary you're drawing hasn't been saved and will be lost.",
+            confirmLabel: "Discard field",
+          });
+          if (!ok) return;
         }
         if (isDrawing) cancelDrawing();
         if (draftPolygon) {
@@ -9401,7 +9569,7 @@
           draftPolygon = null;
           draftGeoJSON = null;
         }
-        draftFarmId = null;
+        discardServerDraft();
         document.getElementById("create-form").style.display = "none";
         document.getElementById("draw-field-modal").style.display = "none";
         // Put #map back where the Imagery & Indices page expects it.
@@ -12123,12 +12291,12 @@
       }
 
       async function revokeApiCredential(id) {
-        if (
-          !confirm(
-            "Revoke this API key? Any integration using it will stop working immediately.",
-          )
-        )
-          return;
+        const ok = await showConfirmModal({
+          title: "Revoke this API key?",
+          message: "Any integration using it will stop working immediately.",
+          confirmLabel: "Revoke key",
+        });
+        if (!ok) return;
         try {
           await api(`/business/api-credentials/${id}/revoke`, {
             method: "POST",

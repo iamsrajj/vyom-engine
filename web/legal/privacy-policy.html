@@ -2,7 +2,10 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Privacy Policy — Vyom Engine / AgriDoot</title>
     <link rel="icon" href="/assets/img/agridoot-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -158,6 +161,48 @@
       }
       footer.site a {
         color: var(--text-dim);
+      }
+
+      /* ===== Mobile polish (phones & small tablets) ===== */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      img,
+      svg,
+      canvas,
+      video {
+        max-width: 100%;
+      }
+      @media (max-width: 720px) {
+        header.top {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        main {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        nav.legal-nav {
+          gap: 10px 14px;
+        }
+        main h1 {
+          font-size: 1.6rem;
+        }
+        table {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+        }
+        p,
+        li {
+          overflow-wrap: anywhere;
+        }
+        footer.site {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
       }
     </style>
   </head>

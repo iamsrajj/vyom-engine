@@ -168,6 +168,10 @@ def create_partner_farm(
                          f"Invalid farm boundary: {exc}")
 
     geom_shape = shape(clean_geometry)
+    from vyom import farm_lifecycle
+    too_big = farm_lifecycle.extent_error(geom_shape, draft=False)
+    if too_big:
+        raise ApiV1Error(422, "VALIDATION_ERROR", too_big)
     area_ha = _geodesic_area_ha(geom_shape)
 
     farm = Polygon(

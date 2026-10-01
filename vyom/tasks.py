@@ -36,7 +36,8 @@ from sqlalchemy import select, func
 from vyom.celery_app import celery_app, priority_queue_name
 from vyom.config import settings
 from vyom.db import SessionLocal
-from vyom.models import Polygon, CatalogProduct, ZonalStat, Notification
+from vyom.models import Polygon, CatalogProduct, PolygonTileMap, ZonalStat, Notification
+from vyom.farm_lifecycle import fetchable_farms_stmt, is_fetchable
 from vyom.discovery import discover_products_for_geometry
 from vyom.download_manager import download_product
 from vyom.processing.pipeline import process_product
@@ -54,6 +55,16 @@ logger = logging.getLogger("vyom.tasks")
 # Per-product pipeline stages
 # ============================================================
 
+def _has_linked_farm(db, product_id: uuid.UUID) -> bool:
+    """False once every farm that wanted this product was deleted/discarded.
+    Chains are queued up-front (up to ~100 per new farm), so without this
+    guard a farm deleted mid-backfill kept downloading gigabytes."""
+    return db.execute(
+        select(PolygonTileMap.polygon_id).where(
+            PolygonTileMap.product_id == product_id).limit(1)
+    ).first() is not None
+
+
 @celery_app.task(name="vyom.download.download_product_task", bind=True,
                  max_retries=3, default_retry_delay=60)
 def download_product_task(self, product_id: str) -> dict:
@@ -67,6 +78,8 @@ def download_product_task(self, product_id: str) -> dict:
         # "failed" too, not just fresh "discovered" ones.
         if product.status not in ("discovered", "failed"):
             return {"product_id": product_id, "status": product.status}
+        if not _has_linked_farm(db, product.id):
+            return {"product_id": product_id, "status": "cancelled_no_farm"}
 
         try:
             download_product(db, product)
@@ -98,6 +111,18 @@ def process_product_task(self, product_id: str) -> dict:
             return {"product_id": product_id, "status": "not_found"}
         if product.status != "downloaded":
             return {"product_id": product_id, "status": product.status}
+        if not _has_linked_farm(db, product.id):
+            # Farm was deleted after the download finished: drop the raw file
+            # and let a future farm re-fetch it rather than processing for nobody.
+            from vyom.storage import storage
+            try:
+                storage.delete(product.raw_path)
+            except Exception:  # noqa: BLE001
+                logger.warning("raw cleanup failed", exc_info=True)
+            product.status = "discovered"
+            db.add(product)
+            db.commit()
+            return {"product_id": product_id, "status": "cancelled_no_farm"}
 
         try:
             process_product(db, product)
@@ -305,6 +330,12 @@ def refresh_farm(self, farm_id: str, platforms: list[str] | None = None,
         if farm is None:
             logger.error("Farm %s not found", farm_id)
             return {"farm_id": farm_id, "status": "not_found"}
+        if not is_fetchable(db, farm):
+            # Draft, unpaid, expired plan or suspended business account: we
+            # do not spend CDSE/processing/storage money on it.
+            logger.info(
+                "Farm %s is not fetchable (draft/unpaid/expired); skipping", farm_id)
+            return {"farm_id": farm_id, "status": "skipped_not_fetchable"}
 
         # Captured ONCE, before dispatching anything, and passed through to
         # fill_gaps_callback -- this is what "field_ready" actually keys off
@@ -400,7 +431,9 @@ def poll_all_farms():
     without a separate "episode" flag to track and reset."""
     db = SessionLocal()
     try:
-        farms = db.query(Polygon).all()
+        # Only farms we are allowed to spend money on: not drafts, not prewarm
+        # seeds, not unpaid/expired dashboard farms, not suspended partners.
+        farms = db.execute(fetchable_farms_stmt()).scalars().all()
         farm_ids = [str(f.id) for f in farms]
 
         now = datetime.now(timezone.utc)

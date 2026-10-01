@@ -6,7 +6,7 @@ celery_app = Celery(
     "vyom",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["vyom.tasks", "vyom.billing_tasks"],
+    include=["vyom.tasks", "vyom.billing_tasks", "vyom.maintenance_tasks"],
 )
 
 # Every pipeline stage has a normal queue and a "_priority" twin. A farm-
@@ -33,6 +33,7 @@ celery_app.conf.update(
         "vyom.stats.*": {"queue": "stats"},
         "vyom.discovery.*": {"queue": "discover"},
         "vyom.billing.*": {"queue": "billing"},
+        "vyom.maintenance.*": {"queue": "discover"},
     },
     task_serializer="json",
     result_serializer="json",
@@ -93,5 +94,14 @@ celery_app.conf.beat_schedule = {
     "reconcile-pending-business-invoices": {
         "task": "vyom.billing.reconcile_pending_business_invoices",
         "schedule": 30 * 60,
+    },
+    # Cost / storage hygiene (vyom/maintenance_tasks.py)
+    "cleanup-stale-drafts": {
+        "task": "vyom.maintenance.cleanup_stale_drafts",
+        "schedule": 30 * 60,
+    },
+    "purge-orphan-products": {
+        "task": "vyom.maintenance.purge_orphan_products",
+        "schedule": 24 * 60 * 60,
     },
 }

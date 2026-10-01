@@ -356,6 +356,14 @@ def process_product(db: Session, product: CatalogProduct) -> CatalogProduct:
         product.error_message = str(exc)[:1000]
         db.add(product)
         db.commit()
+        # A failed job used to leave its multi-GB raw zip in the bucket forever
+        # (only the success path deleted it). The product is 'failed', so the
+        # next sweep re-downloads it anyway -- keeping the old file is pure cost.
+        try:
+            storage.delete(product.raw_path)
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not delete raw file of failed product %s",
+                           product.product_name, exc_info=True)
         logger.exception("S2 processing failed for %s", product.product_name)
         log_error("pipeline_s2", str(exc), platform="S2",
                   context={"product_id": str(product.id), "product_name": product.product_name})

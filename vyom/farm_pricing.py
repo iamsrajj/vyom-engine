@@ -238,6 +238,16 @@ def _activate_plan(db: Session, *, plan: FarmPlan, farm: Polygon, razorpay_payme
 
     db.commit()
 
+    # The plan is paid: NOW start the wide satellite backfill. Fetching is
+    # deliberately not started at farm creation (drafts / unpaid farms cost
+    # CDSE + processing + storage money for nothing if never paid).
+    try:
+        from vyom.api.farms import _backfill_and_dispatch_refresh
+        _backfill_and_dispatch_refresh(db, farm)
+    except Exception:  # noqa: BLE001 - never undo a successful payment
+        logger.exception(
+            "Could not dispatch initial fetch for farm %s", farm.id)
+
     # Best-effort, same reasoning as send_business_welcome_email: a failed
     # confirmation email must never undo or block a payment that already
     # succeeded. This previously didn't exist at all for individual farm

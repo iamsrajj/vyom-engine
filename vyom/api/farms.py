@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from vyom.config import settings
+from vyom import farm_lifecycle
 from vyom.auth import require_auth, stable_owner_uuid
 from vyom.db import get_db
 from vyom.geometry_utils import sanitize_polygon_geojson
@@ -368,6 +369,14 @@ def _backfill_and_dispatch_refresh(db: Session, farm: Polygon, priority: bool = 
             "Reuse-check failed for farm %s, continuing without backfill", farm.id)
         backfilled = {}
 
+    # Drafts, unpaid farms and expired plans get the (free) reuse backfill
+    # above but NO satellite download. The wide 365-day fetch is dispatched
+    # when the plan is activated (see farm_pricing._activate_plan).
+    if not farm_lifecycle.is_fetchable(db, farm):
+        logger.info(
+            "Farm %s not fetchable yet (draft/unpaid); fetch deferred", farm.id)
+        return backfilled
+
     cold_start_platforms = [p for p, count in backfilled.items() if count == 0] \
         if backfilled else ["S2", "S1"]
 
@@ -443,11 +452,28 @@ def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), 
     except ValueError as exc:
         raise HTTPException(422, f"Invalid farm boundary: {exc}")
     geom_shape = shape(clean_geometry)
+    too_big = farm_lifecycle.extent_error(geom_shape, draft=payload.is_draft)
+    if too_big:
+        raise HTTPException(422, too_big)
     area_ha = _geodesic_area_ha(geom_shape)
+
+    owner = stable_owner_uuid(current_user)
+    if payload.is_draft:
+        # At most N drafts per user. Make room by dropping the user's oldest
+        # abandoned drafts instead of locking them out of drawing.
+        farm_lifecycle.purge_stale_drafts(db, owner=owner)
+        while farm_lifecycle.count_user_drafts(db, owner) >= settings.max_draft_farms_per_user:
+            oldest = db.execute(
+                farm_lifecycle._draft_stmt(owner).order_by(
+                    Polygon.created_at.asc()).limit(1)
+            ).scalars().first()
+            if oldest is None:
+                break
+            farm_lifecycle.delete_farm_data(db, oldest)
 
     farm = Polygon(
         name=payload.name,
-        user_id=stable_owner_uuid(current_user),
+        user_id=owner,
         geom=from_shape(geom_shape, srid=4326),
         crop_type=payload.crop_type,
         soil_type=payload.soil_type,
@@ -492,6 +518,7 @@ def create_farm(payload: FarmCreate, current_user: str = Depends(require_auth), 
         except razorpay_client.RazorpayError as exc:
             raise HTTPException(502, f"Could not start payment: {exc}")
         payment = _plan_order_to_out(result)
+        # If the wallet fully covered it, _activate_plan already dispatched the fetch.
 
     return FarmCreateOut(farm=_to_farm_out(db, farm), payment=payment)
 
@@ -522,6 +549,9 @@ def update_farm(farm_id: uuid.UUID, payload: FarmUpdate, current_user: str = Dep
         except ValueError as exc:
             raise HTTPException(422, f"Invalid farm boundary: {exc}")
         geom_shape = shape(clean_geometry)
+        too_big = farm_lifecycle.extent_error(geom_shape, draft=False)
+        if too_big:
+            raise HTTPException(422, too_big)
         farm.geom = from_shape(geom_shape, srid=4326)
         farm.area_ha = _geodesic_area_ha(geom_shape)
         farm.is_draft = False
@@ -720,9 +750,24 @@ def get_farm(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: 
 @router.delete("/{farm_id}")
 def delete_farm(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
     farm = _get_owned_farm(db, farm_id, current_user)
-    db.delete(farm)
-    db.commit()
-    return {"status": "deleted"}
+    # Also removes the files only this farm owned; shared satellite COGs are
+    # purged later by the orphan job, and queued download/process jobs for
+    # this farm cancel themselves (see tasks._has_linked_farm).
+    owner_id = farm.user_id
+    result = farm_lifecycle.delete_farm_data(db, farm)
+    _invalidate_farm_cache(farm_id, owner=owner_id)
+    return {"status": "deleted", **result}
+
+
+@router.post("/{farm_id}/discard")
+def discard_draft(farm_id: uuid.UUID, current_user: str = Depends(require_auth), db: Session = Depends(get_db)):
+    """Called when the user cancels/discards the field they are drawing.
+    Only ever deletes a DRAFT, so a stale client id can never remove a real farm."""
+    farm = _get_owned_farm(db, farm_id, current_user)
+    if not farm.is_draft:
+        return {"status": "ignored", "reason": "not_a_draft"}
+    farm_lifecycle.delete_farm_data(db, farm)
+    return {"status": "discarded"}
 
 
 class RefreshRequest(BaseModel):

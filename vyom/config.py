@@ -33,6 +33,22 @@ class Settings(BaseSettings):
     raw_data_dir: str = "./data/raw"
     processed_data_dir: str = "./data/processed"
 
+    # Farm size / draft limits (abuse + cost protection)
+    max_draft_farms_per_user: int = 2
+    max_draft_acres: float = 15.0
+    # A draft not finalised within this many minutes is deleted.
+    draft_ttl_minutes: int = 120
+    # Hard cap for any real farm (dashboard or partner API), in acres.
+    max_farm_acres: float = 1000.0
+    # Hard cap on the bounding-box side of any farm, in degrees (~111 km each).
+    max_farm_bbox_deg: float = 0.06
+    # A draft starts a 365-day satellite download for a rough pin that may be
+    # abandoned. Off by default: imagery is fetched once the farm is paid.
+    draft_prefetch_enabled: bool = False
+    # Processed products no farm links to are kept this long for reuse by
+    # nearby farms, then their COG files are deleted from object storage.
+    orphan_product_grace_days: int = 14
+
     # MinIO default; use AWS endpoint for real S3
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = ""

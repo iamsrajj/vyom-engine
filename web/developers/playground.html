@@ -2,7 +2,10 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Vyom Engine API Playground</title>
     <link rel="icon" type="image/png" href="/assets/img/agridoot-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -505,6 +508,7 @@
         overflow: hidden;
       }
       pre.output code {
+        color: #abb2bf; /* readable fallback if highlighting is skipped */
         display: block;
         padding: var(--sp-3);
         font-size: 0.8rem;
@@ -712,6 +716,71 @@
         color: var(--text-dim);
         font-size: 0.8rem;
         padding: var(--sp-5);
+      }
+
+      /* ===== Mobile polish (phones & small tablets) ===== */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      img,
+      svg,
+      canvas,
+      video {
+        max-width: 100%;
+      }
+      @media (max-width: 760px) {
+        header,
+        .env-bar,
+        .shell {
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+        .env-bar {
+          grid-template-columns: 1fr !important;
+        }
+        .env-status {
+          padding-bottom: 0;
+          white-space: normal;
+        }
+        /* endpoint list becomes a horizontal chip strip instead of a tall column */
+        .endpoint-nav {
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 8px;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .endpoint-nav h3 {
+          display: none;
+        }
+        .endpoint-nav > * {
+          flex: 0 0 auto;
+        }
+        input,
+        select,
+        textarea {
+          font-size: 16px !important;
+          max-width: 100%;
+        }
+        button {
+          min-height: 40px;
+        }
+        pre.output code {
+          max-height: 320px;
+        }
+        table {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+        }
+        #responseMeta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        }
+        #mapPreviewEl {
+          height: 260px;
+        }
       }
     </style>
   </head>
@@ -1476,6 +1545,9 @@ ${goHeaderLines}
       function setSnippet(id, text) {
         const el = $(id);
         el.textContent = text;
+        // highlight.js 11 skips any element it already marked
+        // (data-highlighted), so clear the flag before re-highlighting.
+        delete el.dataset.highlighted;
         if (window.hljs) hljs.highlightElement(el);
       }
 
@@ -1542,9 +1614,14 @@ ${goHeaderLines}
         if (lastResponseParsed !== null && responseView === "pretty") {
           el.className = "language-json";
           el.textContent = JSON.stringify(lastResponseParsed, null, 2);
+          // Without this, the 2nd+ response is never re-highlighted: hljs
+          // refuses already-marked elements, and the reset className drops
+          // the .hljs colour, leaving dark text on the dark code background.
+          delete el.dataset.highlighted;
           if (window.hljs) hljs.highlightElement(el);
         } else {
           el.className = "plain";
+          delete el.dataset.highlighted;
           el.textContent = lastResponseText;
         }
       }

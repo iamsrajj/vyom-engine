@@ -2,7 +2,10 @@
 <html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <title>Prewarm — Vyom Engine</title>
     <style>
       :root {
@@ -170,6 +173,85 @@
         font-size: 13px;
         margin-bottom: var(--sp-4);
         line-height: 1.5;
+      }
+
+      /* ===== Mobile polish (phones & small tablets) ===== */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      img,
+      svg,
+      canvas,
+      video {
+        max-width: 100%;
+      }
+      @media (max-width: 720px) {
+        header {
+          flex-wrap: wrap;
+          gap: 8px;
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        main {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        .toolbar {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+        .toolbar > * {
+          flex: 1 1 140px;
+        }
+        .row {
+          flex-direction: column;
+          gap: 10px;
+        }
+        .modal-card {
+          width: 100% !important;
+          max-width: 100% !important;
+          max-height: 94vh;
+          overflow-y: auto;
+        }
+        .modal-footer {
+          flex-wrap: wrap;
+        }
+        .modal-footer .btn {
+          flex: 1 1 120px;
+        }
+        .card,
+        .error-card {
+          padding: 12px;
+        }
+        .error-top,
+        .actions {
+          flex-wrap: wrap;
+        }
+        table {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        pre,
+        pre.traceback {
+          max-width: 100%;
+          overflow-x: auto;
+        }
+        input,
+        select,
+        textarea {
+          font-size: 16px !important;
+          max-width: 100%;
+        }
+        button,
+        .btn {
+          min-height: 40px;
+        }
+        .message,
+        .context {
+          overflow-wrap: anywhere;
+        }
       }
     </style>
   </head>
