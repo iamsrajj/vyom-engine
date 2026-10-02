@@ -58,6 +58,18 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_use_ssl: bool = False
 
+    # OPTIONAL separate store for RAW Sentinel zips (e.g. Cloudflare R2
+    # Standard). Raw zips are deleted within hours; Wasabi bills every deleted
+    # object for 90 days, R2 Standard has no minimum duration. Leave the
+    # endpoint empty to keep raw zips in the main S3 store (old behaviour).
+    # The bucket name MUST differ from s3_bucket_raw: the bucket name is how
+    # old rows (still on Wasabi) are told apart from new ones (on R2).
+    raw_s3_endpoint_url: str = ""
+    raw_s3_access_key: str = ""
+    raw_s3_secret_key: str = ""
+    raw_s3_bucket: str = "vyom-raw-r2"
+    raw_s3_region: str = "auto"
+
     # Discovery defaults — Sentinel-2 (optical)
     default_max_cloud_cover: float = 40.0
 

@@ -26,6 +26,7 @@ products.
 - [Database tables](#database-tables)
 - [Scheduled jobs](#scheduled-jobs-celery-beat-celery_apppy)
 - [The imagery pipeline, end to end](#the-imagery-pipeline-end-to-end)
+- [Storage, cost controls and cleanup](#storage-cost-controls-and-cleanup)
 - [Real vs. filled data: interpolation](#real-vs-filled-data-interpolation)
 - [Auth: three separate schemes](#auth-three-separate-schemes)
 - [Billing & monetization](#billing--monetization)
@@ -251,11 +252,11 @@ satellite reading without checking that label.
                      |  queues: download/discover  |  process/stats        |
                      |  tasks.py, billing_tasks.py, celery_app.py (beat)   |
                      +-----------+---------------------------+-------------+
-                                 | raw .SAFE.zip               | COGs + stats
+                                 | raw .SAFE.zip -> R2         | COGs -> Wasabi + stats
                      +-----------v------------+     +----------v-------------+
                      |  Object storage         |     |  PostgreSQL + PostGIS  |
-                     |  (Wasabi S3, or local   |     |  models.py (22 tables) |
-                     |  disk -- storage.py)    |     |                        |
+                     |  Wasabi: COGs           |     |  models.py (22 tables) |
+                     |  R2: raw zips (temp)    |     |                        |
                      +-------------------------+     +-----------+------------+
                                                                   |
                                             +---------------------v---------------------+
@@ -343,8 +344,14 @@ vyom/                        Python package -- all backend logic
 |-- error_log.py              Central log_error() used everywhere
 |-- prewarm.py                Admin region pre-fetch logic
 |-- idempotency.py            Idempotency-Key handling (partner API)
+|-- storage.py                Storage backends (local / S3). Processed COGs on the
+|                             main S3 store; raw zips optionally on a second S3
+|                             store (Cloudflare R2), routed by bucket name
+|-- farm_lifecycle.py         Farm/draft size limits, fetch eligibility, and
+|                             delete/cleanup logic (see "Storage, cost controls
+|                             and cleanup")
 |-- celery_app.py             Celery app + beat schedule
-`-- tasks.py, billing_tasks.py   Celery task definitions
+`-- tasks.py, billing_tasks.py, maintenance_tasks.py   Celery task definitions
 
 scripts/
 `-- download_assets.py         Fetches logo + store badges into web/assets/img/
@@ -445,15 +452,36 @@ browser                         FastAPI                       Celery / DB
    |<- ready + progress            |                               | notifications
 ```
 
+**Drafts, limits and discard.** Clicking the first point while drawing creates
+a small placeholder draft (`is_draft=true`, ~8 acres) so the dashboard has a
+farm id to work with. Rules enforced in `vyom/farm_lifecycle.py`:
+
+- At most `MAX_DRAFT_FARMS_PER_USER` (2) drafts per user, each at most
+  `MAX_DRAFT_ACRES` (15). Creating a third deletes the user's oldest one.
+- Any farm is capped at `MAX_FARM_ACRES` (1000) and `MAX_FARM_BBOX_DEG`
+  (0.06 degrees, ~6.6 km) across -- checked server-side on dashboard and
+  partner-API create/update, and client-side while drawing.
+- Cancelling, closing the wizard, or restarting the drawing calls
+  `POST /farms/{id}/discard`, which deletes the draft (and only ever a draft).
+- Drafts older than `DRAFT_TTL_MINUTES` (120) are deleted by a beat job.
+- **No satellite fetch happens for a draft or an unpaid farm.** The 365-day
+  backfill is dispatched when the plan is activated (`farm_pricing.py`).
+- "Discard this field?" and "Revoke this API key?" use the in-app
+  `showConfirmModal()`, not the browser's native `confirm()`.
+
 ### 2. Satellite data pipeline (Celery)
 
 ```
 poll_all_farms (beat, every 6 h) / refresh_farm (on demand)
   -> vyom.discovery.*     CDSE OData search per farm bbox
-  -> vyom.download.*      download_product_task   (raw .SAFE.zip -> storage)
+  -> vyom.download.*      download_product_task   (raw .SAFE.zip -> raw store: R2)
   -> vyom.process.*       process_product_task    (S2 or S1 pipeline -> COGs)
   -> vyom.stats.*         compute_stats_task      (exactextract -> zonal_stats)
   -> vyom.stats.*         fill_gaps_callback      (interpolation + notifications)
+Download/process tasks first check that some farm still links to the product
+(`PolygonTileMap`); if the farm was deleted meanwhile, the job cancels itself.
+`poll_all_farms` and `refresh_farm` only act on "fetchable" farms (active
+plan, or a partner-API farm of an account in good standing).
 Every stage has a "<queue>_priority" twin so a farmer waiting on a new field is
 never stuck behind background sweeps (needs a dedicated worker; see setup).
 ```
@@ -491,17 +519,19 @@ objects, which is exactly the bug that `map-layer` originally hit).
 
 ## Scheduled jobs (Celery beat, `celery_app.py`)
 
-| Task                                                    | Every  | Purpose                                                            |
-| ------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
-| `vyom.discovery.poll_all_farms`                         | 6 h    | Incremental 30-day refresh of every farm; stale-data notifications |
-| `vyom.billing.expire_farm_plans`                        | 24 h   | End plans past their term                                          |
-| `vyom.billing.reconcile_abandoned_farm_plans`           | 24 h   | Clean up farms whose payment never completed                       |
-| `vyom.billing.generate_monthly_business_api_invoices`   | 24 h   | Idempotent per month (unique user + month)                         |
-| `vyom.billing.suspend_overdue_business_invoices`        | 24 h   | Enforce unpaid partner invoices                                    |
-| `vyom.billing.send_business_renewal_reminders`          | 24 h   | Renewal emails                                                     |
-| `vyom.billing.cleanup_idempotency_keys`                 | 24 h   | Expire old `Idempotency-Key` rows                                  |
-| `vyom.billing.reconcile_pending_business_subscriptions` | 30 min | Settle Razorpay state                                              |
-| `vyom.billing.reconcile_pending_business_invoices`      | 30 min | Settle Razorpay state                                              |
+| Task                                                    | Every  | Purpose                                                                                                                                                           |
+| ------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vyom.discovery.poll_all_farms`                         | 6 h    | Incremental 30-day refresh of every _fetchable_ farm (active plan or healthy partner account; not drafts, unpaid, expired or suspended); stale-data notifications |
+| `vyom.billing.expire_farm_plans`                        | 24 h   | End plans past their term                                                                                                                                         |
+| `vyom.billing.reconcile_abandoned_farm_plans`           | 24 h   | Clean up farms whose payment never completed                                                                                                                      |
+| `vyom.billing.generate_monthly_business_api_invoices`   | 24 h   | Idempotent per month (unique user + month)                                                                                                                        |
+| `vyom.billing.suspend_overdue_business_invoices`        | 24 h   | Enforce unpaid partner invoices                                                                                                                                   |
+| `vyom.billing.send_business_renewal_reminders`          | 24 h   | Renewal emails                                                                                                                                                    |
+| `vyom.billing.cleanup_idempotency_keys`                 | 24 h   | Expire old `Idempotency-Key` rows                                                                                                                                 |
+| `vyom.billing.reconcile_pending_business_subscriptions` | 30 min | Settle Razorpay state                                                                                                                                             |
+| `vyom.billing.reconcile_pending_business_invoices`      | 30 min | Settle Razorpay state                                                                                                                                             |
+| `vyom.maintenance.cleanup_stale_drafts`                 | 30 min | Delete drafts older than `DRAFT_TTL_MINUTES`                                                                                                                      |
+| `vyom.maintenance.purge_orphan_products`                | 24 h   | Delete processed COGs (and any leftover raw zip) of products no farm links to, after `ORPHAN_PRODUCT_GRACE_DAYS`                                                  |
 
 ---
 
@@ -511,11 +541,13 @@ objects, which is exactly the bug that `map-layer` originally hit).
    intersecting a farm's (buffered) bounding box, filtered by collection
    (`SENTINEL-2`/`SENTINEL-1`), product type, cloud cover, and a
    configurable lookback window. `poll_all_farms` (Celery beat, every 6h)
-   sweeps every farm with a 30-day lookback; a brand-new farm additionally
-   gets a one-time 365-day/85%-cloud-cover backfill request on creation.
+   sweeps every fetchable farm with a 30-day lookback; a farm additionally
+   gets a one-time 365-day/85%-cloud-cover backfill request once its plan is
+   paid (not at creation).
 2. **`tile_grid.py`** groups farms that share the same processing area so
    one downloaded scene can serve several nearby farms without re-fetching.
-3. **`download_manager.py`** downloads the product via CDSE's
+3. **`download_manager.py`** downloads the product (stored in the raw store,
+   see "Storage, cost controls and cleanup") via CDSE's
    `/odata/v1/Products($ID)/$value` endpoint, manually re-attaching the
    Authorization bearer token across the redirect that endpoint issues
    (the `requests` library strips auth headers on cross-host redirects by
@@ -545,6 +577,66 @@ objects, which is exactly the bug that `map-layer` originally hit).
    discrete labelled-band PNG (via `processing/index_scale.py`, for indices
    with a defined scale) or a continuous colormap (for anything without
    one, currently just `VV_VH_RATIO`).
+
+---
+
+## Storage, cost controls and cleanup
+
+### Two object stores
+
+| Data                                 | Store                                                    | Why                                                                                                                                                                                                                                        |
+| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Processed COGs, interpolated COGs    | **Wasabi** (`S3_*`, `S3_BUCKET_PROCESSED`)               | Cheapest per GB at scale; read via GDAL `/vsis3/` for tile serving                                                                                                                                                                         |
+| Raw Sentinel `.SAFE.zip` (temporary) | **Cloudflare R2 Standard** (`RAW_S3_*`, `RAW_S3_BUCKET`) | Zips live for hours, then are deleted. Wasabi bills every object for a **90-day minimum** even if deleted after minutes, plus a 1 TB minimum monthly charge. R2 Standard has no minimum storage duration, deletes are free, egress is free |
+
+Routing lives in `S3Storage._client_for(bucket)` (`vyom/storage.py`): the
+bucket name inside a stored path (`s3://<bucket>/<key>`) decides which client
+downloads or deletes it. `RAW_S3_BUCKET` therefore **must differ** from
+`S3_BUCKET_RAW` (the app refuses to start otherwise) -- that is how old rows
+still pointing at `s3://vyom-raw/...` on Wasabi keep working while new ones go
+to R2. Leave `RAW_S3_ENDPOINT_URL` empty to keep raw zips on the main store.
+
+R2 setup: create a Standard bucket; add a lifecycle rule "delete uploaded
+objects after 5 days" (a safety net for orphans -- not 1-2 days, since a big
+backfill can leave zips queued longer than that); create an API token with
+Object Read & Write scoped to that bucket. Operation counts stay far inside
+the free tier (a 1 GB zip is ~125 multipart requests each way).
+
+### Who deletes what
+
+| Case                                  | Cleanup                                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Processing succeeds                   | Pipeline deletes the raw zip                                                                                     |
+| Processing fails                      | Pipeline deletes the raw zip; the product is `failed` and re-downloads on the next sweep                         |
+| Farm deleted before a queued job runs | The job sees no farm links to the product, deletes the zip, resets the product to `discovered`                   |
+| Farm deleted                          | `farm_lifecycle.delete_farm_data()` deletes the farm's interpolated COGs; shared product COGs are kept for reuse |
+| Product no longer used by any farm    | `purge_orphan_products` (daily) deletes its COGs and any leftover zip after `ORPHAN_PRODUCT_GRACE_DAYS` (14)     |
+| Anything missed                       | The R2 lifecycle rule removes raw objects older than 5 days                                                      |
+
+All raw deletes go through `storage.delete(product.raw_path)`, so they reach
+R2 or Wasabi automatically depending on the stored path. If the R2 rule
+removes a zip while its product is still `downloaded`, the next process
+attempt fails, the product becomes `failed`, and the next sweep re-downloads it.
+
+### Who may cost us money
+
+`farm_lifecycle.fetchable_farms_stmt()` is the single definition of "a farm we
+fetch for": not a draft, not a prewarm seed, and either an active
+(non-expired) `FarmPlan`, or an `api`-created farm whose owner has
+`business_status='active'` and is not payment-suspended. `poll_all_farms`
+queries it; `refresh_farm` and the on-create backfill check `is_fetchable()`.
+Drafts never prefetch unless `DRAFT_PREFETCH_ENABLED=true`. When a plan is
+activated, `farm_pricing._activate_plan` dispatches the first fetch.
+
+### Remaining cost levers (not implemented)
+
+- Every enabled index is one COG per scene (`S2_INDICES`); fewer indices means
+  fewer files.
+- Pixel interpolation writes per-farm, per-index COGs every 6 days
+  (`raster_interpolation.py`).
+- Admin prewarm accepts any region size -- keep requests small.
+- The cold-start processing window (`COLD_START_BUFFER_DEG`) is ~3.3 km wide.
+- Partner API has the farm size cap but no per-account farm quota.
 
 ---
 
@@ -734,7 +826,13 @@ categories, roughly:
 - **CDSE**: credentials, OAuth/OData/download URLs, concurrency/rate limits.
 - **Database / Redis**: `DATABASE_URL`, `REDIS_URL`.
 - **Storage**: `STORAGE_BACKEND` (`local` or `s3`), local paths, or the
-  full Wasabi S3 credential set.
+  full Wasabi S3 credential set (processed COGs).
+- **Raw store (optional)**: `RAW_S3_ENDPOINT_URL`, `RAW_S3_ACCESS_KEY`,
+  `RAW_S3_SECRET_KEY`, `RAW_S3_BUCKET`, `RAW_S3_REGION` -- Cloudflare R2 for
+  temporary raw zips. The bucket name must differ from `S3_BUCKET_RAW`.
+- **Farm / draft limits and cleanup**: `MAX_DRAFT_FARMS_PER_USER`,
+  `MAX_DRAFT_ACRES`, `DRAFT_TTL_MINUTES`, `MAX_FARM_ACRES`,
+  `MAX_FARM_BBOX_DEG`, `DRAFT_PREFETCH_ENABLED`, `ORPHAN_PRODUCT_GRACE_DAYS`.
 - **Discovery defaults**: default cloud-cover threshold, S1/S2 collection
   and product-type identifiers, `S2_INDICES` (JSON list -- add a new index
   here _and_ implement its formula in `processing/indices.py` before it'll
@@ -756,7 +854,8 @@ categories, roughly:
 
 Production currently runs manually (not via the `systemd`/`nginx` units
 that exist in the repo history) on a Hostinger KVM instance with Wasabi
-object storage. Whichever way you deploy:
+object storage (processed COGs) and Cloudflare R2 (raw zips). Whichever way
+you deploy:
 
 - **nginx routing**: every new top-level API prefix (`/auth`, `/farms`,
   `/tiles`, `/errors` -> `/api/errors`, `/admin`, `/health`, `/reference`,
@@ -770,8 +869,15 @@ object storage. Whichever way you deploy:
   the server. Partial copy-paste edits on a live server have caused
   syntax errors that silently broke the _entire_ page's script (not just
   the intended change) more than once.
+- **After deploying backend changes, restart** the API, the Celery workers
+  _and Celery beat_ (beat reads its schedule at startup, so new jobs such as
+  `cleanup_stale_drafts` do not run until it restarts). The maintenance tasks
+  are routed to the `discover` queue, so a worker must consume that queue.
+- **Raw zips on Cloudflare R2**: set the `RAW_S3_*` variables (see
+  [Storage, cost controls and cleanup](#storage-cost-controls-and-cleanup)).
+  Test with a tiny upload/download/delete against the bucket first.
 - **Env vars that must be set for production, not left as `.env.example`
-  placeholders**: `AUTH_SECRET_KEY`, all `S3_*` credentials,
+  placeholders**: `AUTH_SECRET_KEY`, all `S3_*` and `RAW_S3_*` credentials,
   `RAZORPAY_*`, `GST_NUMBER`, `PLATFORM_*`, `SMTP_*`, and
   `CORS_ALLOWED_ORIGINS` (a real origin list, never `*`).
 
@@ -815,6 +921,20 @@ knowing before you hit them again:
 - **Timeouts don't raise HTTP-status-based exceptions.** A retry loop that
   only checks `response.status_code` will never fire on a raw
   `requests.Timeout`/`ConnectionError` -- needs its own `except` clause.
+- **Wasabi bills deleted objects for 90 days** (and has a 1 TB monthly
+  minimum). Never route short-lived files (raw zips) to it -- that is why raw
+  zips go to R2. `RAW_S3_BUCKET` must differ from `S3_BUCKET_RAW`.
+- **Unpaid farms and drafts must never trigger a satellite fetch.** Any new
+  code path that dispatches `refresh_farm` or downloads imagery should go
+  through `farm_lifecycle.is_fetchable()`.
+- **Native `confirm()`/`alert()` are not used** for in-app prompts; use
+  `showConfirmModal()` in `web/index.html`.
+- **Playground responses and highlight.js 11**: it skips elements already
+  marked `data-highlighted`, so the response `<code>` element must have that
+  flag cleared before each re-highlight (otherwise the 2nd response renders as
+  dark text on a dark background).
+- **Every HTML page carries a "Mobile polish" CSS block** at the end of its
+  `<style>`; keep `viewport-fit=cover` in each page's viewport meta tag.
 - **Every new API router needs an nginx location-regex entry** (see
   [Deployment](#deployment)) or it 404s to the SPA fallback in production.
 - **Long unbroken strings (raw CDSE URLs in error messages) overflow
@@ -825,13 +945,15 @@ knowing before you hit them again:
 
 ## Where to look for X
 
-| I want to...                            | Start here                                                                                                                                                           |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add a new satellite index               | `vyom/processing/indices.py` (S2) or `sar_indices.py` (S1), then add it to `S2_INDICES`/`s1_indices` in config, then optionally give it a legend in `index_scale.py` |
-| Change how a farm is billed             | `vyom/farm_pricing.py`, `vyom/api/billing.py`                                                                                                                        |
-| Add a partner-API endpoint              | `vyom/api/partner_farms.py` or `partner_tiles.py`; reuse dashboard logic where it exists rather than re-deriving it                                                  |
-| Change the dashboard UI                 | `web/index.html` -- search for the relevant DOM id or function name                                                                                                  |
-| Debug a stuck/failed satellite fetch    | `vyom/api/errors.py` + `web/admin/errors.html`, or the `Product.status` column directly                                                                              |
-| Understand what data is real vs. filled | [Real vs. filled data](#real-vs-filled-data-interpolation)                                                                                                           |
-| Add a new auth-gated route              | [Auth: three separate schemes](#auth-three-separate-schemes) -- pick the right one first                                                                             |
-| Change notification behavior            | `vyom/notifications.py` (rules), `vyom/api/notifications.py` (API), `vyom/email_utils.py` (templates)                                                                |
+| I want to...                                   | Start here                                                                                                                                                           |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a new satellite index                      | `vyom/processing/indices.py` (S2) or `sar_indices.py` (S1), then add it to `S2_INDICES`/`s1_indices` in config, then optionally give it a legend in `index_scale.py` |
+| Change draft/farm size limits or draft cleanup | `vyom/farm_lifecycle.py`, `vyom/config.py` (limits), `vyom/maintenance_tasks.py` + `celery_app.py` (schedules)                                                       |
+| Change where raw zips or COGs are stored       | `vyom/storage.py` (`S3Storage._client_for`), `RAW_S3_*` / `S3_*` in `.env`                                                                                           |
+| Change how a farm is billed                    | `vyom/farm_pricing.py`, `vyom/api/billing.py`                                                                                                                        |
+| Add a partner-API endpoint                     | `vyom/api/partner_farms.py` or `partner_tiles.py`; reuse dashboard logic where it exists rather than re-deriving it                                                  |
+| Change the dashboard UI                        | `web/index.html` -- search for the relevant DOM id or function name                                                                                                  |
+| Debug a stuck/failed satellite fetch           | `vyom/api/errors.py` + `web/admin/errors.html`, or the `Product.status` column directly                                                                              |
+| Understand what data is real vs. filled        | [Real vs. filled data](#real-vs-filled-data-interpolation)                                                                                                           |
+| Add a new auth-gated route                     | [Auth: three separate schemes](#auth-three-separate-schemes) -- pick the right one first                                                                             |
+| Change notification behavior                   | `vyom/notifications.py` (rules), `vyom/api/notifications.py` (API), `vyom/email_utils.py` (templates)                                                                |

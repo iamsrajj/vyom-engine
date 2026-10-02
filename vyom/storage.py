@@ -108,12 +108,35 @@ class S3Storage(Storage):
             region_name=settings.s3_region,
             use_ssl=settings.s3_use_ssl,
         )
-        for bucket in (settings.s3_bucket_raw, settings.s3_bucket_processed):
+        # Optional second client just for raw zips (Cloudflare R2 etc.).
+        self._raw_client = None
+        if settings.raw_s3_endpoint_url:
+            if settings.raw_s3_bucket == settings.s3_bucket_raw:
+                raise ValueError(
+                    "RAW_S3_BUCKET must differ from S3_BUCKET_RAW, otherwise old "
+                    "raw rows on the main store cannot be told apart from new ones.")
+            self._raw_client = self._make_raw_client()
+
+        buckets = [(self._client, settings.s3_bucket_processed)]
+        if self._raw_client is None:
+            buckets.append((self._client, settings.s3_bucket_raw))
+        else:
+            buckets.append((self._raw_client, settings.raw_s3_bucket))
+        for client, bucket in buckets:
             try:
-                self._client.head_bucket(Bucket=bucket)
+                client.head_bucket(Bucket=bucket)
             except Exception:  # noqa: BLE001 — bucket doesn't exist yet, create it
                 logger.info("Creating bucket %s", bucket)
-                self._client.create_bucket(Bucket=bucket)
+                try:
+                    client.create_bucket(Bucket=bucket)
+                except Exception:  # noqa: BLE001
+                    if client is not self._raw_client:
+                        raise
+                    # R2 tokens scoped to one bucket usually can't create/head
+                    # buckets. Create the bucket in the Cloudflare dashboard;
+                    # uploads will surface a clear error if it is really missing.
+                    logger.warning(
+                        "Could not verify/create raw bucket %s", bucket)
 
         # GDAL env vars so /vsis3/ virtual paths can authenticate against MinIO
         os.environ.setdefault("AWS_S3_ENDPOINT", settings.s3_endpoint_url.replace(
@@ -124,10 +147,43 @@ class S3Storage(Storage):
         os.environ.setdefault(
             "AWS_HTTPS", "YES" if settings.s3_use_ssl else "NO")
 
+    @staticmethod
+    def _make_raw_client():
+        import boto3
+        from botocore.config import Config
+
+        opts = dict(signature_version="s3v4", s3={"addressing_style": "path"})
+        try:
+            # boto3 >= 1.36 adds CRC32 checksums to uploads by default, which
+            # S3-compatible stores like R2 can reject; only send them if required.
+            cfg = Config(request_checksum_calculation="when_required",
+                         response_checksum_validation="when_required", **opts)
+        except TypeError:  # older botocore: option doesn't exist, nothing to disable
+            cfg = Config(**opts)
+        return boto3.client(
+            "s3",
+            endpoint_url=settings.raw_s3_endpoint_url,
+            aws_access_key_id=settings.raw_s3_access_key,
+            aws_secret_access_key=settings.raw_s3_secret_key,
+            region_name=settings.raw_s3_region,
+            config=cfg,
+        )
+
+    def _client_for(self, bucket: str):
+        """Raw bucket on R2 -> R2 client; everything else (processed COGs and
+        any old raw rows still on the main store) -> main client."""
+        if self._raw_client is not None and bucket == settings.raw_s3_bucket:
+            return self._raw_client
+        return self._client
+
     def save_raw(self, local_tmp_path: str, key: str) -> str:
-        self._client.upload_file(local_tmp_path, settings.s3_bucket_raw, key)
+        if self._raw_client is not None:
+            bucket, client = settings.raw_s3_bucket, self._raw_client
+        else:
+            bucket, client = settings.s3_bucket_raw, self._client
+        client.upload_file(local_tmp_path, bucket, key)
         os.remove(local_tmp_path)
-        return f"s3://{settings.s3_bucket_raw}/{key}"
+        return f"s3://{bucket}/{key}"
 
     def save_processed(self, local_tmp_path: str, key: str) -> str:
         self._client.upload_file(
@@ -153,13 +209,13 @@ class S3Storage(Storage):
             "Downloading %s to local temp %s for zip extraction",
             stored_path, local_path,
         )
-        self._client.download_file(bucket, key, local_path)
+        self._client_for(bucket).download_file(bucket, key, local_path)
         return local_path
 
     def delete(self, stored_path: str) -> None:
         if stored_path.startswith("s3://"):
             bucket, key = stored_path[len("s3://"):].split("/", 1)
-            self._client.delete_object(Bucket=bucket, Key=key)
+            self._client_for(bucket).delete_object(Bucket=bucket, Key=key)
         elif os.path.exists(stored_path):
             os.remove(stored_path)
 
