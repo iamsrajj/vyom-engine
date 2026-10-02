@@ -3250,6 +3250,137 @@
           min-width: 100%;
         }
       }
+
+      /* ===== Mobile fixes, round 2 (phones) ===== */
+      @media (max-width: 768px) {
+        /* Header: 8 controls must fit a 360-430px screen (header clips overflow) */
+        header {
+          padding: 0 8px;
+          gap: 6px;
+        }
+        .brand {
+          gap: 6px;
+          min-width: 0;
+        }
+        .brand-logo {
+          width: 30px;
+          height: 30px;
+        }
+        .brand-text .title {
+          font-size: 14px;
+        }
+        header .icon-btn {
+          width: 34px;
+          height: 34px;
+          min-height: 34px;
+        }
+        .header-right {
+          gap: 4px;
+          min-width: 0;
+        }
+        .status-toggle {
+          padding: 4px 6px;
+        }
+        .user-chip {
+          padding: 4px;
+          gap: 4px;
+        }
+        .user-chip .chevron {
+          display: none;
+        }
+
+        /* Field / imagery page: ONE scroll for the whole page. Before, only the
+           small box under the (tall) field summary card scrolled. */
+        #page-imagery {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .imagery-shell {
+          height: auto;
+          min-height: 100%;
+        }
+        .imagery-row {
+          flex: none;
+          overflow: visible;
+          min-height: 0;
+        }
+        .map-column {
+          flex: none;
+          height: 60vh;
+          height: 60dvh;
+          min-height: 320px;
+        }
+        #sidebar {
+          overflow: visible;
+          max-height: none;
+          flex-shrink: 0;
+        }
+        /* Cloud badge no longer covers Google's map-type dropdown (top-right) */
+        .cloud-badge {
+          top: 56px;
+          right: auto;
+          left: 60px;
+        }
+        .field-overview-bar {
+          padding: 12px 14px;
+        }
+        .fo-stat {
+          min-width: 0;
+          flex: 1 1 calc(50% - 6px);
+          padding: 8px 10px;
+        }
+        .fo-actions {
+          width: 100%;
+        }
+        .fo-actions > * {
+          flex: 1;
+        }
+
+        /* Settings: stack the two-column layout and the avatar/fields row */
+        #page-settings .page-scroll > div[style*="grid-template-columns"] {
+          grid-template-columns: 1fr !important;
+          gap: 14px !important;
+        }
+        #page-settings .card {
+          padding: 16px !important;
+          min-width: 0;
+        }
+        #page-settings .card [style*="gap: 18px"] {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px !important;
+        }
+        #page-settings .card [style*="gap: 18px"] > div {
+          width: 100%;
+          min-width: 0;
+        }
+        #page-settings [style*="grid-template-columns: 1fr 1fr"] {
+          grid-template-columns: 1fr !important;
+        }
+        #page-settings input {
+          width: 100%;
+          min-width: 0;
+        }
+        #account-info-grid {
+          grid-template-columns: 1fr !important;
+          gap: 2px 0 !important;
+          overflow-wrap: anywhere;
+        }
+
+        /* Login: use the real visible height on iOS */
+        #login-overlay {
+          -webkit-overflow-scrolling: touch;
+          bottom: auto;
+          height: 100vh;
+          height: 100dvh;
+        }
+      }
+      @media (max-width: 430px) {
+        .brand-text {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -7302,6 +7433,12 @@
           },
           streetViewControl: false,
           fullscreenControl: false,
+          // Phones: one finger scrolls the page, two fingers move the map.
+          // With the default ("greedy") a swipe over the map pans it and the
+          // page can't be scrolled past it.
+          gestureHandling: window.matchMedia("(max-width: 768px)").matches
+            ? "cooperative"
+            : "auto",
         });
 
         geocoder = new google.maps.Geocoder();
@@ -10363,6 +10500,9 @@
             mapTypeId: "satellite",
             disableDefaultUI: true,
             zoomControl: true,
+            gestureHandling: window.matchMedia("(max-width: 768px)").matches
+              ? "cooperative"
+              : "auto",
           });
         }
         if (!cmpMapB) {
@@ -10370,6 +10510,9 @@
             mapTypeId: "satellite",
             disableDefaultUI: true,
             zoomControl: true,
+            gestureHandling: window.matchMedia("(max-width: 768px)").matches
+              ? "cooperative"
+              : "auto",
           });
         }
         return true;
