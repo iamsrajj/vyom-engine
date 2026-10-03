@@ -8,7 +8,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # rasterio / rio-cogeo / shapely / pyproj / exactextract ship manylinux wheels
-# with GDAL/GEOS bundled, so no system GDAL is needed.
+# with GDAL/GEOS bundled, so no system GDAL is needed. The ONE system library
+# the wheels do not bundle is libexpat (rasterio fails to import without it on
+# the slim image); libstdc++/zlib are listed to be explicit.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 libstdc++6 zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
