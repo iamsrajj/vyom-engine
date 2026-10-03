@@ -63,7 +63,8 @@ def _get_owned_api_farm(db: Session, farm_id: uuid.UUID, ctx: BusinessApiContext
     they share the same user_id -- exactly the confirmed split (dashboard
     farms never appear in the API, regardless of who owns them)."""
     farm = db.get(Polygon, farm_id)
-    if not farm or farm.user_id != ctx.user.id or farm.created_via != "api":
+    if (not farm or farm.user_id != ctx.user.id or farm.created_via != "api"
+            or farm.deleted_at is not None):
         raise ApiV1Error(404, "NOT_FOUND", "Farm not found")
     return farm
 
@@ -230,12 +231,51 @@ def update_partner_farm(
     return result
 
 
+class PartnerFarmDeletedOut(BaseModel):
+    id: uuid.UUID
+    status: str  # always "deleted"
+
+
+@router.delete("/{farm_id}", response_model=Envelope[PartnerFarmDeletedOut])
+def delete_partner_farm(
+    farm_id: uuid.UUID,
+    idempotency_key: Optional[str] = None,
+    ctx: BusinessApiContext = Depends(require_business_api_auth),
+    db: Session = Depends(get_db),
+):
+    """Delete a farm you created through the API.
+
+    Satellite fetching for the farm stops immediately and its stored readings
+    and map layers are removed; the farm disappears from every endpoint
+    (further calls for it return 404 NOT_FOUND). Billing is NOT undone: a farm
+    counts toward the monthly invoice of the cycle in which it was created,
+    even if it is deleted later in that cycle. Supports `Idempotency-Key`."""
+    body_for_hash = {"farm_id": str(farm_id), "op": "delete"}
+    replay = check_and_replay(db, credential_id=ctx.credential.id,
+                              idempotency_key=idempotency_key, body=body_for_hash)
+    if replay is not None:
+        _, cached_body = replay
+        return cached_body
+
+    farm = _get_owned_api_farm(db, farm_id, ctx)
+    from vyom import farm_lifecycle
+    farm_lifecycle.archive_farm_data(db, farm)
+
+    result = Envelope(data=PartnerFarmDeletedOut(id=farm_id, status="deleted"),
+                      meta=_build_meta(db, ctx))
+    store_result(db, credential_id=ctx.credential.id, idempotency_key=idempotency_key,
+                 body=body_for_hash, status_code=200,
+                 response_body=result.model_dump(mode="json"))
+    return result
+
+
 @router.get("", response_model=Envelope[list[PartnerFarmOut]])
 def list_partner_farms(ctx: BusinessApiContext = Depends(require_business_api_auth),
                        db: Session = Depends(get_db)):
     farms = db.execute(
         select(Polygon).where(Polygon.user_id ==
-                              ctx.user.id, Polygon.created_via == "api")
+                              ctx.user.id, Polygon.created_via == "api",
+                              Polygon.deleted_at.is_(None))
         .order_by(Polygon.created_at.desc()).limit(500)
     ).scalars().all()
     return Envelope(data=[_to_partner_farm_out(f) for f in farms], meta=_build_meta(db, ctx))

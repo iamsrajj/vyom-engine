@@ -93,6 +93,12 @@ class Polygon(Base):
     # here"), so these rows can be deleted later without undoing the
     # benefit. Always excluded from list_farms, same as is_draft.
     is_prewarm_seed = Column(Boolean, nullable=False, server_default="false")
+    # Soft delete (partner API DELETE /api/v1/farms/{id}). The row is KEPT so
+    # monthly partner invoices still bill farms created in that cycle and old
+    # invoice line items (business_api_invoice_farms cascades on farm delete)
+    # stay intact. A soft-deleted farm is hidden from every read endpoint, is
+    # never fetched, and its raster/stat data is removed.
+    deleted_at = Column(DateTime(timezone=True))
 
     # 'dashboard' (default) or 'api'. Drives the whole individual-vs-business
     # pricing/feature split -- see FarmPlan and BusinessApiInvoice below.

@@ -733,7 +733,14 @@ Key routes (see `vyom/api/partner_farms.py` and `partner_tiles.py` for full
 docstrings on each):
 
 - `POST/GET/PATCH/DELETE /api/v1/farms` -- farm CRUD, scoped to farms
-  created via this credential (`created_via='api'`).
+  created via this credential (`created_via='api'`). `DELETE /api/v1/farms/{id}`
+  is a **soft delete** (`Polygon.deleted_at`, migration `020`): fetching stops,
+  the farm's readings, tile links and own interpolated COGs are removed
+  (`farm_lifecycle.archive_farm_data`), and it 404s everywhere afterwards. The
+  row is kept on purpose so the monthly invoice still bills farms created in
+  that cycle (deleting does not dodge billing) and old invoice line items
+  survive (`business_api_invoice_farms` cascades on a hard delete). Supports
+  `Idempotency-Key`. The playground's "Delete farm" asks for a second click.
 - `GET /api/v1/farms/{id}/indices` -- latest (or a specific date's) index
   readings.
 - `GET /api/v1/farms/{id}/timeseries` -- full history for one metric.

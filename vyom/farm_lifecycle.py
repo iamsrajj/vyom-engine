@@ -21,12 +21,13 @@ from datetime import datetime, timedelta, timezone
 
 import pyproj
 from shapely.ops import transform as shapely_transform
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from vyom.config import settings
 from vyom.models import (
-    CatalogProduct, FarmPlan, InterpolatedTile, Polygon, PolygonTileMap, User,
+    CatalogProduct, FarmPlan, InterpolatedStat, InterpolatedTile, Polygon,
+    PolygonTileMap, User, ZonalStat,
 )
 from vyom.units import HA_TO_ACRE
 
@@ -99,11 +100,14 @@ def fetchable_farms_stmt(now: datetime | None = None):
     return select(Polygon).where(
         Polygon.is_draft.is_(False),
         Polygon.is_prewarm_seed.is_(False),
+        Polygon.deleted_at.is_(None),
         or_(Polygon.id.in_(active_plan_farms),
             (Polygon.created_via == "api") & Polygon.user_id.in_(good_api_owners)))
 
 
 def is_fetchable(db: Session, farm: Polygon) -> bool:
+    if farm.deleted_at is not None:
+        return False
     if farm.is_prewarm_seed:
         # admin-triggered one-off, never polled (see poll_all_farms)
         return True
@@ -146,6 +150,25 @@ def delete_farm_data(db: Session, farm: Polygon) -> dict:
             InterpolatedTile.source == "interpolated")).scalars().all()
     farm_id = str(farm.id)  # read before delete: the row is gone after commit
     db.delete(farm)
+    db.commit()
+    files = _delete_files(owned)
+    return {"farm_id": farm_id, "interpolated_files_deleted": files}
+
+
+def archive_farm_data(db: Session, farm: Polygon) -> dict:
+    """SOFT delete (partner API). Keeps the polygon row for billing but removes
+    everything that costs money: its readings, tile links (so shared COGs become
+    orphans and get purged later), and its own interpolated COG files. After
+    this the farm is hidden everywhere and never fetched again."""
+    owned = db.execute(
+        select(InterpolatedTile.storage_path).where(
+            InterpolatedTile.polygon_id == farm.id,
+            InterpolatedTile.source == "interpolated")).scalars().all()
+    farm_id = str(farm.id)
+    for model in (InterpolatedTile, InterpolatedStat, ZonalStat, PolygonTileMap):
+        db.execute(delete(model).where(model.polygon_id == farm.id))
+    farm.deleted_at = datetime.now(timezone.utc)
+    db.add(farm)
     db.commit()
     files = _delete_files(owned)
     return {"farm_id": farm_id, "interpolated_files_deleted": files}

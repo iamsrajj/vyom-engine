@@ -287,7 +287,8 @@ def _get_owned_farm(db: Session, farm_id: uuid.UUID, current_user: str) -> Polyg
     else, so a caller can't distinguish 'no such farm' from 'that's not
     yours' and enumerate valid farm IDs belonging to other users."""
     farm = db.get(Polygon, farm_id)
-    if not farm or farm.user_id != stable_owner_uuid(current_user):
+    if (not farm or farm.user_id != stable_owner_uuid(current_user)
+            or farm.deleted_at is not None):
         raise HTTPException(404, "Farm not found")
     return farm
 
@@ -656,7 +657,8 @@ def list_farms(include_drafts: bool = False, current_user: str = Depends(require
     prewarm seeds (see is_prewarm_seed) -- neither is a real farm a user
     should see."""
     owner = stable_owner_uuid(current_user)
-    stmt = select(Polygon).where(Polygon.user_id == owner)
+    stmt = select(Polygon).where(Polygon.user_id == owner,
+                                 Polygon.deleted_at.is_(None))
     if not include_drafts:
         stmt = stmt.where(Polygon.is_draft == False, Polygon.is_prewarm_seed == False)  # noqa: E712
     farms = db.execute(stmt).scalars().all()
@@ -705,7 +707,8 @@ def current_status(response: Response, metric: str = "NDVI_mean", current_user: 
 
     def _compute():
         farms = db.execute(select(Polygon).where(
-            Polygon.user_id == owner)).scalars().all()
+            Polygon.user_id == owner,
+            Polygon.deleted_at.is_(None))).scalars().all()
         now = datetime.now(tz.utc)
         out = []
         for farm in farms:

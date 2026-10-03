@@ -185,7 +185,7 @@ def get_partner_farm_map_tile(
             "/api/v1/farms/{farm_id}/map-layer for this farm to get a valid token.")
 
     farm = db.get(Polygon, farm_id)
-    if farm is None:
+    if farm is None or farm.deleted_at is not None:
         raise ApiV1Error(404, "NOT_FOUND", "Farm not found")
 
     content, source_label = render_index_tile(

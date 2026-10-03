@@ -963,7 +963,7 @@
         <label
           >Idempotency-Key
           <span style="font-weight: 400"
-            >(optional, for Create/Update)</span
+            >(optional, for Create/Update/Delete)</span
           ></label
         >
         <div style="display: flex; gap: 8px">
@@ -1122,7 +1122,13 @@
       const ENDPOINT_GROUPS = [
         {
           title: "Farms",
-          keys: ["create_farm", "list_farms", "get_farm", "update_farm"],
+          keys: [
+            "create_farm",
+            "list_farms",
+            "get_farm",
+            "update_farm",
+            "delete_farm",
+          ],
         },
         {
           title: "Indices & dates",
@@ -1187,6 +1193,15 @@
           needsFarmId: true,
           needsBody: true,
           defaultBody: { crop_type: "rice", sowing_date: "2026-11-15" },
+        },
+        delete_farm: {
+          label: "Delete farm",
+          method: "DELETE",
+          path: "/api/v1/farms/{farm_id}",
+          summary:
+            "Delete a farm you created via the API. Fetching stops and its data is removed; the farm then returns 404. A farm still counts toward the invoice of the cycle it was created in.",
+          needsFarmId: true,
+          destructive: true,
         },
         get_indices: {
           label: "Get indices",
@@ -1452,7 +1467,12 @@
           "Content-Type": "application/json",
         };
         const idem = $("idempotencyKey").value.trim();
-        if (idem && (cfg.method === "POST" || cfg.method === "PATCH"))
+        if (
+          idem &&
+          (cfg.method === "POST" ||
+            cfg.method === "PATCH" ||
+            cfg.method === "DELETE")
+        )
           headers["Idempotency-Key"] = idem;
 
         let body = null;
@@ -1760,7 +1780,31 @@ ${goHeaderLines}
       }
 
       // ================= send =================
+      // Destructive endpoints (DELETE) need a second click within 4 s, shown on
+      // the button itself -- no browser alert().
+      let deleteArmedUntil = 0;
+      let sendBtnLabel = null;
       $("sendBtn").addEventListener("click", async () => {
+        const pending = currentConfig();
+        if (pending && pending.destructive) {
+          if (Date.now() > deleteArmedUntil) {
+            deleteArmedUntil = Date.now() + 4000;
+            if (sendBtnLabel === null) sendBtnLabel = $("sendBtn").innerHTML;
+            $("sendBtn").innerHTML = "Click again to confirm delete";
+            setTimeout(() => {
+              if (sendBtnLabel !== null && Date.now() >= deleteArmedUntil) {
+                $("sendBtn").innerHTML = sendBtnLabel;
+                sendBtnLabel = null;
+              }
+            }, 4100);
+            return;
+          }
+          deleteArmedUntil = 0;
+          if (sendBtnLabel !== null) {
+            $("sendBtn").innerHTML = sendBtnLabel;
+            sendBtnLabel = null;
+          }
+        }
         const out = $("responseOutput");
         const meta = $("responseMeta");
         meta.innerHTML = "";

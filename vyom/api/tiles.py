@@ -245,7 +245,8 @@ def index_tile(
     # bug as farms.py's endpoints before that fix, see
     # _get_owned_farm's docstring there for the reasoning (404, not 403,
     # so a caller can't distinguish "no such farm" from "not yours").
-    if farm is None or farm.user_id != stable_owner_uuid(current_user):
+    if (farm is None or farm.user_id != stable_owner_uuid(current_user)
+            or farm.deleted_at is not None):
         raise HTTPException(404, "Farm not found")
 
     content, source_label = render_index_tile(
