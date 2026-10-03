@@ -94,7 +94,7 @@ services:
   beat:
     <<: *vyom
     command: celery -A vyom.celery_app beat --loglevel=INFO --schedule=/app/data/celerybeat-schedule
-    mem_limit: 256m
+    mem_limit: 512m
     # The slim image has no pgrep/ps, so scan /proc for the beat process.
     healthcheck:
       test:
