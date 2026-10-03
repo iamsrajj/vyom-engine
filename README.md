@@ -742,6 +742,9 @@ docstrings on each):
   that cycle (deleting does not dodge billing) and old invoice line items
   survive (`business_api_invoice_farms` cascades on a hard delete). Supports
   `Idempotency-Key`. The playground's "Delete farm" asks for a second click.
+  Deleting an API farm from the **dashboard** is the same soft delete:
+  `farm_lifecycle.delete_farm_data()` redirects any `created_via='api'` farm to
+  `archive_farm_data()`, so it still appears on the monthly invoice.
 - `GET /api/v1/farms/{id}/indices` -- latest (or a specific date's) index
   readings.
 - `GET /api/v1/farms/{id}/timeseries` -- full history for one metric.
@@ -972,6 +975,18 @@ knowing before you hit them again:
 - **Wasabi bills deleted objects for 90 days** (and has a 1 TB monthly
   minimum). Never route short-lived files (raw zips) to it -- that is why raw
   zips go to R2. `RAW_S3_BUCKET` must differ from `S3_BUCKET_RAW`.
+- **Never hard-delete a `created_via='api'` polygon.** The monthly partner
+  invoice is built from those rows, so a hard delete silently removes the farm
+  from the bill (and cascades away old invoice line items). Always go through
+  `farm_lifecycle.delete_farm_data()` / `archive_farm_data()`.
+- **SEO and branding.** `web/index.html` carries the title, description,
+  canonical, Open Graph/Twitter tags and JSON-LD (Organization, WebSite,
+  WebApplication); the canonical host is `https://vyom.agridoot.in`. Social
+  image `web/assets/img/og-image.png` (1200x630), icons `favicon-48.png`,
+  `apple-touch-icon.png`, `icon-512.png`. `web/robots.txt` and
+  `web/sitemap.xml` must be served from the site root (nginx `try_files`).
+  Admin pages are `noindex`. The login panel shows the CDSE partner badge
+  (`web/assets/img/cdse-logo.png`).
 - **Unpaid farms and drafts must never trigger a satellite fetch.** Any new
   code path that dispatches `refresh_farm` or downloads imagery should go
   through `farm_lifecycle.is_fetchable()`.

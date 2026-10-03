@@ -144,6 +144,12 @@ def delete_farm_data(db: Session, farm: Polygon) -> dict:
     purged later by purge_orphan_products() once NO farm links to them.
     Queued Celery jobs for this farm are cancelled by the stage guards in
     tasks.py (they no-op when the product has no linked farm any more)."""
+    if farm.created_via == "api":
+        # Partner-API farms are billed from this row (monthly invoice counts
+        # farms created in the cycle, and business_api_invoice_farms cascades
+        # on delete). Hard-deleting one from the DASHBOARD used to drop it from
+        # the bill, so every delete path ends in a soft delete for them.
+        return archive_farm_data(db, farm)
     owned = db.execute(
         select(InterpolatedTile.storage_path).where(
             InterpolatedTile.polygon_id == farm.id,
