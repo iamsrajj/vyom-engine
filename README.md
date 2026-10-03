@@ -371,7 +371,8 @@ test/                        Standalone scripts (not a pytest suite) --
                               test_wasabi.py, check_cdse_auth.py
 docs/                        Screenshots + a Word doc from earlier planning;
                               historical, not guaranteed current
-docker-compose.dev.yml       Postgres + Redis for local development only
+Dockerfile                   Image for the api / worker / beat containers
+docker-compose.yml           Production stack: api, 2 workers, beat
 .env.example                 Every environment variable this app reads
 requirements.txt             Pinned Python dependencies
 ```
@@ -779,8 +780,11 @@ cd Vyom-Engine
 python -m venv venv && source venv/bin/activate     # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Postgres + Redis for local dev:
-docker compose -f docker-compose.dev.yml up -d
+# Postgres (with PostGIS) + Redis must be running locally. Either install them,
+# or start throwaway containers, e.g.:
+#   docker run -d --name vyom-pg -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=postgres \
+#     -e POSTGRES_DB=vyom postgis/postgis:16-3.4
+#   docker run -d --name vyom-redis -p 127.0.0.1:6379:6379 redis:7-alpine
 
 cp .env.example .env
 # Fill in at minimum: CDSE_USERNAME/PASSWORD, DATABASE_URL, REDIS_URL,
@@ -861,8 +865,45 @@ categories, roughly:
 
 Production currently runs manually (not via the `systemd`/`nginx` units
 that exist in the repo history) on a Hostinger KVM instance with Wasabi
-object storage (processed COGs) and Cloudflare R2 (raw zips). Whichever way
-you deploy:
+object storage (processed COGs) and Cloudflare R2 (raw zips).
+
+### Running with Docker Compose (recommended)
+
+`docker-compose.yml` runs the four processes you would otherwise start in four
+terminals, from one image (`Dockerfile`): `api`, `worker-priority`,
+`worker-main` and `beat`. All use `restart: unless-stopped` (they come back
+after a crash, an OOM kill or a server reboot), have health checks, capped
+logs and per-container memory limits. Postgres and Redis stay on the host;
+`network_mode: host` lets the containers use the same `localhost`
+`DATABASE_URL` / `REDIS_URL` and keeps the API on host port 8000 for nginx.
+
+```bash
+cp .env.example .env            # fill in real values (never commit .env)
+# apply any new SQL in migrations/ with psql FIRST, then:
+docker compose up -d --build    # build + start all four
+docker compose ps               # state and health of each
+docker compose logs -f worker-main
+docker compose restart api      # restart one process
+docker compose stop worker-priority && docker compose start worker-priority
+docker compose up -d --build    # deploy new code (rebuilds, recreates changed)
+```
+
+Notes:
+
+- `worker-main` consumes `discover,download,process,stats,billing`. The
+  `billing` queue must have a consumer or plan expiry, monthly partner
+  invoices, overdue suspension and renewal reminders never run.
+- Run exactly one `beat`. Its schedule state is kept in the `vyom_data`
+  volume so a restart does not reset the 6 h / 24 h timers.
+- Tune memory in `.env`: `API_MEM_LIMIT`, `WORKER_MEM_LIMIT` (per worker) and
+  `WORKER_MAX_MEM_KB` (a worker process is recycled after a task once it
+  passes this; keep it below `WORKER_MEM_LIMIT`). Leave room for the host,
+  Postgres and Redis.
+- `docker compose stop` waits up to 120 s so a running download/processing
+  task can finish. A task killed mid-run is picked up again by the next
+  `poll_all_farms` sweep (products stay `discovered`/`downloaded`).
+
+Whichever way you deploy:
 
 - **nginx routing**: every new top-level API prefix (`/auth`, `/farms`,
   `/tiles`, `/errors` -> `/api/errors`, `/admin`, `/health`, `/reference`,

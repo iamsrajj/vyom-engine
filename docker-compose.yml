@@ -1,0 +1,105 @@
+# Production stack: the four processes you used to run in four terminals.
+#
+#   docker compose up -d --build         start everything (survives reboots)
+#   docker compose ps                    status + health of all four
+#   docker compose logs -f worker-main   follow one process
+#   docker compose restart api           restart ONE process
+#   docker compose stop worker-priority  stop one / start it again with `start`
+#
+# Postgres and Redis are NOT in this file: they keep running on the host, as
+# today. `network_mode: host` lets the containers reach them on localhost with
+# the same DATABASE_URL / REDIS_URL you already use, and keeps the API on host
+# port 8000 for your existing nginx.
+
+x-vyom: &vyom
+  build: .
+  image: vyom-engine:latest
+  env_file: .env
+  network_mode: host
+  restart: unless-stopped # crash, OOM kill or reboot -> comes back
+  init: true # reaps zombie processes, forwards SIGTERM
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" } # logs can't fill the disk
+  volumes:
+    - vyom_data:/app/data
+
+services:
+  # T1 -- HTTP API
+  api:
+    <<: *vyom
+    command: uvicorn vyom.api.main:app --host 0.0.0.0 --port 8000
+    mem_limit: ${API_MEM_LIMIT:-1g}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)",
+        ]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 40s
+
+  # T2 -- dedicated worker for farmer-facing (_priority) queues
+  worker-priority:
+    <<: *vyom
+    command: >
+      celery -A vyom.celery_app worker
+      -Q download_priority,process_priority,stats_priority
+      --concurrency=1 --loglevel=INFO --hostname=priority@%h
+      --max-memory-per-child=${WORKER_MAX_MEM_KB:-2500000}
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    stop_grace_period: 120s # let a running task finish on `stop`/deploy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A vyom.celery_app inspect ping -d priority@$$(hostname) --timeout 8 | grep -q pong",
+        ]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+  # T3 -- background worker. `billing` is included on purpose: your old
+  # command did not consume that queue, so plan expiry, monthly partner
+  # invoices, overdue suspension and renewal reminders were never executed.
+  worker-main:
+    <<: *vyom
+    command: >
+      celery -A vyom.celery_app worker
+      -Q discover,download,process,stats,billing
+      --concurrency=1 --loglevel=INFO --hostname=main@%h
+      --max-memory-per-child=${WORKER_MAX_MEM_KB:-2500000}
+    mem_limit: ${WORKER_MEM_LIMIT:-3g}
+    stop_grace_period: 120s
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A vyom.celery_app inspect ping -d main@$$(hostname) --timeout 8 | grep -q pong",
+        ]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+
+  # T4 -- scheduler. Exactly ONE instance, ever (two would double-run jobs).
+  # Its state file lives in the volume: with only the 6 h / 24 h intervals in
+  # the schedule, a beat that forgets "last run" on every restart would keep
+  # pushing the next run out and could effectively never fire.
+  beat:
+    <<: *vyom
+    command: celery -A vyom.celery_app beat --loglevel=INFO --schedule=/app/data/celerybeat-schedule
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  vyom_data:

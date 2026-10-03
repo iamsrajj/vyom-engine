@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+data
+docs
+test
+web/*
+!web/assets
+**/__pycache__
+**/*.pyc
+*.zip
+README.md
